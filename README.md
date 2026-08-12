@@ -32,6 +32,23 @@ elicitation subsystem (the `elicitation-form-surface` and
 
 ## Install
 
+**As a Claude Code plugin** (skill + MCP server, no Python setup):
+
+```bash
+claude plugin marketplace add Smart-AI-Memory/attune-forms
+claude plugin install attune-forms@attune-forms
+```
+
+The plugin teaches the session the forms discipline (the `forms`
+skill) and serves four MCP tools — `elicitation_render_form`,
+`elicitation_render_widget`, `elicitation_collect_response`,
+`elicitation_ask` — from this package via `uvx`. Decision cards,
+pushback cards, and progress forms work out of the box; rich HTML
+renders where the host supports widgets and degrades to plain
+questions everywhere else.
+
+**As a Python library:**
+
 ```bash
 pip install attune-forms
 ```
