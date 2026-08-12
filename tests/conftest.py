@@ -13,4 +13,8 @@ def _isolate_attune_home(tmp_path, monkeypatch):
     monkeypatch.setenv("ATTUNE_HOME", str(tmp_path / ".attune"))
     monkeypatch.delenv("ATTUNE_KEYBOARD_MODE", raising=False)
     monkeypatch.delenv("ATTUNE_FORM_TELEMETRY", raising=False)
+    monkeypatch.delenv("ATTUNE_FORMS_KEYBOARD_MODE", raising=False)
+    monkeypatch.delenv("ATTUNE_FORMS_TELEMETRY", raising=False)
+    monkeypatch.delenv("ATTUNE_FORMS_HOME", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.delenv("DO_NOT_TRACK", raising=False)

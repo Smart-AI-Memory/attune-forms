@@ -700,11 +700,16 @@ def _route(
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _FALSEY = frozenset({"0", "false", "no", "off"})
 
-#: Project-local config file the preference persists in. This is the
-#: established project-scope convention (``config/loader.py``); we read
-#: the one key directly rather than pulling the full unified-config
-#: loader into the routing path.
-_PROJECT_CONFIG = "attune.config.json"
+#: Project-local config files the preference persists in. The
+#: collision-proof name is the public default (P1 naming ruling,
+#: attune-forms-plugin spec D2, 2026-08-12); the legacy attune-ai name
+#: stays honored so existing repos keep working byte-identically.
+#: Read precedence: new > legacy. Write target: explicit override >
+#: whichever file exists (new first) > legacy default (flipping the
+#: fresh-write default to the new name is deferred until attune-ai
+#: pins its name explicitly — public surfaces pass ``config_name``).
+_PROJECT_CONFIG_NEW = "attune-forms.config.json"
+_PROJECT_CONFIG_LEGACY = "attune.config.json"
 
 #: The key holding the preference inside :data:`_PROJECT_CONFIG`.
 _KEYBOARD_MODE_KEY = "keyboard_mode"
@@ -718,8 +723,11 @@ def _project_keyboard_mode(project_root: Path | None = None) -> bool:
     routing must never fail because a config file is bad.
     """
     base = Path(project_root) if project_root is not None else Path.cwd()
+    path = base / _PROJECT_CONFIG_NEW
+    if not path.exists():
+        path = base / _PROJECT_CONFIG_LEGACY
     try:
-        raw = (base / _PROJECT_CONFIG).read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
         data = json.loads(raw)
     except (OSError, ValueError):
         return False
@@ -752,15 +760,21 @@ def keyboard_mode_enabled(project_root: Path | None = None) -> bool:
     Returns:
         True if terse/keyboard mode is on.
     """
-    env = os.environ.get("ATTUNE_KEYBOARD_MODE", "").strip().lower()
-    if env in _TRUTHY:
-        return True
-    if env in _FALSEY:
-        return False
+    for var in ("ATTUNE_FORMS_KEYBOARD_MODE", "ATTUNE_KEYBOARD_MODE"):
+        env = os.environ.get(var, "").strip().lower()
+        if env in _TRUTHY:
+            return True
+        if env in _FALSEY:
+            return False
     return _project_keyboard_mode(project_root)
 
 
-def set_keyboard_mode(enabled: bool, project_root: Path | None = None) -> Path:
+def set_keyboard_mode(
+    enabled: bool,
+    project_root: Path | None = None,
+    *,
+    config_name: str | None = None,
+) -> Path:
     """Persist the keyboard-mode preference for this project.
 
     Writes ``keyboard_mode`` into the project-local ``attune.config.json``,
@@ -782,7 +796,12 @@ def set_keyboard_mode(enabled: bool, project_root: Path | None = None) -> Path:
             data, so the caller must fix it first.
     """
     base = Path(project_root) if project_root is not None else Path.cwd()
-    path = base / _PROJECT_CONFIG
+    if config_name is not None:
+        path = base / config_name
+    elif (base / _PROJECT_CONFIG_NEW).exists():
+        path = base / _PROJECT_CONFIG_NEW
+    else:
+        path = base / _PROJECT_CONFIG_LEGACY
 
     data: dict[str, Any] = {}
     if path.exists():
