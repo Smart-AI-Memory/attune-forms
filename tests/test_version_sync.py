@@ -22,16 +22,12 @@ def _pyproject_version() -> str:
 
 
 def test_plugin_manifest_matches_pyproject() -> None:
-    plugin = json.loads(
-        (ROOT / "plugin/.claude-plugin/plugin.json").read_text(encoding="utf-8")
-    )
+    plugin = json.loads((ROOT / "plugin/.claude-plugin/plugin.json").read_text(encoding="utf-8"))
     assert plugin["version"] == _pyproject_version()
 
 
 def test_marketplace_manifest_matches_pyproject() -> None:
-    market = json.loads(
-        (ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8")
-    )
+    market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
     version = _pyproject_version()
     assert market["metadata"]["version"] == version
     assert all(p["version"] == version for p in market["plugins"])
