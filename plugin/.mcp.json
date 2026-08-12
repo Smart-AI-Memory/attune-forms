@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "attune-forms": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "attune-forms[mcp]",
+        "attune-forms-mcp"
+      ]
+    }
+  }
+}
