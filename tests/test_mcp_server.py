@@ -33,9 +33,7 @@ _FORM = {
 
 
 def _server_params() -> StdioServerParameters:
-    return StdioServerParameters(
-        command=sys.executable, args=["-m", "attune_forms.mcp_server"]
-    )
+    return StdioServerParameters(command=sys.executable, args=["-m", "attune_forms.mcp_server"])
 
 
 def _payload(result) -> dict:
@@ -43,9 +41,7 @@ def _payload(result) -> dict:
     if getattr(result, "structuredContent", None):
         sc = result.structuredContent
         return sc.get("result", sc) if isinstance(sc, dict) else sc
-    text = "".join(
-        c.text for c in result.content if getattr(c, "type", "") == "text"
-    )
+    text = "".join(c.text for c in result.content if getattr(c, "type", "") == "text")
     return json.loads(text)
 
 
@@ -58,14 +54,10 @@ async def _round_trip() -> dict[str, dict]:
             tools = await session.list_tools()
             out["tools"] = {"names": sorted(t.name for t in tools.tools)}
 
-            r = await session.call_tool(
-                "elicitation_render_form", {"form": _FORM}
-            )
+            r = await session.call_tool("elicitation_render_form", {"form": _FORM})
             out["render_form"] = _payload(r)
 
-            r = await session.call_tool(
-                "elicitation_render_widget", {"form": _FORM}
-            )
+            r = await session.call_tool("elicitation_render_widget", {"form": _FORM})
             out["render_widget"] = _payload(r)
 
             r = await session.call_tool(

@@ -189,9 +189,7 @@ def _parse_form(args: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
 
 def _record_surface_choice(form: Any, *, chosen: str) -> str | None:
     try:
-        return select_form_surface(
-            form, keyboard_mode=keyboard_mode_enabled(), chosen=chosen
-        )
+        return select_form_surface(form, keyboard_mode=keyboard_mode_enabled(), chosen=chosen)
     except (OSError, ValueError) as exc:
         logger.debug("surface-choice telemetry skipped: %s", exc)
         return None
