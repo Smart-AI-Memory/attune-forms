@@ -19,13 +19,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from attune_forms.form_events import log_surface_decision
 from attune_forms.models import (
     FormQuestion,
     FormResponse,
     FormSchema,
     QuestionType,
 )
-from attune_forms.form_events import log_surface_decision
 
 #: The answer values accepted for a BOOLEAN question (its
 #: ``to_ask_user_format`` renders as a Yes/No single-select).

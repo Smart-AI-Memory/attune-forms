@@ -42,19 +42,6 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
-from attune_forms.form_events import log_surface_decision
-from attune_forms.intake_template import (
-    PROVIDERS,
-    TEMPLATES,
-    FieldSlot,
-    FormTemplate,
-    ProviderContext,
-    TemplateError,
-    build_form,
-    intake_form,
-    validate_template,
-)
-from attune_forms.models import FormQuestion, FormResponse, FormSchema, QuestionType
 from attune_forms.bridge import (
     FormValidationError,
     collect_form_response,
@@ -70,6 +57,19 @@ from attune_forms.bridge import (
     set_keyboard_mode,
 )
 from attune_forms.elicitation_schema import form_to_elicitation_schema
+from attune_forms.form_events import log_surface_decision
+from attune_forms.intake_template import (
+    PROVIDERS,
+    TEMPLATES,
+    FieldSlot,
+    FormTemplate,
+    ProviderContext,
+    TemplateError,
+    build_form,
+    intake_form,
+    validate_template,
+)
+from attune_forms.models import FormQuestion, FormResponse, FormSchema, QuestionType
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 from attune_forms.template_store import form_from_template, list_templates
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html

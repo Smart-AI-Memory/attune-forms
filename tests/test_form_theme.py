@@ -4,6 +4,7 @@ projection byte-equality, fallback coverage, shared-by-source."""
 from __future__ import annotations
 
 import re
+
 from attune_forms import theme
 from attune_forms import widget as widget_mod
 

@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-from attune_forms.bridge import form_from_dict
 from attune_forms.intake_template import (
     PROVIDERS,
     TEMPLATES,
@@ -56,9 +55,7 @@ class _FakeWorkflow:
 def test_bound_template_tighten_only_and_list_rules(monkeypatch) -> None:
     from attune_forms import intake_template as it
 
-    monkeypatch.setattr(
-        it, "WORKFLOW_SCHEMA_RESOLVER", lambda name: _FakeWorkflow.input_schema
-    )
+    monkeypatch.setattr(it, "WORKFLOW_SCHEMA_RESOLVER", lambda name: _FakeWorkflow.input_schema)
     loosened = FormTemplate(
         "T", "d", [FieldSlot(key="goal", text="g?", required=False)], workflow="fake"
     )

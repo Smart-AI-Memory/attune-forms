@@ -16,8 +16,8 @@ import re
 import pytest
 
 from attune_forms import form_from_dict, form_to_widget_html
-from attune_forms.widget import _CSS_FAMILIES, _families_for
 from attune_forms.models import QuestionType
+from attune_forms.widget import _CSS_FAMILIES, _families_for
 
 _CLASS_RE = re.compile(r'class="([^"]*)"')
 

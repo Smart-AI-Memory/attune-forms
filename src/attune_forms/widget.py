@@ -26,9 +26,9 @@ from collections.abc import Callable
 from html import escape
 
 from attune_forms.bridge import is_fully_inferred
+from attune_forms.models import FormQuestion, FormSchema, QuestionType
 from attune_forms.theme import CSS_BASE as _CSS_BASE
 from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
-from attune_forms.models import FormQuestion, FormSchema, QuestionType
 
 #: Sentinel key the submit payload carries so the agent can recognise a
 #: form postback among ordinary chat messages and route it to

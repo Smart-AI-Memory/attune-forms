@@ -15,6 +15,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+
 class QuestionType(str, Enum):
     """Types of form questions supported.
 
