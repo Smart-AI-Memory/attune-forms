@@ -47,8 +47,17 @@ _MAX_BYTES = 5 * 1024 * 1024
 
 
 def _enabled() -> bool:
-    """False when local form telemetry is switched off via env."""
-    if os.environ.get("ATTUNE_FORM_TELEMETRY", "1").strip().lower() in _FALSEY:
+    """False when local form telemetry is switched off via env.
+
+    ``ATTUNE_FORMS_TELEMETRY`` is the public name (P1 naming ruling);
+    the legacy ``ATTUNE_FORM_TELEMETRY`` stays honored. A set new name
+    wins; otherwise the legacy name decides.
+    """
+    new = os.environ.get("ATTUNE_FORMS_TELEMETRY")
+    if new is not None:
+        if new.strip().lower() in _FALSEY:
+            return False
+    elif os.environ.get("ATTUNE_FORM_TELEMETRY", "1").strip().lower() in _FALSEY:
         return False
     dnt = os.environ.get("DO_NOT_TRACK")
     return dnt is None or dnt.strip().lower() in _FALSEY
@@ -62,9 +71,29 @@ def _events_path(home: Path | None = None) -> Path:
     explicitly so they read the store they display, not the process env.
     """
     if home is None:
-        env = os.environ.get("ATTUNE_HOME")
-        home = Path(env).expanduser() if env else Path.home() / ".attune"
+        home = _default_home()
     return Path(home) / "telemetry" / "form_events.jsonl"
+
+
+def _default_home() -> Path:
+    """Resolve the data home (P1 naming ruling, spec D2).
+
+    Precedence: ``ATTUNE_FORMS_HOME`` > legacy ``ATTUNE_HOME`` > an
+    EXISTING ``~/.attune`` (keeps every current attune-ai machine
+    byte-identical) > the XDG state dir
+    (``$XDG_STATE_HOME/attune-forms``, default
+    ``~/.local/state/attune-forms``) for standalone installs.
+    """
+    for var in ("ATTUNE_FORMS_HOME", "ATTUNE_HOME"):
+        env = os.environ.get(var)
+        if env:
+            return Path(env).expanduser()
+    legacy = Path.home() / ".attune"
+    if legacy.exists():
+        return legacy
+    xdg = os.environ.get("XDG_STATE_HOME")
+    state = Path(xdg).expanduser() if xdg else Path.home() / ".local" / "state"
+    return state / "attune-forms"
 
 
 def _rotate_if_huge(path: Path) -> None:
