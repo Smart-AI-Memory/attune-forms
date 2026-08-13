@@ -44,7 +44,7 @@ And here's the part I keep coming back to: all of that happened in *one* day —
 
 ## What this is, concretely
 
-The library is called attune-forms — Apache 2.0, on PyPI, extracted from my attune-ai workflow harness where the grammar was born and battle-tested. Python 3.10+, one dependency (structlog), 384 tests, CI across three platforms. The template layer can generate a workflow's intake form at ask-time from declared input schemas — so tools describe what they need once, and the form exists for free.
+The library is called attune-forms — Apache 2.0, on PyPI, extracted from my attune-ai workflow harness where the grammar was born and battle-tested. Python 3.10+, one dependency (structlog), 380+ tests, CI across three platforms. The template layer can generate a workflow's intake form at ask-time from declared input schemas — so tools describe what they need once, and the form exists for free.
 
 ```python
 from attune_forms import form_from_dict, select_form_surface
