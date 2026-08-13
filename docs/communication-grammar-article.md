@@ -1,3 +1,9 @@
+<!--
+  This repo copy is the verified MASTER of this article: its claims are
+  checked against the code in this repository. External publications
+  (blog, newsletter) are projections of it — fix divergences here first.
+-->
+
 # A Communication Grammar for AI Agents
 
 *Why an agent's question should be a typed, validated artifact — and when it shouldn't be one at all.*
