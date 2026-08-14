@@ -6,6 +6,12 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-14
+
+The plugin release: attune-forms becomes installable as a Claude Code
+plugin, and the communication-grammar article ships in-repo as its
+verified master.
+
 ### Added
 - Claude Code plugin wrapper: generic forms skill + marketplace scaffold, installable via `claude plugin marketplace add Smart-AI-Memory/attune-forms` (#4)
 - "A Communication Grammar for AI Agents" — the article introducing the grammar, kept in `docs/` as its verified master (#6, #7, #8)
@@ -32,7 +38,8 @@ follow [SemVer](https://semver.org/).
 - Initial extraction of the attune-ai elicitation subsystem: declarative `FormSchema`, build/collect validation, multi-surface renderers (widget HTML, AskUserQuestion batching, MCP elicitation), surface router, template layer with ask-time intake generation
 - Trusted-publishing release workflow (tag-triggered, PyPI environment)
 
-[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Smart-AI-Memory/attune-forms/releases/tag/v0.1.0
