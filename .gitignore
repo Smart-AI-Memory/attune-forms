@@ -8,3 +8,4 @@ build/
 .coverage
 .attune/
 coverage.json
+uv.lock
