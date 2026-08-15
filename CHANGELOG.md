@@ -22,18 +22,51 @@ follow [SemVer](https://semver.org/).
   in order (leading ordinals stripped) or one slot per line, typed
   slots overriding a pasted skeleton. `ranking_slot_count` exported —
   the one sizing rule every surface shares
-- Reference form + example answers cover `ranking`; widget round-trip,
-  CSS-family, needs-widget, markdown-conformance and ingestion guards
-  extended
+- `assumption_review` construct (spec `assumption-review-construct`,
+  communication-grammar member #8 — roundtable
+  `q-forms-grammar-expansion-001` backlog candidate, "the
+  inference-first discipline made a construct", chair-ruled into 0.6.0
+  on 2026-08-15): the agent lists the assumptions it inferred
+  (`assumptions`: `{label, id?, detail?, source?}`) and the user rules
+  each from the FIXED vocabulary accept / edit / reject, an edit
+  carrying replacement text; answer =
+  `{item key: "accept" | "reject" | {"edit": text}}` (D2-c); `suggested`
+  may pre-mark accept only (D2-b); `default` and `dispositions` are
+  rejected (D2-a). Widget: triage-style rows with the source shown, an
+  inline replacement-text box (pre-filled with the label) revealed only
+  while edit is picked. Flat surfaces expand to one single-select per
+  assumption PAIRED with an optional `"<id>.<key>.text"` question; the
+  fold keeps the text only on edit and the validator requires it then;
+  elicitation schema flattens the same way; markdown renders the rule +
+  rows + skeleton and ingests `field.item: edit: <text>` (a bare `edit`
+  shapes to `{"edit": ""}` and is named, never guessed into an accept),
+  typed rows overriding a pasted skeleton. `ASSUMPTION_RULINGS` exported.
+  The skill draws the boundary with "Infer first": settled dimensions
+  are never reviewed; inferred ones about to be acted on are
+- Reference form + example answers cover `ranking` and
+  `assumption_review` (one edit ruling exercises the text lane); widget
+  round-trip, CSS-family, needs-widget, markdown-conformance and
+  ingestion guards extended
 
 ### Changed
-- Form theme budget raised 8 KB → 10 KB (9,808 B measured with the
-  RANK family; ratified 2026-08-15, ranking-construct D2-a — a CSS
-  consolidation pass was offered and not chosen, so the cap is not a
-  ratchet: the next raise needs its own ruling)
+- Form theme budget raised 8 KB → 10 KB (10,064 B measured with the
+  RANK and ASSUME families; ratified 2026-08-15, ranking-construct
+  D2-a — a CSS consolidation pass was offered and not chosen, so the
+  cap is not a ratchet: the next raise needs its own ruling)
 - The dotted answer namespace guard now covers every expanding type
-  (triage items and ranking slots); the markdown parser names a dotted
-  key on a non-expanding field as such
+  (triage items, ranking slots, assumption rows + text lanes); the
+  markdown parser names a dotted key on a non-expanding field as such
+- `form_response_summary` renders an assumption edit as
+  `key: edit → <text>` rather than a raw dict
+- `problems_to_markdown` attributes a problem to the FIRST quoted field
+  id only (every collect-time problem opens with it) — a later quoted
+  value or vocabulary word can no longer re-ask a sibling field that
+  happens to share its name (five-lens review of the assumption-review
+  construct, 2026-08-15; five findings pinned in
+  `tests/test_assumption_review_construct.py::TestReviewFindings`:
+  unquoted vocabulary hint, blank-edit widget gate, duplicate-label
+  rejection, `edit: <text>` accepted on the JSON reply path, inline
+  edit text beating the text lane on both paths)
 
 ### Fixed
 - Docs state the construct count as six (decision, pushback, progress,

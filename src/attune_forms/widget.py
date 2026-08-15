@@ -27,6 +27,7 @@ from html import escape
 
 from attune_forms.bridge import is_fully_inferred
 from attune_forms.models import (
+    ASSUMPTION_RULINGS,
     FormQuestion,
     FormSchema,
     QuestionType,
@@ -404,6 +405,59 @@ def _control_ranking_html(q: FormQuestion) -> str:
     )
 
 
+def _control_assumption_review_html(q: FormQuestion) -> str:
+    """Render an ASSUMPTION_REVIEW control: one row per inferred
+    assumption, each a fixed accept / edit / reject radiogroup with an
+    inline replacement-text input that the script reveals when "edit" is
+    picked (pre-filled with the label, so the user edits rather than
+    retypes).
+
+    Rows reuse the triage row family (label / detail / radiogroup); the
+    ``source`` renders muted so the user can see WHERE the agent inferred
+    it from. A ``suggested`` accept renders pre-selected with a visible
+    "suggested" mark (D2-b) — a proposal to confirm, never silently the
+    answer. Rows carry ``data-item`` so the submit script rebuilds the
+    ``{key: ruling}`` mapping generically; the text input is
+    ``data-control`` too, so the round-trip simulator sees it.
+    """
+    suggested = q.suggested if isinstance(q.suggested, dict) else {}
+    rows = ""
+    for idx, item in enumerate(q.assumptions or []):
+        label = item.get("label", "")
+        key = triage_item_key(item)
+        source = (
+            f'<span class="ae-assume-src">from {_esc(item["source"])}</span>'
+            if item.get("source")
+            else ""
+        )
+        detail = (
+            f'<span class="ae-triage-detail">{_esc(item["detail"])}</span>'
+            if item.get("detail")
+            else ""
+        )
+        pick = suggested.get(key)
+        opts = ""
+        for ruling in ASSUMPTION_RULINGS:
+            checked = " checked" if pick == ruling else ""
+            mark = '<span class="ae-triage-sug">suggested</span>' if pick == ruling else ""
+            opts += (
+                f'<label class="ae-triage-opt">'
+                f'<input type="radio" name="{_esc(q.id)}::{idx}" data-control '
+                f'data-assume="{ruling}" value="{ruling}"{checked}> '
+                f"<span>{ruling}</span>{mark}</label>"
+            )
+        rows += (
+            f'<div class="ae-triage-row" data-assume-row data-item="{_esc(key)}">'
+            f'<div class="ae-triage-head">'
+            f'<span class="ae-triage-label">{_esc(label)}</span>{detail}{source}</div>'
+            f'<div class="ae-triage-opts" role="radiogroup" '
+            f'aria-label="{_esc(label)}">{opts}</div>'
+            f'<input type="text" data-control class="ae-input ae-assume-edit" '
+            f'value="{_esc(label)}" aria-label="Replacement text for {_esc(label)}"></div>'
+        )
+    return f'<div class="ae-triage">{rows}</div>'
+
+
 def _control_multi_select_html(q: FormQuestion) -> str:
     """Render MULTI_SELECT: a list_style list, or plain checkboxes."""
     if q.list_style:
@@ -479,6 +533,7 @@ _CONTROL_RENDERERS: dict[QuestionType, Callable[[FormQuestion], str]] = {
     QuestionType.TRIAGE: _control_triage_html,
     QuestionType.CONFIRM: _control_confirm_html,
     QuestionType.RANKING: _control_ranking_html,
+    QuestionType.ASSUMPTION_REVIEW: _control_assumption_review_html,
     QuestionType.MULTI_SELECT: _control_multi_select_html,
     QuestionType.SINGLE_SELECT: _control_single_select_html,
     QuestionType.BOOLEAN: _control_boolean_html,
@@ -585,6 +640,8 @@ def _families_for(question: FormQuestion) -> set[str]:
         return {"CONFIRM"}
     if qtype == QuestionType.RANKING:
         return {"RANK"}
+    if qtype == QuestionType.ASSUMPTION_REVIEW:
+        return {"TRIAGE", "INPUT", "ASSUME"}  # rows + edit box reuse; ASSUME adds the reveal
     if qtype == QuestionType.MULTI_SELECT:
         return {"LIST"} if question.list_style else {"CHECKS"}
     if qtype == QuestionType.SINGLE_SELECT:
@@ -676,6 +733,14 @@ def form_to_widget_html(
   // Ranking controls: move a row between the pool and the ranked list,
   // or within the ranked list. Pure DOM moves — the ranked list's order
   // is the answer, read at submit time.
+  // Assumption rows: reveal the replacement-text box only while "edit"
+  // is the picked ruling.
+  form.addEventListener('change', function(e) {{
+    var radio = e.target;
+    if (!radio || !radio.hasAttribute || !radio.hasAttribute('data-assume')) return;
+    var row = radio.closest ? radio.closest('[data-assume-row]') : null;
+    if (row) row.classList.toggle('ae-assume-editing', radio.value === 'edit');
+  }});
   form.addEventListener('click', function(e) {{
     var b = e.target.closest ? e.target.closest('[data-rank]') : null;
     if (!b || !form.contains(b)) return;
@@ -723,6 +788,19 @@ def form_to_widget_html(
           if (p) rulings[r.getAttribute('data-item')] = p.value;
         }});
         if (Object.keys(rulings).length) answers[fid] = rulings;
+      }} else if (ftype === 'assumption_review') {{
+        // assumption review: {{item key: 'accept' | 'reject' | {{edit: text}}}}
+        // from the per-row pickers; an edit carries the row's text box
+        // (empty text is posted as-is — the validator names it).
+        var rulings = {{}};
+        f.querySelectorAll('[data-assume-row]').forEach(function(r) {{
+          var p = r.querySelector('input[type=radio][data-control]:checked');
+          if (!p) return;
+          var t = r.querySelector('.ae-assume-edit');
+          rulings[r.getAttribute('data-item')] =
+            (p.value === 'edit') ? {{ edit: (t ? t.value : '') }} : p.value;
+        }});
+        if (Object.keys(rulings).length) answers[fid] = rulings;
       }} else if (ftype === 'ranking') {{
         // ranking: the ranked list's rows in DOM order ARE the answer;
         // an untouched (empty) ranking posts nothing.
@@ -755,10 +833,20 @@ def form_to_widget_html(
       var rows = f.querySelectorAll('.ae-triage-row').length;
       var rank = f.querySelector('.ae-rank');
       var slots = rank ? Number(rank.getAttribute('data-rank-n')) : 0;
+      // An assumption ruled "edit" with no replacement text is not
+      // answered — never post it for the validator to reject after
+      // the widget is dead.
+      var blankEdit = false;
+      if (v && typeof v === 'object' && !Array.isArray(v)) {{
+        Object.keys(v).forEach(function(k) {{
+          var r = v[k];
+          if (r && typeof r === 'object' && !String(r.edit || '').trim()) blankEdit = true;
+        }});
+      }}
       var empty = v === undefined || v === '' ||
         (Array.isArray(v) && v.length === 0) ||
         (rows > 0 && (!v || Object.keys(v).length < rows)) ||
-        (slots > 0 && (!v || v.length < slots));
+        (slots > 0 && (!v || v.length < slots)) || blankEdit;
       f.classList.toggle('ae-field-missing', empty);
       if (empty) {{
         var lbl = f.querySelector('.ae-label');

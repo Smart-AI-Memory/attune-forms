@@ -219,6 +219,9 @@ class TestReferenceConformance:
                 "finding_rulings.stale-doc: ticket",
                 "flag_flip_gate: Approve",
                 "rollout_order: staging, canary, us-prod",  # a ranking: ordered comma list
+                "inferred_scope.py-floor: accept",
+                "inferred_scope.host: edit: Claude Code plus any text-only host via markdown",
+                "inferred_scope.Tests run in CI on every push: reject",
                 "blockers: Design sign-off",
             ]
         )
@@ -228,6 +231,7 @@ class TestReferenceConformance:
         assert set(response.responses) == set(EXAMPLE_ANSWERS)
         assert response.responses["finding_rulings"] == EXAMPLE_ANSWERS["finding_rulings"]
         assert response.responses["rollout_order"] == EXAMPLE_ANSWERS["rollout_order"]
+        assert response.responses["inferred_scope"] == EXAMPLE_ANSWERS["inferred_scope"]
         assert response.responses["estimated_days"] == 3
 
     def test_filled_skeleton_round_trips_identically(self) -> None:

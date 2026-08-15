@@ -22,6 +22,7 @@ import json
 from typing import Any
 
 from attune_forms.models import (
+    ASSUMPTION_RULINGS,
     FormQuestion,
     FormSchema,
     QuestionType,
@@ -124,6 +125,22 @@ def _ranking_lines(q: FormQuestion) -> list[str]:
     return lines
 
 
+def _assumption_lines(q: FormQuestion) -> list[str]:
+    """Assumption rows + the fixed ruling rule for an ASSUMPTION_REVIEW."""
+    accept, edit, reject = ASSUMPTION_RULINGS
+    lines = [f"Rule each assumption: `{accept}` / `{edit}: <replacement text>` / `{reject}`"]
+    suggested = q.suggested if isinstance(q.suggested, dict) else {}
+    for item in q.assumptions or []:
+        key = triage_item_key(item)
+        detail = f" — {item['detail']}" if item.get("detail") else ""
+        source = f" *(from {item['source']})*" if item.get("source") else ""
+        line = f"- **{item.get('label', '')}**{detail}{source}"
+        if key in suggested:
+            line += f" → suggested: `{suggested[key]}`"
+        lines.append(line)
+    return lines
+
+
 def _control_lines(q: FormQuestion) -> list[str]:
     """The control-specific body lines for one question."""
     if q.type == QuestionType.BOOLEAN:
@@ -166,6 +183,8 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return _triage_lines(q)
     if q.type == QuestionType.RANKING:
         return _ranking_lines(q)
+    if q.type == QuestionType.ASSUMPTION_REVIEW:
+        return _assumption_lines(q)
     if q.type == QuestionType.CONFIRM:
         lines = ["If approved:"]
         for item in q.consequences or []:
@@ -224,6 +243,12 @@ def _skeleton_value(q: FormQuestion) -> Any:
             triage_item_key(item): (q.suggested or {}).get(triage_item_key(item))
             for item in q.triage_items or []
         }
+    if q.type == QuestionType.ASSUMPTION_REVIEW:
+        suggested = q.suggested if isinstance(q.suggested, dict) else {}
+        return {
+            triage_item_key(item): suggested.get(triage_item_key(item))
+            for item in q.assumptions or []
+        }
     # `is not None`, never truthiness: a falsy default (0, "") is still
     # a default, not "unanswered" (review finding, 2026-08-14).
     if q.default is not None:
@@ -270,7 +295,8 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         "lines — `field_id: value` or `N: value` (field number); a triage "
         "row is `field_id.item_id: disposition`; a ranking is a comma list "
         "in order (`field_id: b, a, c`) or one slot per line "
-        "(`field_id.1: b`):",
+        "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
+        "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
         "```json",
         json.dumps(skeleton, indent=2, ensure_ascii=False),

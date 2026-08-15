@@ -29,7 +29,8 @@ and serves four MCP tools — `elicitation_render_form`,
 `elicitation_render_widget`, `elicitation_collect_response`,
 `elicitation_ask` — from this package via `uvx`. Decision cards,
 pushback cards, progress forms, deliberation cards, triage boards,
-confirm gates, and ranking lists work out of the box; rich HTML renders where the host
+confirm gates, ranking lists, and assumption reviews work out of the
+box; rich HTML renders where the host
 supports widgets, degrades to plain questions where it doesn't, and
 renders as portable markdown on text-only hosts — with typed replies
 parsed back into the same validator.
@@ -46,7 +47,7 @@ Linux/macOS/Windows. Apache 2.0.
 ## The grammar
 
 Beyond the plain field types (text, single/multi select, boolean,
-number, date, textarea), seven constructs carry conversational meaning:
+number, date, textarea), eight constructs carry conversational meaning:
 
 - **Decision** — the agent proposes: recommended option first, a "why"
   rationale, a one-line tradeoff under every alternative. Validates
@@ -75,6 +76,11 @@ number, date, textarea), seven constructs carry conversational meaning:
   renders visibly as a proposal (never as the answer), and flat
   surfaces expand it to one pick per rank slot that folds back on
   collection.
+- **Assumption review** — the agent lists the assumptions it inferred
+  from context (each with its source) and the user rules every one
+  `accept` / `edit` / `reject`, typing replacement text for an edit;
+  the vocabulary is fixed, `suggested` may pre-mark accept only, and
+  "infer first" stops being a discipline and becomes an artifact.
 
 ## Quick start
 

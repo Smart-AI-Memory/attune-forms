@@ -20,6 +20,8 @@ from __future__ import annotations
 from typing import Any
 
 from attune_forms.models import (
+    ASSUMPTION_RULINGS,
+    ASSUMPTION_TEXT_SUFFIX,
     FormQuestion,
     FormSchema,
     QuestionType,
@@ -135,6 +137,34 @@ def form_to_elicitation_schema(form: FormSchema) -> dict[str, Any]:
                 if pick is not None:
                     prop["default"] = pick
                 properties[f"{q.id}.{key}"] = prop
+                if q.required:
+                    required.append(f"{q.id}.{key}")
+            continue
+        if q.type is QuestionType.ASSUMPTION_REVIEW:
+            # Flat object of primitives: one fixed-vocabulary enum per
+            # assumption plus an OPTIONAL paired text property for the
+            # edit lane (``"<id>.<key>.text"``); the fold keeps the text
+            # only when the ruling is edit, and the validator requires it
+            # then.
+            for item in q.assumptions or []:
+                key = triage_item_key(item)
+                prop = {
+                    "title": f"{q.text} — {item.get('label', '')}",
+                    "type": "string",
+                    "enum": list(ASSUMPTION_RULINGS),
+                }
+                context = " · ".join(b for b in (item.get("source"), item.get("detail")) if b)
+                if context:
+                    prop["description"] = context
+                pick = (q.suggested or {}).get(key) if isinstance(q.suggested, dict) else None
+                if pick is not None:
+                    prop["default"] = pick
+                properties[f"{q.id}.{key}"] = prop
+                properties[f"{q.id}.{key}{ASSUMPTION_TEXT_SUFFIX}"] = {
+                    "title": f"Replacement text if editing — {item.get('label', '')}",
+                    "type": "string",
+                    "description": "Only read when the ruling is edit",
+                }
                 if q.required:
                     required.append(f"{q.id}.{key}")
             continue

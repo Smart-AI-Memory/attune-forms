@@ -86,6 +86,28 @@ class QuestionType(str, Enum):
     # per rank slot (ids ``"<id>.<k>"``, D2-b) and folds back at
     # collection time.
     RANKING = "ranking"
+    # v8 (communication grammar member #8, assumption-review-construct
+    # spec): an assumption review — the agent lists the assumptions it
+    # INFERRED from context (``assumptions``: {label, id?, detail?,
+    # source?}) and the user rules each one from the FIXED vocabulary
+    # accept / edit / reject, supplying replacement text for an edit. The
+    # answer is {item key: "accept" | "reject" | {"edit": text}} — the
+    # triage mapping shape plus an edit lane (D2-c). ``suggested`` may
+    # pre-mark ``accept`` only, visibly (D2-b); ``default`` and
+    # ``dispositions`` are rejected (D2-a: the vocabulary IS the
+    # construct). Flat surfaces expand to one single-select per item
+    # (``"<id>.<key>"``) paired with an optional text question
+    # (``"<id>.<key>.text"``); the fold enforces text-iff-edit.
+    ASSUMPTION_REVIEW = "assumption_review"
+
+
+#: The fixed ruling vocabulary of an ASSUMPTION_REVIEW (D2-a). Not
+#: author-renameable: the meaning of the construct is these three words.
+ASSUMPTION_RULINGS = ("accept", "edit", "reject")
+
+#: Suffix of the flat-surface text question paired with each assumption
+#: (``"<id>.<key>.text"``): the replacement text when the ruling is edit.
+ASSUMPTION_TEXT_SUFFIX = ".text"
 
 
 def ranking_slot_count(question: "FormQuestion") -> int:
@@ -195,6 +217,12 @@ class FormQuestion:
             "proposed"; never treated as the answer. None = none
         top_n: RANKING only — rank just the top N options (1 <= N <=
             len(options)); None = the answer is a full permutation.
+        assumptions: ASSUMPTION_REVIEW only — the inferred assumptions as
+            a non-empty list of {label, id?, detail?, source?} dicts
+            (``source`` = where the agent inferred it from). Keyed like
+            triage items (:func:`triage_item_key`); keys unique. The
+            ruling vocabulary is fixed (:data:`ASSUMPTION_RULINGS`);
+            ``suggested`` may pre-mark ``accept`` only. None = none
         consequences: CONFIRM only — what happens if the action is
             approved, as a non-empty list of {label, severity?, detail?}
             dicts (severity a free tag; conventional vocabulary low /
@@ -239,6 +267,7 @@ class FormQuestion:
     list_style: str | None = None
     inferred_from: str | None = None
     top_n: int | None = None
+    assumptions: list[dict[str, str]] | None = None
 
     def _fallback_help(self) -> str | None:
         """Help text for AskUserQuestion, carrying any inference provenance.
@@ -267,8 +296,10 @@ class FormQuestion:
                 ``{"type": "triage", "options": []}`` payload (review
                 finding, 2026-08-14). Likewise for a RANKING question,
                 whose ordered-list answer expands to one payload per rank
-                slot (D2-b). Callers on the one-payload contract must use
-                :meth:`to_ask_user_formats`.
+                slot (D2-b), and an ASSUMPTION_REVIEW, whose mapping
+                answer expands to one payload per assumption plus a paired
+                text question. Callers on the one-payload contract must
+                use :meth:`to_ask_user_formats`.
         """
         if self.type is QuestionType.TRIAGE:
             raise ValueError(
@@ -278,6 +309,11 @@ class FormQuestion:
             raise ValueError(
                 "a ranking question expands to one payload per rank slot — "
                 "use to_ask_user_formats()"
+            )
+        if self.type is QuestionType.ASSUMPTION_REVIEW:
+            raise ValueError(
+                "an assumption review expands to one payload per assumption "
+                "(plus a paired text question) — use to_ask_user_formats()"
             )
         # Decision (v3), pushback (v4), and progress (v5) all fall back to a
         # single-select with the recommended option ordered first — the
@@ -362,9 +398,12 @@ class FormQuestion:
         per rank slot (ids ``"<id>.<k>"``, k 1-based, titled "Rank #k";
         every slot offers every option because a host question tool
         cannot remove already-picked ones — the collect-time validator
-        catches a repeat). :func:`attune_forms.collect_form_response`
-        folds the dotted ids back into the mapping / list answer, so the
-        round-trip is lossless.
+        catches a repeat); and ASSUMPTION_REVIEW, which expands to one
+        single-select per assumption over the fixed vocabulary PAIRED
+        with an optional text question (``"<id>.<key>.text"``) for the
+        edit lane. :func:`attune_forms.collect_form_response` folds the
+        dotted ids back into the mapping / list answer, so the round-trip
+        is lossless.
         """
         if self.type is QuestionType.RANKING:
             slots = ranking_slot_count(self)
@@ -383,9 +422,44 @@ class FormQuestion:
                 }
                 for k in range(1, slots + 1)
             ]
+        if self.type is QuestionType.ASSUMPTION_REVIEW:
+            # One single-select per assumption over the fixed vocabulary,
+            # each PAIRED with an optional text question for the edit lane
+            # — a host question tool cannot branch, so the text is always
+            # offered; the collect-time fold keeps it only when the ruling
+            # is edit, and the validator requires it then.
+            payloads: list[dict[str, Any]] = []
+            for item in self.assumptions or []:
+                key = triage_item_key(item)
+                context = " · ".join(b for b in (item.get("source"), item.get("detail")) if b)
+                payloads.append(
+                    {
+                        "question_id": f"{self.id}.{key}",
+                        "question": f"{self.text} — {item.get('label', '')}",
+                        "type": "single_select",
+                        "options": list(ASSUMPTION_RULINGS),
+                        "default": (
+                            (self.suggested or {}).get(key)
+                            if isinstance(self.suggested, dict)
+                            else None
+                        ),
+                        "help_text": context or None,
+                    }
+                )
+                payloads.append(
+                    {
+                        "question_id": f"{self.id}.{key}{ASSUMPTION_TEXT_SUFFIX}",
+                        "question": f"Replacement text if editing — {item.get('label', '')}",
+                        "type": "text_input",
+                        "options": [],
+                        "default": None,
+                        "help_text": "Only read when the ruling is edit",
+                    }
+                )
+            return payloads
         if self.type is not QuestionType.TRIAGE:
             return [self.to_ask_user_format()]
-        payloads: list[dict[str, Any]] = []
+        payloads = []
         for item in self.triage_items or []:
             key = triage_item_key(item)
             context = " · ".join(b for b in (item.get("tag"), item.get("detail")) if b)

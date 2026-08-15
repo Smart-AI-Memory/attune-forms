@@ -112,6 +112,16 @@ _FORMS: dict[str, dict] = {
         "top_n": 2,
         "suggested": ["b", "a"],
     },
+    "assumption_review": {
+        "id": "ar",
+        "type": "assumption_review",
+        "text": "ar",
+        "assumptions": [
+            {"id": "a1", "label": "Assumed one", "source": "README", "detail": "ctx"},
+            {"label": "Assumed two"},
+        ],
+        "suggested": {"a1": "accept"},
+    },
 }
 
 
@@ -187,6 +197,8 @@ def test_families_for_returns_known_names() -> None:
             fields.update(consequences=[{"label": "X"}])
         elif qtype == QuestionType.RANKING:
             fields.update(options=["a", "b"])
+        elif qtype == QuestionType.ASSUMPTION_REVIEW:
+            fields.update(assumptions=[{"label": "X"}])
         form = form_from_dict({"title": "t", "fields": [fields]})
         families = _families_for(form.questions[0])
         assert families, f"{qtype.value} maps to no family"
