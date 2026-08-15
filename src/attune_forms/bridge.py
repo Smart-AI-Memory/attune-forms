@@ -26,6 +26,7 @@ from attune_forms.models import (
     FormResponse,
     FormSchema,
     QuestionType,
+    ranking_slot_count,
     triage_item_key,
 )
 
@@ -104,6 +105,7 @@ _OPTIONS_REQUIRED_TYPES = (
     QuestionType.DECISION,
     QuestionType.PUSHBACK,
     QuestionType.DELIBERATION,
+    QuestionType.RANKING,
 )
 
 
@@ -459,10 +461,12 @@ def _parse_suggested(
     Optional; keys must be item labels, values dispositions.
     """
     suggested = raw.get("suggested")
-    if suggested is None:
+    if suggested is None or qtype is QuestionType.RANKING:
+        # A ranking's ``suggested`` is an ORDER (a list), parsed and
+        # validated by ``_parse_ranking_extras``.
         return None, []
     if qtype is not QuestionType.TRIAGE:
-        return None, [f"{where} 'suggested' is only valid on triage (got {qtype.value})"]
+        return None, [f"{where} 'suggested' is only valid on triage or ranking (got {qtype.value})"]
     if not isinstance(suggested, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in suggested.items()
     ):
@@ -547,6 +551,74 @@ def _parse_confirm_extras(
                 problems.append(f"{where} consequences[{idx}] '{extra}' must be a string")
 
     return (consequences if not problems else None), options, problems
+
+
+def _parse_ranking_extras(
+    where: str, raw: dict[str, Any], qtype: QuestionType, options: list[str]
+) -> tuple[int | None, list[str] | None, list[str]]:
+    """Parse the v8 RANKING extras and enforce its rules (spec R1).
+
+    Returns ``(top_n, suggested_order, problems)``.
+
+    - ``options``: >= 2 unique non-empty strings (a ranking of one is
+      not a ranking; a repeated option cannot be ordered).
+    - ``top_n``: optional int with ``1 <= top_n <= len(options)``; when
+      absent the answer is a full permutation.
+    - ``suggested``: optional proposed order — a list of distinct
+      options whose length equals the answer length (D2-c: rendered
+      visibly as a proposal, never as the answer).
+    - ``default``: REJECTED (D2-c) — a pre-filled order is ``suggested``,
+      so the answer stays an explicit act and one word keeps one meaning
+      across constructs.
+
+    ``top_n`` is invalid on every other type.
+    """
+    top_n = raw.get("top_n")
+    if qtype is not QuestionType.RANKING:
+        if top_n is not None:
+            return None, None, [f"{where} 'top_n' is only valid on ranking (got {qtype.value})"]
+        return None, None, []
+
+    problems: list[str] = []
+    if len(options) < 2 or len(set(options)) != len(options) or not all(options):
+        problems.append(f"{where} type ranking requires >= 2 unique non-empty options")
+
+    if top_n is not None:
+        if isinstance(top_n, bool) or not isinstance(top_n, int):
+            problems.append(f"{where} 'top_n' must be an integer")
+            top_n = None
+        elif not 1 <= top_n <= len(options):
+            problems.append(f"{where} 'top_n' must be between 1 and {len(options)} (got {top_n})")
+            top_n = None
+
+    if raw.get("default") is not None:
+        problems.append(
+            f"{where} 'default' is not permitted on ranking (D2-c: a proposed order is 'suggested')"
+        )
+
+    suggested = raw.get("suggested")
+    if suggested is not None:
+        expected = top_n if top_n is not None else len(options)
+        if not isinstance(suggested, list) or not all(isinstance(s, str) for s in suggested):
+            problems.append(f"{where} 'suggested' on ranking must be a list of options (an order)")
+            suggested = None
+        else:
+            order_problems: list[str] = []
+            stray = [s for s in suggested if s not in options]
+            if stray:
+                order_problems.append(f"{where} 'suggested' entries not in options: {stray}")
+            if len(set(suggested)) != len(suggested):
+                order_problems.append(f"{where} 'suggested' order repeats an option")
+            if len(suggested) != expected:
+                order_problems.append(
+                    f"{where} 'suggested' order must name exactly {expected} option(s) "
+                    f"(got {len(suggested)})"
+                )
+            if order_problems:
+                problems.extend(order_problems)
+                suggested = None
+
+    return top_n, suggested, problems
 
 
 def _parse_inferred_from(where: str, raw: dict[str, Any]) -> tuple[str | None, list[str]]:
@@ -676,6 +748,11 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         consequences, options, confirm_problems = _parse_confirm_extras(where, raw, qtype, options)
         problems.extend(confirm_problems)
 
+        top_n, suggested_order, ranking_problems = _parse_ranking_extras(where, raw, qtype, options)
+        problems.extend(ranking_problems)
+        if suggested_order is not None:
+            suggested = suggested_order
+
         list_style, list_style_problems = _parse_list_style(where, raw, qtype)
         problems.extend(list_style_problems)
 
@@ -708,23 +785,26 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     consequences=consequences,
                     list_style=list_style,
                     inferred_from=inferred_from,
+                    top_n=top_n,
                 )
             )
 
-    # The dotted triage namespace must be collision-free BY DEFINITION:
+    # The dotted answer namespace must be collision-free BY DEFINITION:
     # every flat surface (AskUserQuestion expansion, elicitation schema,
-    # markdown shorthand) writes triage answers as "<board id>.<item>",
-    # and the collect-time fold claims every key with that prefix — a
-    # sibling field id inside the namespace would have its answer stolen
-    # (review finding, 2026-08-14). Rejecting the definition keeps every
-    # downstream consumer safe without per-surface guards.
-    triage_ids = [q.id for q in questions if q.type is QuestionType.TRIAGE]
-    for question in questions:
-        for board_id in triage_ids:
-            if question.id != board_id and question.id.startswith(f"{board_id}."):
+    # markdown shorthand) writes triage answers as "<board id>.<item>"
+    # and ranking answers as "<field id>.<slot>", and the collect-time
+    # fold claims every key with that prefix — a sibling field id inside
+    # the namespace would have its answer stolen (review finding,
+    # 2026-08-14). Rejecting the definition keeps every downstream
+    # consumer safe without per-surface guards.
+    for owner in questions:
+        if owner.type not in _EXPANDING_TYPES:
+            continue
+        for question in questions:
+            if question.id != owner.id and question.id.startswith(f"{owner.id}."):
                 problems.append(
-                    f"field id {question.id!r} collides with triage {board_id!r}'s "
-                    f"dotted answer namespace ('{board_id}.<item>')"
+                    f"field id {question.id!r} collides with {owner.type.value} "
+                    f"{owner.id!r}'s dotted answer namespace ('{owner.id}.<key>')"
                 )
 
     if problems:
@@ -753,8 +833,16 @@ _WIDGET_ONLY_TYPES = frozenset(
         QuestionType.DELIBERATION,
         QuestionType.TRIAGE,
         QuestionType.CONFIRM,
+        QuestionType.RANKING,
     }
 )
+
+#: Types whose answer has no single flat-surface payload and therefore
+#: EXPANDS to dotted keys (``"<id>.<key>"``) on AskUserQuestion, the
+#: elicitation schema, and markdown shorthand, folding back in
+#: :func:`collect_form_response`: TRIAGE (one key per item) and RANKING
+#: (one key per rank slot, D2-b).
+_EXPANDING_TYPES = frozenset({QuestionType.TRIAGE, QuestionType.RANKING})
 
 #: The strict subset with NO portable ``AskUserQuestion`` control at
 #: all. A form using any of these cannot be asked on ``AskUserQuestion``
@@ -1169,6 +1257,30 @@ def _validate_triage(question: FormQuestion, value: Any) -> str | None:
     return None
 
 
+def _validate_ranking(question: FormQuestion, value: Any) -> str | None:
+    """RANKING: value is an ordered list of option labels — every entry
+    an option, no repeats, exactly ``top_n`` (or all) of them (spec R2).
+    Each failure names the offending entries so the re-ask is precise.
+    """
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        return f"{question.id!r} expects an ordered list of options (ranking)"
+    unknown = [v for v in value if v not in question.options]
+    if unknown:
+        return f"{question.id!r} has out-of-option entr(y/ies): {unknown}"
+    seen: set[str] = set()
+    repeats: list[str] = []
+    for entry in value:
+        if entry in seen:
+            repeats.append(entry)
+        seen.add(entry)
+    if repeats:
+        return f"{question.id!r} ranks the same option more than once: {repeats}"
+    expected = ranking_slot_count(question)
+    if len(value) != expected:
+        return f"{question.id!r} must rank exactly {expected} option(s) (got {len(value)})"
+    return None
+
+
 def _validate_boolean(question: FormQuestion, value: Any) -> str | None:
     """BOOLEAN: value must be exactly one of ``_BOOLEAN_OPTIONS``."""
     if value not in _BOOLEAN_OPTIONS:
@@ -1228,6 +1340,7 @@ _ANSWER_VALIDATORS: dict[QuestionType, Callable[[FormQuestion, Any], str | None]
     QuestionType.PROGRESS: _validate_membership,
     QuestionType.DELIBERATION: _validate_membership,
     QuestionType.TRIAGE: _validate_triage,
+    QuestionType.RANKING: _validate_ranking,
     QuestionType.CONFIRM: _validate_membership,
     QuestionType.BOOLEAN: _validate_boolean,
     QuestionType.NUMBER: _validate_number,
@@ -1241,29 +1354,50 @@ def _validate_answer(question: FormQuestion, value: Any) -> str | None:
     return handler(question, value)
 
 
-def _fold_triage_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
-    """Fold per-item triage answers back into the mapping shape.
+def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
+    """Fold dotted per-item / per-slot answers back into their canonical shape.
 
     The non-widget surfaces (AskUserQuestion expansion, MCP elicitation —
-    whose schema must stay flat) carry a TRIAGE answer as one key per
-    item: ``"<question id>.<item label>"``. This pre-pass rebuilds the
-    canonical ``{label: disposition}`` mapping so every surface funnels
-    into the same validator. A mapping answer already present under the
-    question id wins; the input dict is never mutated.
+    whose schema must stay flat — and markdown shorthand) carry a TRIAGE
+    answer as one key per item (``"<id>.<item key>"``) and a RANKING
+    answer as one key per rank slot (``"<id>.<k>"``, k 1-based). This
+    pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
+    ordered list so every surface funnels into the same validator. An
+    answer already present under the question id wins; the input dict is
+    never mutated.
+
+    Ranking slots fold in slot order; a non-integer or out-of-range slot
+    suffix is left in place (so it surfaces as an unknown key rather
+    than silently vanishing), and gaps are simply absent — the validator
+    then names the wrong length.
     """
-    triage_questions = [q for q in form.questions if q.type is QuestionType.TRIAGE]
-    if not triage_questions:
+    expanding = [q for q in form.questions if q.type in _EXPANDING_TYPES]
+    if not expanding:
         return raw_answers
     folded = dict(raw_answers)
-    for question in triage_questions:
+    for question in expanding:
         if question.id in folded:
             continue
         prefix = f"{question.id}."
-        picks = {
-            key[len(prefix) :]: folded.pop(key) for key in list(folded) if key.startswith(prefix)
-        }
-        if picks:
-            folded[question.id] = picks
+        if question.type is QuestionType.TRIAGE:
+            picks = {
+                key[len(prefix) :]: folded.pop(key)
+                for key in list(folded)
+                if key.startswith(prefix)
+            }
+            if picks:
+                folded[question.id] = picks
+            continue
+        slots: dict[int, Any] = {}
+        limit = ranking_slot_count(question)
+        for key in list(folded):
+            if not key.startswith(prefix):
+                continue
+            suffix = key[len(prefix) :]
+            if suffix.isdigit() and 1 <= int(suffix) <= limit:
+                slots[int(suffix)] = folded.pop(key)
+        if slots:
+            folded[question.id] = [slots[k] for k in sorted(slots)]
     return folded
 
 
@@ -1293,7 +1427,7 @@ def collect_form_response(
     """
     problems: list[str] = []
     responses: dict[str, Any] = {}
-    raw_answers = _fold_triage_answers(form, raw_answers)
+    raw_answers = _fold_expanded_answers(form, raw_answers)
 
     for question in form.questions:
         provided = question.id in raw_answers

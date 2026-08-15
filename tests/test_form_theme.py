@@ -8,9 +8,12 @@ import re
 from attune_forms import theme
 from attune_forms import widget as widget_mod
 
-#: Chair-ruled cap (spec decisions.md D1: amended 4 KB -> 6 KB with
-#: the 5,574 B full-sheet measurement on record).
-_BUDGET_BYTES = 8192
+#: Chair-ruled cap (workflow-intake-forms decisions.md D1: 4 KB -> 6 KB
+#: with the 5,574 B measurement; 6 KB -> 8 KB with the grammar-expansion
+#: merge, 8,158 B; 8 KB -> 10 KB ratified 2026-08-15, ranking-construct
+#: decisions.md D2-a — a consolidation pass was offered and NOT chosen,
+#: so the cap is not a ratchet: the next raise needs its own ruling).
+_BUDGET_BYTES = 10240
 
 #: ``var(--name)`` with NO fallback value — the pattern the theme
 #: must never contain (host-token fallbacks are the design).

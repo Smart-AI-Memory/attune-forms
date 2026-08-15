@@ -39,6 +39,10 @@ from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 #: checked control rather than the generic first-control tail).
 _CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation", "confirm"}
 
+#: data-ftype values whose answer is a collection the script rebuilds
+#: from several controls (checked boxes, per-row radios, ranked rows).
+_COLLECTION_FTYPES = {"multi_select", "triage", "ranking"}
+
 
 class _WidgetDOM(HTMLParser):
     """Parse the emitted widget HTML into fields the way the submit
@@ -118,6 +122,11 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
                 ctl["checked"] = value.get(ctl.get("item")) == ctl["value"]
             continue
         wanted = [str(v) for v in (value if isinstance(value, list) else [value])]
+        if field["ftype"] == "ranking":
+            # Ranking: the user moves rows into the ranked list in the
+            # answer's order — the DOM order the script reads at submit.
+            field["ranked"] = [v for v in wanted if v in {c["value"] for c in field["controls"]}]
+            continue
         for ctl in field["controls"]:
             if ctl["type"] in ("checkbox", "radio"):
                 # Radio semantics: picking one clears the group.
@@ -140,6 +149,10 @@ def _submit(dom: _WidgetDOM) -> dict[str, Any]:
             rulings = {c["item"]: c["value"] for c in controls if c.get("checked")}
             if rulings:
                 answers[fid] = rulings
+        elif ftype == "ranking":
+            # The ranked list's rows in DOM order; untouched posts nothing.
+            if field.get("ranked"):
+                answers[fid] = list(field["ranked"])
         elif ftype in _CHECKED_FTYPES:
             picked = next((c for c in controls if c.get("checked")), None)
             if picked:
@@ -184,7 +197,7 @@ class TestSentinelContract:
         control is actually special-cased in the emitted reader."""
         _, dom = _render_reference()
         handled = set(re.findall(r"ftype === '(\w+)'", dom.script))
-        assert _CHECKED_FTYPES | {"multi_select"} <= handled
+        assert _CHECKED_FTYPES | _COLLECTION_FTYPES <= handled
 
 
 class TestFieldIdRoundTrip:

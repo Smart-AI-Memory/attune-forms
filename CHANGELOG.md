@@ -6,6 +6,35 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `ranking` construct (spec `ranking-construct`, communication-grammar
+  member #7 — roundtable `q-forms-grammar-expansion-001` backlog
+  candidate, chair-ruled into 0.6.0 on 2026-08-15): the user orders the
+  options, all of them or only the top `top_n`; the answer is the
+  ordered list (distinct, exactly `top_n`/all long, every entry an
+  option); a `suggested` order renders visibly as a proposal and is
+  never the answer, and `default` is rejected (D2-c). Widget: a ranked
+  list + unranked pool moved by buttons (no drag dependency), an
+  untouched form posts nothing. Flat surfaces expand to one
+  single-select per rank slot (`"<id>.<k>"`, D2-b) and fold back in
+  `collect_form_response`; elicitation schema is a bounded unique
+  array; markdown renders the rule + skeleton and ingests a comma list
+  in order (leading ordinals stripped) or one slot per line, typed
+  slots overriding a pasted skeleton. `ranking_slot_count` exported —
+  the one sizing rule every surface shares
+- Reference form + example answers cover `ranking`; widget round-trip,
+  CSS-family, needs-widget, markdown-conformance and ingestion guards
+  extended
+
+### Changed
+- Form theme budget raised 8 KB → 10 KB (9,808 B measured with the
+  RANK family; ratified 2026-08-15, ranking-construct D2-a — a CSS
+  consolidation pass was offered and not chosen, so the cap is not a
+  ratchet: the next raise needs its own ruling)
+- The dotted answer namespace guard now covers every expanding type
+  (triage items and ranking slots); the markdown parser names a dotted
+  key on a non-expanding field as such
+
 ### Fixed
 - Docs state the construct count as six (decision, pushback, progress,
   deliberation, triage, confirm) — the plain batched form is the
