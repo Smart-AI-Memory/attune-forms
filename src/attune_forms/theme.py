@@ -15,12 +15,12 @@ Every ``var()`` reference carries a literal fallback, so one
 stylesheet renders native on claude.ai (host tokens win,
 light/dark follows the host) and standalone (fallbacks win).
 
-Budget: ``FORM_THEME_CSS`` is capped at 6 KB raw by
-``test_form_theme_budget`` (amended from 4 KB by chair ruling
-2026-07-31 — the original figure predated the mandated fallback
-literals; measured full sheet = 5,574 B) — no fonts, no icon
-fonts, no images, no @import; growth past the cap is a design
-decision, not a drift.
+Budget: ``FORM_THEME_CSS`` is capped at 8 KB raw by
+``test_form_theme_budget`` (4 KB → 6 KB by chair ruling 2026-07-31;
+6 KB → 8 KB ratified with the grammar-expansion merge 2026-08-14 —
+TRIAGE + CONFIRM families + deliberation seat chips; measured full
+sheet = 8,158 B) — no fonts, no icon fonts, no images, no @import;
+growth past the cap is a design decision, not a drift.
 
 Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0

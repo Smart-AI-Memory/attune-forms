@@ -201,7 +201,11 @@ def _skeleton_value(q: FormQuestion) -> Any:
             triage_item_key(item): (q.suggested or {}).get(triage_item_key(item))
             for item in q.triage_items or []
         }
-    return q.default or (q.recommended if q.recommended else None)
+    # `is not None`, never truthiness: a falsy default (0, "") is still
+    # a default, not "unanswered" (review finding, 2026-08-14).
+    if q.default is not None:
+        return q.default
+    return q.recommended if q.recommended else None
 
 
 def form_to_markdown(form: FormSchema, message: str = "") -> str:

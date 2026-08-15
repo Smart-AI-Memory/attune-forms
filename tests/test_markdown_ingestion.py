@@ -239,3 +239,90 @@ class TestReferenceConformance:
         assert problems == []
         response = collect_form_response(form, answers)
         assert set(response.responses) == set(EXAMPLE_ANSWERS)
+
+
+class TestReviewFindingRegressions:
+    """One regression per confirmed 2026-08-14 review finding."""
+
+    def test_typed_shorthand_overrides_quoted_skeleton(self) -> None:
+        # Quoting the original message (whose skeleton carries prefills)
+        # must never beat what the user actually typed.
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "approach",
+                        "type": "decision",
+                        "text": "Approach?",
+                        "options": ["A", "B"],
+                        "recommended": "A",
+                    }
+                ],
+            }
+        )
+        quoted = form_to_markdown(form)  # skeleton prefills approach: "A"
+        reply = f"approach: B\n\n> quoting the form:\n{quoted}"
+        answers, _ = markdown_to_answers(form, reply)
+        assert answers["approach"] == "B"
+
+    def test_prose_around_a_block_is_not_a_problem(self) -> None:
+        form = form_from_dict(_small_form())
+        reply = 'Note: here you go!\n```json\n{"answers": {"env": "prod"}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert problems == []
+        assert answers == {"env": "prod"}
+
+    def test_python_fence_is_never_ingested(self) -> None:
+        form = form_from_dict(_small_form())
+        reply = "```python\ndays = 99\n```\nenv: staging"
+        answers, problems = markdown_to_answers(form, reply)
+        assert answers == {"env": "staging"}  # days=99 NOT ingested
+        assert problems == []  # fence markers are not shorthand lines
+
+    def test_unknown_json_key_is_named(self) -> None:
+        form = form_from_dict(_small_form())
+        reply = '```json\n{"answers": {"enw": "staging"}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert answers == {}
+        assert problems == ["unknown field: 'enw'"]
+
+    def test_dotted_json_triage_keys_accepted(self) -> None:
+        form = form_from_dict(_small_form())
+        reply = '```json\n{"answers": {"rulings.r1": "fix"}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert answers == {"rulings.r1": "fix"}
+        assert problems == []
+
+    def test_label_with_spaces_shorthand_parses(self) -> None:
+        # The footer teaches `field.item: disposition`; id-less items key
+        # by LABEL, which routinely contains spaces.
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "rulings",
+                        "type": "triage",
+                        "text": "Rule.",
+                        "triage_items": [{"label": "Unbounded retry loop"}],
+                        "dispositions": ["fix", "skip"],
+                    }
+                ],
+            }
+        )
+        answers, problems = markdown_to_answers(form, "rulings.Unbounded retry loop: fix")
+        assert problems == []
+        resp = collect_form_response(form, answers)
+        assert resp.responses["rulings"] == {"Unbounded retry loop": "fix"}
+
+    def test_nan_and_inf_do_not_pass_bounds(self) -> None:
+        form = form_from_dict(_small_form())
+        for bad in ("nan", "inf", "-inf", "1e999"):
+            answers, _ = markdown_to_answers(form, f"days: {bad}")
+            assert isinstance(answers["days"], str)  # passthrough, not float
+            with pytest.raises(FormValidationError, match="expects a number"):
+                collect_form_response(
+                    form,
+                    {**answers, "env": "staging", "rulings.r1": "fix", "rulings.r2": "fix"},
+                )

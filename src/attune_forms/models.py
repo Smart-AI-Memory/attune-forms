@@ -233,7 +233,18 @@ class FormQuestion:
         Returns:
             Dictionary with question data for AskUserQuestion
 
+        Raises:
+            ValueError: For a TRIAGE question — its {item: disposition}
+                answer has no single-payload equivalent, and the old
+                fall-through silently produced an unrenderable
+                ``{"type": "triage", "options": []}`` payload (review
+                finding, 2026-08-14). Callers on the one-payload
+                contract must use :meth:`to_ask_user_formats`.
         """
+        if self.type is QuestionType.TRIAGE:
+            raise ValueError(
+                "a triage question expands to one payload per item — " "use to_ask_user_formats()"
+            )
         # Decision (v3), pushback (v4), and progress (v5) all fall back to a
         # single-select with the recommended option ordered first — the
         # richer card layout is widget-only; the answer is one selected
