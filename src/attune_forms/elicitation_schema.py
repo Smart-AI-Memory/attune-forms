@@ -24,6 +24,7 @@ from attune_forms.models import (
     FormSchema,
     QuestionType,
     _consequences_summary,
+    ranking_slot_count,
     triage_item_key,
 )
 
@@ -55,6 +56,21 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
         prop.update(type="array", items={"type": "string", "enum": list(question.options)})
         if question.required:
             prop["minItems"] = 1
+    elif question.type == QuestionType.RANKING:
+        # An ordered array of distinct options, exactly ``top_n`` (or all)
+        # long — the multi-select array precedent with the ranking rules
+        # (spec R4). A ``suggested`` order is the schema default: the
+        # host shows it pre-filled as a proposal.
+        slots = ranking_slot_count(question)
+        prop.update(
+            type="array",
+            items={"type": "string", "enum": list(question.options)},
+            minItems=slots,
+            maxItems=slots,
+            uniqueItems=True,
+        )
+        if isinstance(question.suggested, list):
+            prop["default"] = list(question.suggested)
     elif question.type == QuestionType.BOOLEAN:
         prop["type"] = "boolean"
     elif question.type == QuestionType.NUMBER:

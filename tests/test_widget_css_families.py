@@ -104,6 +104,14 @@ _FORMS: dict[str, dict] = {
             {"label": "Docs promote"},
         ],
     },
+    "ranking": {
+        "id": "r",
+        "type": "ranking",
+        "text": "r",
+        "options": ["a", "b", "c"],
+        "top_n": 2,
+        "suggested": ["b", "a"],
+    },
 }
 
 
@@ -177,6 +185,8 @@ def test_families_for_returns_known_names() -> None:
             fields.update(triage_items=[{"label": "X"}], dispositions=["keep", "drop"])
         elif qtype == QuestionType.CONFIRM:
             fields.update(consequences=[{"label": "X"}])
+        elif qtype == QuestionType.RANKING:
+            fields.update(options=["a", "b"])
         form = form_from_dict({"title": "t", "fields": [fields]})
         families = _families_for(form.questions[0])
         assert families, f"{qtype.value} maps to no family"

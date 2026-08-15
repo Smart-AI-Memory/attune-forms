@@ -165,6 +165,16 @@ REFERENCE_FORM: dict[str, Any] = {
             ],
         },
         {
+            # v8: a ranking — order the top N; the proposed order is a
+            # visible proposal (D2-c), never the answer
+            "id": "rollout_order",
+            "type": "ranking",
+            "text": "Which environments ship first?",
+            "options": ["staging", "canary", "eu-prod", "us-prod"],
+            "top_n": 3,
+            "suggested": ["staging", "canary", "eu-prod"],
+        },
+        {
             # v5: a status report whose blocked items are a picker
             "id": "blockers",
             "type": "progress",
@@ -199,5 +209,6 @@ EXAMPLE_ANSWERS: dict[str, Any] = {
     "cache_strategy": "In-process LRU",
     "finding_rulings": {"retry-loop": "fix now", "stale-doc": "ticket"},
     "flag_flip_gate": "Approve",
+    "rollout_order": ["staging", "canary", "us-prod"],
     "blockers": "Design sign-off",
 }

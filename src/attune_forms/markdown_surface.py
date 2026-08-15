@@ -21,7 +21,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from attune_forms.models import FormQuestion, FormSchema, QuestionType, triage_item_key
+from attune_forms.models import (
+    FormQuestion,
+    FormSchema,
+    QuestionType,
+    ranking_slot_count,
+    triage_item_key,
+)
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
 #: Status icon per default-style progress status (matches the widget).
@@ -107,6 +113,17 @@ def _triage_lines(q: FormQuestion) -> list[str]:
     return lines
 
 
+def _ranking_lines(q: FormQuestion) -> list[str]:
+    """Option list + the ordering rule for a RANKING question."""
+    slots = ranking_slot_count(q)
+    scope = f"the top {slots}" if slots < len(q.options) else "all of these"
+    lines = [f"Rank {scope}, best first (each option once):"]
+    lines += [f"- {opt}" for opt in q.options]
+    if isinstance(q.suggested, list) and q.suggested:
+        lines.append(f"→ proposed order: {', '.join(q.suggested)}")
+    return lines
+
+
 def _control_lines(q: FormQuestion) -> list[str]:
     """The control-specific body lines for one question."""
     if q.type == QuestionType.BOOLEAN:
@@ -147,6 +164,8 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return _progress_lines(q)
     if q.type == QuestionType.TRIAGE:
         return _triage_lines(q)
+    if q.type == QuestionType.RANKING:
+        return _ranking_lines(q)
     if q.type == QuestionType.CONFIRM:
         lines = ["If approved:"]
         for item in q.consequences or []:
@@ -196,6 +215,10 @@ def _skeleton_value(q: FormQuestion) -> Any:
         return None
     if q.type == QuestionType.MULTI_SELECT:
         return [q.default] if q.default else []
+    if q.type == QuestionType.RANKING:
+        # The proposed order prefills (a visible proposal — the reply
+        # rules say typed shorthand overrides it); else an empty list.
+        return list(q.suggested) if isinstance(q.suggested, list) else []
     if q.type == QuestionType.TRIAGE:
         return {
             triage_item_key(item): (q.suggested or {}).get(triage_item_key(item))
@@ -245,7 +268,9 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         "---",
         "Reply by filling the `answers` values below, or with shorthand "
         "lines — `field_id: value` or `N: value` (field number); a triage "
-        "row is `field_id.item_id: disposition`:",
+        "row is `field_id.item_id: disposition`; a ranking is a comma list "
+        "in order (`field_id: b, a, c`) or one slot per line "
+        "(`field_id.1: b`):",
         "",
         "```json",
         json.dumps(skeleton, indent=2, ensure_ascii=False),

@@ -76,6 +76,26 @@ class QuestionType(str, Enum):
     # D2); approving is an explicit act on every surface. The answer is
     # one of the two options (validated as a single-select).
     CONFIRM = "confirm"
+    # v8 (communication grammar member #7, ranking-construct spec): a
+    # ranking — the user ORDERS the options, optionally only the top
+    # ``top_n``. The answer is an ordered list of option labels (distinct,
+    # every entry an option, length == top_n or len(options)) — the one
+    # construct whose answer is an ordered list. A ``suggested`` order
+    # renders visibly as a proposal, never as the answer; ``default`` is
+    # rejected (D2-c). On flat surfaces it expands to one single-select
+    # per rank slot (ids ``"<id>.<k>"``, D2-b) and folds back at
+    # collection time.
+    RANKING = "ranking"
+
+
+def ranking_slot_count(question: "FormQuestion") -> int:
+    """How many entries a RANKING answer carries: ``top_n`` or all options.
+
+    Every surface (widget header, ordinal flat expansion, elicitation
+    array bounds, markdown skeleton, validator) sizes the answer through
+    this one function so they can never disagree.
+    """
+    return question.top_n if question.top_n is not None else len(question.options)
 
 
 def _consequences_summary(consequences: list[dict[str, str]] | None) -> str | None:
@@ -166,10 +186,15 @@ class FormQuestion:
             (≥2 unique non-empty strings, e.g. ["fix now", "ticket",
             "dismiss"]). Every ruling in the answer must be one of these.
             None = none
-        suggested: TRIAGE only — {item label: disposition}: the agent's
+        suggested: TRIAGE — {item label: disposition}: the agent's
             proposed ruling per item, rendered pre-selected and marked
             "suggested" (a guess to confirm, never silently accepted).
-            Keys must be item labels, values dispositions. None = none
+            Keys must be item labels, values dispositions. RANKING — the
+            agent's proposed order as a list of options (distinct, one
+            entry per answer slot), rendered pre-arranged and badged
+            "proposed"; never treated as the answer. None = none
+        top_n: RANKING only — rank just the top N options (1 <= N <=
+            len(options)); None = the answer is a full permutation.
         consequences: CONFIRM only — what happens if the action is
             approved, as a non-empty list of {label, severity?, detail?}
             dicts (severity a free tag; conventional vocabulary low /
@@ -209,10 +234,11 @@ class FormQuestion:
     endorsements: dict[str, list[str]] | None = None
     triage_items: list[dict[str, str]] | None = None
     dispositions: list[str] | None = None
-    suggested: dict[str, str] | None = None
+    suggested: dict[str, str] | list[str] | None = None
     consequences: list[dict[str, str]] | None = None
     list_style: str | None = None
     inferred_from: str | None = None
+    top_n: int | None = None
 
     def _fallback_help(self) -> str | None:
         """Help text for AskUserQuestion, carrying any inference provenance.
@@ -239,12 +265,19 @@ class FormQuestion:
                 answer has no single-payload equivalent, and the old
                 fall-through silently produced an unrenderable
                 ``{"type": "triage", "options": []}`` payload (review
-                finding, 2026-08-14). Callers on the one-payload
-                contract must use :meth:`to_ask_user_formats`.
+                finding, 2026-08-14). Likewise for a RANKING question,
+                whose ordered-list answer expands to one payload per rank
+                slot (D2-b). Callers on the one-payload contract must use
+                :meth:`to_ask_user_formats`.
         """
         if self.type is QuestionType.TRIAGE:
             raise ValueError(
                 "a triage question expands to one payload per item — " "use to_ask_user_formats()"
+            )
+        if self.type is QuestionType.RANKING:
+            raise ValueError(
+                "a ranking question expands to one payload per rank slot — "
+                "use to_ask_user_formats()"
             )
         # Decision (v3), pushback (v4), and progress (v5) all fall back to a
         # single-select with the recommended option ordered first — the
@@ -324,10 +357,32 @@ class FormQuestion:
         Every type yields its single :meth:`to_ask_user_format` payload
         except TRIAGE, whose {item: disposition} answer has no
         single-question equivalent: it expands to one single-select per
-        item (ids ``"<id>.<label>"``, the suggested ruling as default).
-        :func:`attune_forms.collect_form_response` folds the dotted ids
-        back into the mapping answer, so the round-trip is lossless.
+        item (ids ``"<id>.<label>"``, the suggested ruling as default);
+        and RANKING, whose ordered-list answer expands to one single-select
+        per rank slot (ids ``"<id>.<k>"``, k 1-based, titled "Rank #k";
+        every slot offers every option because a host question tool
+        cannot remove already-picked ones — the collect-time validator
+        catches a repeat). :func:`attune_forms.collect_form_response`
+        folds the dotted ids back into the mapping / list answer, so the
+        round-trip is lossless.
         """
+        if self.type is QuestionType.RANKING:
+            slots = ranking_slot_count(self)
+            proposed = self.suggested if isinstance(self.suggested, list) else []
+            help_text = self._fallback_help()
+            note = f"Rank {slots} of {len(self.options)}; each option may be used once"
+            help_text = f"{help_text} · {note}" if help_text else note
+            return [
+                {
+                    "question_id": f"{self.id}.{k}",
+                    "question": f"{self.text} — Rank #{k}",
+                    "type": "single_select",
+                    "options": list(self.options),
+                    "default": proposed[k - 1] if k - 1 < len(proposed) else None,
+                    "help_text": help_text,
+                }
+                for k in range(1, slots + 1)
+            ]
         if self.type is not QuestionType.TRIAGE:
             return [self.to_ask_user_format()]
         payloads: list[dict[str, Any]] = []

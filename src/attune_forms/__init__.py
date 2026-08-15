@@ -76,6 +76,7 @@ from attune_forms.models import (
     FormResponse,
     FormSchema,
     QuestionType,
+    ranking_slot_count,
     triage_item_key,
 )
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
@@ -119,5 +120,6 @@ __all__ = [
     "problems_to_markdown",
     "select_form_surface",
     "set_keyboard_mode",
+    "ranking_slot_count",
     "triage_item_key",
 ]

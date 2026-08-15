@@ -26,7 +26,13 @@ from collections.abc import Callable
 from html import escape
 
 from attune_forms.bridge import is_fully_inferred
-from attune_forms.models import FormQuestion, FormSchema, QuestionType, triage_item_key
+from attune_forms.models import (
+    FormQuestion,
+    FormSchema,
+    QuestionType,
+    ranking_slot_count,
+    triage_item_key,
+)
 from attune_forms.theme import CSS_BASE as _CSS_BASE
 from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
 
@@ -349,6 +355,55 @@ def _control_confirm_html(q: FormQuestion) -> str:
     )
 
 
+def _control_ranking_html(q: FormQuestion) -> str:
+    """Render a RANKING control: a ranked list plus an unranked pool.
+
+    Two lists, no drag dependency (spec R3): every option starts in the
+    unranked pool with an "add" button; the ranked ``<ol>`` shows the
+    order (native numbering) with move-up / move-down / remove buttons.
+    Moving an option is the explicit act — an untouched form posts an
+    empty ranking, never the author's option order by accident. A
+    ``suggested`` order pre-populates the ranked list with a visible
+    "proposed" badge (D2-c: a proposal to confirm, never silently the
+    answer). Each row carries a hidden ``data-control`` input holding
+    the option, so the submit script (and the round-trip simulator) read
+    the ranked list generically; the answer is the ranked rows' values in
+    DOM order.
+    """
+    slots = ranking_slot_count(q)
+    proposed = q.suggested if isinstance(q.suggested, list) else []
+    buttons = "".join(
+        f'<button type="button" class="ae-rank-btn" data-rank="{action}" '
+        f'aria-label="{aria}">{glyph}</button>'
+        for action, aria, glyph in (
+            ("add", "Add to ranking", "+"),
+            ("up", "Move up", "↑"),
+            ("down", "Move down", "↓"),
+            ("drop", "Remove from ranking", "×"),
+        )
+    )
+
+    def row(opt: str) -> str:
+        return (
+            f'<li class="ae-rank-row" data-opt="{_esc(opt)}">'
+            f'<input type="hidden" data-control value="{_esc(opt)}">'
+            f'<span class="ae-rank-label">{_esc(opt)}</span>'
+            f'<span class="ae-rank-btns">{buttons}</span></li>'
+        )
+
+    ranked = "".join(row(opt) for opt in proposed)
+    pool = "".join(row(opt) for opt in q.options if opt not in proposed)
+    badge = '<span class="ae-rank-sug">proposed</span>' if proposed else ""
+    return (
+        f'<div class="ae-rank" data-rank-n="{slots}">'
+        f'<div class="ae-rank-h">Ranked <span class="ae-rank-count">{len(proposed)}</span>'
+        f"/{slots}{badge}</div>"
+        f'<ol class="ae-rank-ranked">{ranked}</ol>'
+        f'<div class="ae-rank-h">Unranked</div>'
+        f'<ul class="ae-rank-pool">{pool}</ul></div>'
+    )
+
+
 def _control_multi_select_html(q: FormQuestion) -> str:
     """Render MULTI_SELECT: a list_style list, or plain checkboxes."""
     if q.list_style:
@@ -423,6 +478,7 @@ _CONTROL_RENDERERS: dict[QuestionType, Callable[[FormQuestion], str]] = {
     QuestionType.DELIBERATION: _control_deliberation_html,
     QuestionType.TRIAGE: _control_triage_html,
     QuestionType.CONFIRM: _control_confirm_html,
+    QuestionType.RANKING: _control_ranking_html,
     QuestionType.MULTI_SELECT: _control_multi_select_html,
     QuestionType.SINGLE_SELECT: _control_single_select_html,
     QuestionType.BOOLEAN: _control_boolean_html,
@@ -527,6 +583,8 @@ def _families_for(question: FormQuestion) -> set[str]:
         return {"TRIAGE"}
     if qtype == QuestionType.CONFIRM:
         return {"CONFIRM"}
+    if qtype == QuestionType.RANKING:
+        return {"RANK"}
     if qtype == QuestionType.MULTI_SELECT:
         return {"LIST"} if question.list_style else {"CHECKS"}
     if qtype == QuestionType.SINGLE_SELECT:
@@ -615,6 +673,29 @@ def form_to_widget_html(
   var btn = document.getElementById('ae-submit-{sfx}');
   var err = document.getElementById('ae-error-{sfx}');
   if (!form || !btn) return;
+  // Ranking controls: move a row between the pool and the ranked list,
+  // or within the ranked list. Pure DOM moves — the ranked list's order
+  // is the answer, read at submit time.
+  form.addEventListener('click', function(e) {{
+    var b = e.target.closest ? e.target.closest('[data-rank]') : null;
+    if (!b || !form.contains(b)) return;
+    var row = b.closest('.ae-rank-row'), box = b.closest('.ae-rank');
+    if (!row || !box) return;
+    var ranked = box.querySelector('.ae-rank-ranked');
+    var pool = box.querySelector('.ae-rank-pool');
+    var n = Number(box.getAttribute('data-rank-n')), act = b.getAttribute('data-rank');
+    if (act === 'add') {{
+      if (ranked.children.length < n) ranked.appendChild(row);
+    }} else if (act === 'drop') {{
+      pool.appendChild(row);
+    }} else if (act === 'up' && row.previousElementSibling) {{
+      ranked.insertBefore(row, row.previousElementSibling);
+    }} else if (act === 'down' && row.nextElementSibling) {{
+      ranked.insertBefore(row.nextElementSibling, row);
+    }}
+    var count = box.querySelector('.ae-rank-count');
+    if (count) count.textContent = ranked.children.length;
+  }});
   btn.addEventListener('click', function() {{
     var answers = {{}};
     form.querySelectorAll('.ae-field').forEach(function(f) {{
@@ -642,6 +723,14 @@ def form_to_widget_html(
           if (p) rulings[r.getAttribute('data-item')] = p.value;
         }});
         if (Object.keys(rulings).length) answers[fid] = rulings;
+      }} else if (ftype === 'ranking') {{
+        // ranking: the ranked list's rows in DOM order ARE the answer;
+        // an untouched (empty) ranking posts nothing.
+        var order = [];
+        f.querySelectorAll('.ae-rank-ranked [data-control]').forEach(function(c) {{
+          order.push(c.value);
+        }});
+        if (order.length) answers[fid] = order;
       }} else {{
         var el = f.querySelector('[data-control]');
         if (!el) return;
@@ -661,11 +750,15 @@ def form_to_widget_html(
     var missing = [];
     form.querySelectorAll('.ae-field[data-required]').forEach(function(f) {{
       var v = answers[f.getAttribute('data-fid')];
-      // A required triage board is complete only when EVERY row is ruled.
+      // A required triage board is complete only when EVERY row is ruled;
+      // a required ranking only when EVERY slot is filled.
       var rows = f.querySelectorAll('.ae-triage-row').length;
+      var rank = f.querySelector('.ae-rank');
+      var slots = rank ? Number(rank.getAttribute('data-rank-n')) : 0;
       var empty = v === undefined || v === '' ||
         (Array.isArray(v) && v.length === 0) ||
-        (rows > 0 && (!v || Object.keys(v).length < rows));
+        (rows > 0 && (!v || Object.keys(v).length < rows)) ||
+        (slots > 0 && (!v || v.length < slots));
       f.classList.toggle('ae-field-missing', empty);
       if (empty) {{
         var lbl = f.querySelector('.ae-label');

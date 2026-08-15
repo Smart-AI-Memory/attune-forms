@@ -36,6 +36,7 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    ranking_slot_count,
     triage_item_key,
 )
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
@@ -54,6 +55,9 @@ _FENCE_RE = re.compile(r"```([^\s`]*)[ \t]*\n(.*?)```", re.DOTALL)
 #: number, or dotted triage row — item keys may contain spaces, since
 #: an id-less item is keyed by its label), ``:`` or ``=``, the value.
 _LINE_RE = re.compile(r"^\s*(?:[-*]\s+)?([^:=]+?)\s*[:=]\s*(.+?)\s*$")
+
+#: A leading ordinal on one entry of a typed ranking ("1. b", "2) a").
+_ORDINAL_PREFIX_RE = re.compile(r"^\d+[.)]\s*")
 
 
 def _coerce(question: FormQuestion, value: str) -> Any:
@@ -78,6 +82,15 @@ def _coerce(question: FormQuestion, value: str) -> Any:
         if value in question.options:
             return [value]
         return [part.strip() for part in value.split(",") if part.strip()]
+    if question.type is QuestionType.RANKING:
+        # An ordered comma list; a leading ordinal ("1. b", "2) a") is
+        # shaping noise, stripped deterministically. Membership, repeats,
+        # and length stay the validator's call.
+        if value in question.options:
+            return [value]
+        return [
+            _ORDINAL_PREFIX_RE.sub("", part.strip()) for part in value.split(",") if part.strip()
+        ]
     return value
 
 
@@ -88,6 +101,8 @@ def _known_keys(form: FormSchema) -> set[str]:
     for q in form.questions:
         if q.type is QuestionType.TRIAGE:
             keys |= {f"{q.id}.{triage_item_key(it)}" for it in q.triage_items or []}
+        elif q.type is QuestionType.RANKING:
+            keys |= {f"{q.id}.{k}" for k in range(1, ranking_slot_count(q) + 1)}
     return keys
 
 
@@ -153,11 +168,15 @@ def _resolve_line_key(form: FormSchema, key: str) -> tuple[str | None, str | Non
             return form.questions[index].id, None
         return None, f"unknown field number: {key}"
     if "." in key:
-        root = key.split(".", 1)[0]
+        root, suffix = key.split(".", 1)
         if root in by_id:
             if by_id[root].type is QuestionType.TRIAGE:
                 return key, None
-            return None, f"dotted key on non-triage field: {key!r}"
+            if by_id[root].type is QuestionType.RANKING:
+                if suffix.isdigit() and 1 <= int(suffix) <= ranking_slot_count(by_id[root]):
+                    return key, None
+                return None, f"unknown rank slot: {key!r}"
+            return None, f"dotted key on a field that has no dotted rows: {key!r}"
     return None, f"unknown field: {key!r}"
 
 
@@ -205,6 +224,12 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
                 problems.append(problem)
             continue
         question = by_id.get(answer_key)
+        if question is None and "." in answer_key:
+            # A dotted rank slot carries ONE option — never comma-split it.
+            root = by_id.get(answer_key.split(".", 1)[0])
+            if root is not None and root.type is QuestionType.RANKING:
+                answers[answer_key] = _ORDINAL_PREFIX_RE.sub("", value)
+                continue
         answers[answer_key] = _coerce(question, value) if question else value
 
     # Typed dotted rows must survive a quoted skeleton that already
@@ -214,14 +239,29 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
     # rule serves the other surfaces, strands them and the validator
     # re-asks an item the user answered (ultrareview finding).
     for q in form.questions:
-        if q.type is not QuestionType.TRIAGE:
-            continue
-        mapping = answers.get(q.id)
-        if not isinstance(mapping, dict):
-            continue
         prefix = f"{q.id}."
-        for key in [k for k in answers if k.startswith(prefix)]:
-            mapping[key[len(prefix) :]] = answers.pop(key)
+        if q.type is QuestionType.TRIAGE:
+            mapping = answers.get(q.id)
+            if not isinstance(mapping, dict):
+                continue
+            for key in [k for k in answers if k.startswith(prefix)]:
+                mapping[key[len(prefix) :]] = answers.pop(key)
+        elif q.type is QuestionType.RANKING:
+            # Same rule for a ranking: typed slots overlay a quoted list
+            # (the skeleton may carry the proposed order); the merged
+            # list is rebuilt in slot order so the validator sees one
+            # answer, not a stranded slot.
+            typed = {
+                int(k[len(prefix) :]): answers.pop(k)
+                for k in list(answers)
+                if k.startswith(prefix) and k[len(prefix) :].isdigit()
+            }
+            if not typed:
+                continue
+            base = answers.get(q.id)
+            slots = {i + 1: v for i, v in enumerate(base)} if isinstance(base, list) else {}
+            slots.update(typed)
+            answers[q.id] = [slots[k] for k in sorted(slots)]
 
     return answers, problems
 

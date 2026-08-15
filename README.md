@@ -28,8 +28,8 @@ The plugin teaches the session the forms discipline (the `forms` skill)
 and serves four MCP tools — `elicitation_render_form`,
 `elicitation_render_widget`, `elicitation_collect_response`,
 `elicitation_ask` — from this package via `uvx`. Decision cards,
-pushback cards, progress forms, deliberation cards, triage boards, and
-confirm gates work out of the box; rich HTML renders where the host
+pushback cards, progress forms, deliberation cards, triage boards,
+confirm gates, and ranking lists work out of the box; rich HTML renders where the host
 supports widgets, degrades to plain questions where it doesn't, and
 renders as portable markdown on text-only hosts — with typed replies
 parsed back into the same validator.
@@ -46,7 +46,7 @@ Linux/macOS/Windows. Apache 2.0.
 ## The grammar
 
 Beyond the plain field types (text, single/multi select, boolean,
-number, date, textarea), six constructs carry conversational meaning:
+number, date, textarea), seven constructs carry conversational meaning:
 
 - **Decision** — the agent proposes: recommended option first, a "why"
   rationale, a one-line tradeoff under every alternative. Validates
@@ -70,6 +70,11 @@ number, date, textarea), six constructs carry conversational meaning:
   exactly two options, and nothing is ever pre-selected — a
   pre-checked approval would defeat the gate, so the validator forbids
   it.
+- **Ranking** — the user orders the options, all of them or only the
+  top N: the answer is the ordered list itself, a proposed order
+  renders visibly as a proposal (never as the answer), and flat
+  surfaces expand it to one pick per rank slot that folds back on
+  collection.
 
 ## Quick start
 

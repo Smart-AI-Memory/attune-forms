@@ -119,10 +119,10 @@ class TestNoSilentGuesses:
         _, problems = markdown_to_answers(form, "here are my answers!!")
         assert problems == ["unparseable line: 'here are my answers!!'"]
 
-    def test_dotted_key_on_non_triage_named(self) -> None:
+    def test_dotted_key_on_non_expanding_field_named(self) -> None:
         form = form_from_dict(_small_form())
         _, problems = markdown_to_answers(form, "env.x: staging")
-        assert problems == ["dotted key on non-triage field: 'env.x'"]
+        assert problems == ["dotted key on a field that has no dotted rows: 'env.x'"]
 
     def test_blank_lines_ignored(self) -> None:
         form = form_from_dict(_small_form())
@@ -218,6 +218,7 @@ class TestReferenceConformance:
                 "finding_rulings.retry-loop: fix now",
                 "finding_rulings.stale-doc: ticket",
                 "flag_flip_gate: Approve",
+                "rollout_order: staging, canary, us-prod",  # a ranking: ordered comma list
                 "blockers: Design sign-off",
             ]
         )
@@ -226,6 +227,7 @@ class TestReferenceConformance:
         response = collect_form_response(form, answers)
         assert set(response.responses) == set(EXAMPLE_ANSWERS)
         assert response.responses["finding_rulings"] == EXAMPLE_ANSWERS["finding_rulings"]
+        assert response.responses["rollout_order"] == EXAMPLE_ANSWERS["rollout_order"]
         assert response.responses["estimated_days"] == 3
 
     def test_filled_skeleton_round_trips_identically(self) -> None:

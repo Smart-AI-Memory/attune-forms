@@ -67,6 +67,7 @@ def _field_schema() -> dict[str, Any]:
                     "deliberation",
                     "triage",
                     "confirm",
+                    "ranking",
                 ],
                 "description": (
                     "Control type. Core: text_input/single_select/"
@@ -79,7 +80,10 @@ def _field_schema() -> dict[str, Any]:
                     "option, chair picks one), triage (per-item rulings "
                     "over a reviewed list; answer = {item id: disposition}), "
                     "confirm (consequences preview + two-way approve/abort "
-                    "gate; no default/recommended permitted)."
+                    "gate; no default/recommended permitted), ranking (order "
+                    "the options, optionally only the top_n; answer = ordered "
+                    "list; a suggested order is a visible proposal, no default "
+                    "permitted)."
                 ),
             },
             "options": {"type": "array", "items": {"type": "string"}},
@@ -109,8 +113,16 @@ def _field_schema() -> dict[str, Any]:
                 "description": "triage: the shared per-item ruling vocabulary",
             },
             "suggested": {
-                "type": "object",
-                "description": "triage: {item id: proposed disposition}",
+                "type": ["object", "array"],
+                "description": (
+                    "triage: {item id: proposed disposition}; ranking: the "
+                    "proposed order as [option, ...] (rendered as a proposal, "
+                    "never the answer)"
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "description": "ranking: rank only the top N (1..len(options))",
             },
             "consequences": {
                 "type": "array",

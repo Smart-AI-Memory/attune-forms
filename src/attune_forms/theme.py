@@ -15,12 +15,15 @@ Every ``var()`` reference carries a literal fallback, so one
 stylesheet renders native on claude.ai (host tokens win,
 light/dark follows the host) and standalone (fallbacks win).
 
-Budget: ``FORM_THEME_CSS`` is capped at 8 KB raw by
+Budget: ``FORM_THEME_CSS`` is capped at 10 KB raw by
 ``test_form_theme_budget`` (4 KB → 6 KB by chair ruling 2026-07-31;
 6 KB → 8 KB ratified with the grammar-expansion merge 2026-08-14 —
-TRIAGE + CONFIRM families + deliberation seat chips; measured full
-sheet = 8,158 B) — no fonts, no icon fonts, no images, no @import;
-growth past the cap is a design decision, not a drift.
+TRIAGE + CONFIRM families + deliberation seat chips, 8,158 B; 8 KB →
+10 KB ratified 2026-08-15 for the 0.6.0 constructs, ranking-construct
+spec D2-a — the RANK family did not fit under 8 KB; a CSS
+consolidation pass was offered and not chosen, so the cap is NOT a
+ratchet: growth past it is a design decision, not a drift) — no fonts,
+no icon fonts, no images, no @import.
 
 Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0
@@ -176,6 +179,34 @@ CSS_CONFIRM = """#attune-elicit-form .ae-gate { display:flex; flex-direction:col
 #attune-elicit-form .ae-gate-opt { font-weight:500; cursor:pointer; }
 """
 
+#: RANK — the ranking list: a ranked <ol> + an unranked pool, moved by
+#: buttons (no drag dependency). Button visibility follows the container:
+#: pool rows show only "add", ranked rows only up / down / remove.
+CSS_RANK = """#attune-elicit-form .ae-rank { display:flex; flex-direction:column; gap:.35rem; }
+#attune-elicit-form .ae-rank-h { font-size:11px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.03em; color:var(--text-muted,#8a887f); }
+#attune-elicit-form .ae-rank-count { color:var(--text-primary,#2c2c2a); }
+#attune-elicit-form .ae-rank-sug { margin-left:.5rem; font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--text-accent,#a1571c); }
+#attune-elicit-form .ae-rank-ranked, #attune-elicit-form .ae-rank-pool { margin:0;
+  list-style:none; padding:.25rem .75rem; min-height:1.4rem;
+  border:1px dashed var(--border,#e3e1dc); border-radius:var(--radius,8px); }
+#attune-elicit-form .ae-rank-ranked { counter-reset:ae-rank; }
+#attune-elicit-form .ae-rank-row { display:flex; align-items:center; gap:.5rem;
+  padding:.15rem 0; }
+#attune-elicit-form .ae-rank-ranked .ae-rank-row::before { counter-increment:ae-rank;
+  content:counter(ae-rank) "."; min-width:1.4rem; color:var(--text-muted,#8a887f); }
+#attune-elicit-form .ae-rank-label { flex:1; }
+#attune-elicit-form .ae-rank-btns { display:inline-flex; gap:.25rem; }
+#attune-elicit-form .ae-rank-btn { font-size:13px; line-height:1; padding:.1rem .45rem;
+  cursor:pointer; color:var(--text-primary,#2c2c2a); background:var(--bg-accent,#f3ece4);
+  border:1px solid var(--border-accent,#d8b89a); border-radius:var(--radius,8px); }
+#attune-elicit-form .ae-rank-pool [data-rank="up"],
+#attune-elicit-form .ae-rank-pool [data-rank="down"],
+#attune-elicit-form .ae-rank-pool [data-rank="drop"],
+#attune-elicit-form .ae-rank-ranked [data-rank="add"] { display:none; }
+"""
+
 #: Named family blocks in cascade-emission order (BASE is always first).
 CSS_FAMILIES: list[tuple[str, str]] = [
     ("INPUT", CSS_INPUT),
@@ -185,6 +216,7 @@ CSS_FAMILIES: list[tuple[str, str]] = [
     ("PROGRESS", CSS_PROGRESS),
     ("TRIAGE", CSS_TRIAGE),
     ("CONFIRM", CSS_CONFIRM),
+    ("RANK", CSS_RANK),
 ]
 
 #: The full theme: base + every family, in cascade order. This exact

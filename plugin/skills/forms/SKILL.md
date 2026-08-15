@@ -1,6 +1,6 @@
 ---
 name: forms
-description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board, gate consequential actions with a confirm card. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board, confirm card, approval gate."
+description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board, gate consequential actions with a confirm card, order options with a ranking list. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board, confirm card, approval gate, ranking, rank these, prioritize."
 argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refactor'>"
 ---
 
@@ -48,7 +48,7 @@ A form is a plain dict: `title`, optional `description`, and `fields`.
 Each field: `id`, `text` (the question), `type`, and per-type extras.
 
 Types: `text_input`, `textarea`, `single_select`, `multi_select`,
-`boolean`, `number` (with `minimum`/`maximum`), `date`, plus the three
+`boolean`, `number` (with `minimum`/`maximum`), `date`, plus the
 constructs below. Optional keys: `options`, `default`, `help_text`,
 `required` (default true), `max_length`.
 
@@ -145,6 +145,25 @@ a spend, a public post) where "here is exactly what will happen" is
 the point. If you have no consequences worth listing, you don't have
 a confirm — ask plainly.
 
+## The ranking list
+
+A `ranking` asks the user to **order** the options — all of them, or
+only the top N. Use it when the order itself is the decision (what
+ships first, which risks matter most); when any subset would do, that
+is a `multi_select`, and when one pick would do, a `single_select`.
+
+Extra keys: `top_n` (rank only the top N; omit for a full ordering),
+`suggested` (your proposed order as a list — rendered visibly as a
+proposal, never taken as the answer). **No `default`** — the library
+rejects it; a pre-filled order is `suggested`. The answer is an ordered
+list of options: distinct, exactly `top_n` (or all) long. On flat
+surfaces the list expands to one single-select per rank slot
+(`"<field id>.1"`, `"<field id>.2"`, … each offering every option — a
+host question tool can't remove already-picked ones); pass those
+answers straight to `elicitation_collect_response`, they fold back and
+a repeated option is a named problem. On markdown hosts the reply is a
+comma list in order (`field_id: b, a, c`) or one slot per line.
+
 ## Choosing a surface
 
 1. **Widget host** (the client renders HTML): call
@@ -159,12 +178,14 @@ a confirm — ask plainly.
    recommendation-first ordering, `multi_select` → multi-select,
    constructs → single-select with the recommended option first and
    tradeoffs folded into option descriptions (a triage board arrives
-   pre-expanded as one single-select per item).
+   pre-expanded as one single-select per item; a ranking as one
+   single-select per rank slot).
 4. **No widget, no question tool** (text-only hosts): render the form
    with `form_to_markdown` (library) and relay the markdown verbatim.
    It ends with a JSON answer skeleton — the widget's exact postback
    shape — and documents the line shorthand (`field_id: value`,
-   `N: value`, `field_id.item_id: disposition` for triage rows).
+   `N: value`, `field_id.item_id: disposition` for triage rows,
+   `field_id: b, a, c` or `field_id.1: b` for a ranking).
    Collect the reply in this order:
    - **Parse first**: run `markdown_to_answers(form, reply)` — it
      deterministically handles a pasted JSON block or shorthand lines
