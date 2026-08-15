@@ -46,3 +46,43 @@ def test_widget_css_is_theme_source_by_identity() -> None:
 def test_full_sheet_is_base_plus_all_families_in_order() -> None:
     expected = theme.CSS_BASE + "".join(css for _n, css in theme.CSS_FAMILIES)
     assert theme.FORM_THEME_CSS == expected
+
+
+#: A selector's STYLED class: the last ``.class`` token before the rule
+#: body (pseudo-classes stripped). ``.ae-card .ae-prog-tag`` styles
+#: ``ae-prog-tag``; ``.ae-card:hover`` styles ``ae-card``.
+_SELECTOR_RE = re.compile(r"([^{}]+)\{")
+_CLASS_RE = re.compile(r"\.([A-Za-z0-9_-]+)")
+
+
+def _styled_classes(block: str) -> set[str]:
+    styled: set[str] = set()
+    for match in _SELECTOR_RE.finditer(block):
+        selector = match.group(1).split(":")[0]
+        classes = _CLASS_RE.findall(selector)
+        if classes:
+            styled.add(classes[-1])
+    return styled
+
+
+def test_no_class_is_styled_in_two_blocks() -> None:
+    """Same-name collision guard (confirm-construct D3).
+
+    The coverage guard in test_widget_css_families only catches
+    UNSTYLED classes; it is structurally blind to two blocks styling
+    the same class name — which is how the CONFIRM family's first
+    wrapper (``.ae-confirm``) silently inherited the BASE
+    fully-inferred banner's accent border. Every class may be styled
+    by exactly one block (contextual restyling of ANOTHER family's
+    class counts as a collision too — a family must not reach into
+    a sibling's names).
+    """
+    blocks = [("BASE", theme.CSS_BASE), *theme.CSS_FAMILIES]
+    owners: dict[str, str] = {}
+    collisions: list[str] = []
+    for name, css in blocks:
+        for cls in _styled_classes(css):
+            if cls in owners and owners[cls] != name:
+                collisions.append(f"{cls!r} styled in both {owners[cls]} and {name}")
+            owners.setdefault(cls, name)
+    assert not collisions, "; ".join(collisions)
