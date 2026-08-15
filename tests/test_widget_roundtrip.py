@@ -37,7 +37,7 @@ from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 
 #: data-ftype values the submit script special-cases (read from a
 #: checked control rather than the generic first-control tail).
-_CHECKED_FTYPES = {"decision", "pushback", "progress"}
+_CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation"}
 
 
 class _WidgetDOM(HTMLParser):
@@ -53,6 +53,7 @@ class _WidgetDOM(HTMLParser):
         self._in_script = False
         self._select: dict[str, Any] | None = None
         self._textarea: dict[str, Any] | None = None
+        self._item: str | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
@@ -62,6 +63,11 @@ class _WidgetDOM(HTMLParser):
             self._in_script = True
         if "data-fid" in a:
             self.fields.append({"fid": a["data-fid"], "ftype": a.get("data-ftype"), "controls": []})
+            self._item = None
+        if "data-item" in a and self.fields:
+            # A triage row: subsequent controls belong to this item, the
+            # way the submit script scopes its per-row query.
+            self._item = a["data-item"]
         if "data-control" in a and self.fields:
             controls = self.fields[-1]["controls"]
             if tag == "input":
@@ -70,6 +76,7 @@ class _WidgetDOM(HTMLParser):
                         "type": a.get("type", "text"),
                         "value": a.get("value", "") or "",
                         "checked": "checked" in a,
+                        "item": self._item,
                     }
                 )
             elif tag == "select":
@@ -105,6 +112,11 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
         if field["fid"] not in answers:
             continue
         value = answers[field["fid"]]
+        if isinstance(value, dict):
+            # Triage: per-row radios — check the row's chosen disposition.
+            for ctl in field["controls"]:
+                ctl["checked"] = value.get(ctl.get("item")) == ctl["value"]
+            continue
         wanted = [str(v) for v in (value if isinstance(value, list) else [value])]
         for ctl in field["controls"]:
             if ctl["type"] in ("checkbox", "radio"):
@@ -124,6 +136,10 @@ def _submit(dom: _WidgetDOM) -> dict[str, Any]:
         fid, ftype, controls = field["fid"], field["ftype"], field["controls"]
         if ftype == "multi_select":
             answers[fid] = [c["value"] for c in controls if c.get("checked")]
+        elif ftype == "triage":
+            rulings = {c["item"]: c["value"] for c in controls if c.get("checked")}
+            if rulings:
+                answers[fid] = rulings
         elif ftype in _CHECKED_FTYPES:
             picked = next((c for c in controls if c.get("checked")), None)
             if picked:

@@ -10,7 +10,7 @@ from attune_forms import widget as widget_mod
 
 #: Chair-ruled cap (spec decisions.md D1: amended 4 KB -> 6 KB with
 #: the 5,574 B full-sheet measurement on record).
-_BUDGET_BYTES = 6144
+_BUDGET_BYTES = 8192
 
 #: ``var(--name)`` with NO fallback value — the pattern the theme
 #: must never contain (host-token fallbacks are the design).

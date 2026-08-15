@@ -26,7 +26,7 @@ from collections.abc import Callable
 from html import escape
 
 from attune_forms.bridge import is_fully_inferred
-from attune_forms.models import FormQuestion, FormSchema, QuestionType
+from attune_forms.models import FormQuestion, FormSchema, QuestionType, triage_item_key
 from attune_forms.theme import CSS_BASE as _CSS_BASE
 from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
 
@@ -239,6 +239,79 @@ def _control_progress_html(q: FormQuestion) -> str:
     return f'<div class="ae-progress">{rows_html}{picker}</div>'
 
 
+def _control_deliberation_html(q: FormQuestion) -> str:
+    """Render a DELIBERATION control.
+
+    Multi-voice framing: each option card carries chips naming the
+    voices that endorsed it (``endorsements``), so a 2-1 split and its
+    minority are visible at a glance; the synthesis pick
+    (``recommended``) is badged and ordered first. Same radio answer
+    path as DECISION — the user chairs the pick.
+    """
+    notes = q.option_notes or {}
+    endorse = q.endorsements or {}
+    cards = ""
+    for opt in _ordered_options_recommended_first(q):
+        is_rec = opt == q.recommended
+        badge = '<span class="ae-rec-badge">Synthesis pick</span>' if is_rec else ""
+        chips = "".join(
+            f'<span class="ae-seat">{_esc(name)}</span>' for name in endorse.get(opt, [])
+        )
+        seats = f'<span class="ae-seats">{chips}</span>' if chips else ""
+        note = f'<span class="ae-card-note">{_esc(notes[opt])}</span>' if opt in notes else ""
+        checked = " checked" if q.default == opt else ""
+        cls = "ae-card ae-card-rec" if is_rec else "ae-card"
+        cards += (
+            f'<label class="{cls}">'
+            f'<input type="radio" name="{_esc(q.id)}" data-control '
+            f'value="{_esc(opt)}"{checked}>'
+            f'{badge}<span class="ae-card-title">{_esc(opt)}</span>{seats}{note}</label>'
+        )
+    return f'<div class="ae-cards" role="radiogroup">{cards}</div>'
+
+
+def _control_triage_html(q: FormQuestion) -> str:
+    """Render a TRIAGE control: one row per item, each row its own
+    disposition radiogroup.
+
+    A ``suggested`` ruling renders pre-selected with a "suggested" mark —
+    the agent's guess stays visible and overridable, never silently
+    accepted (the inference-first discipline). The row carries
+    ``data-item`` so the submit script can rebuild the
+    ``{label: disposition}`` mapping generically.
+    """
+    suggested = q.suggested or {}
+    rows = ""
+    for idx, item in enumerate(q.triage_items or []):
+        label = item.get("label", "")
+        key = triage_item_key(item)
+        tag = f'<span class="ae-triage-tag">{_esc(item["tag"])}</span>' if item.get("tag") else ""
+        detail = (
+            f'<span class="ae-triage-detail">{_esc(item["detail"])}</span>'
+            if item.get("detail")
+            else ""
+        )
+        pick = suggested.get(key)
+        opts = ""
+        for disposition in q.dispositions or []:
+            checked = " checked" if pick == disposition else ""
+            mark = '<span class="ae-triage-sug">suggested</span>' if pick == disposition else ""
+            opts += (
+                f'<label class="ae-triage-opt">'
+                f'<input type="radio" name="{_esc(q.id)}::{idx}" data-control '
+                f'value="{_esc(disposition)}"{checked}> '
+                f"<span>{_esc(disposition)}</span>{mark}</label>"
+            )
+        rows += (
+            f'<div class="ae-triage-row" data-item="{_esc(key)}">'
+            f'<div class="ae-triage-head">{tag}'
+            f'<span class="ae-triage-label">{_esc(label)}</span>{detail}</div>'
+            f'<div class="ae-triage-opts" role="radiogroup" '
+            f'aria-label="{_esc(label)}">{opts}</div></div>'
+        )
+    return f'<div class="ae-triage">{rows}</div>'
+
+
 def _control_multi_select_html(q: FormQuestion) -> str:
     """Render MULTI_SELECT: a list_style list, or plain checkboxes."""
     if q.list_style:
@@ -310,6 +383,8 @@ def _control_text_input_html(q: FormQuestion) -> str:
 _CONTROL_RENDERERS: dict[QuestionType, Callable[[FormQuestion], str]] = {
     QuestionType.DECISION: _control_decision_html,
     QuestionType.PUSHBACK: _control_pushback_html,
+    QuestionType.DELIBERATION: _control_deliberation_html,
+    QuestionType.TRIAGE: _control_triage_html,
     QuestionType.MULTI_SELECT: _control_multi_select_html,
     QuestionType.SINGLE_SELECT: _control_single_select_html,
     QuestionType.BOOLEAN: _control_boolean_html,
@@ -365,6 +440,7 @@ def _field_html(q: FormQuestion) -> str:
     rationale_headers = {
         QuestionType.PUSHBACK: "Why I&#x27;d push back",
         QuestionType.PROGRESS: "Summary",
+        QuestionType.DELIBERATION: "Synthesis",
     }
     rationale_h = rationale_headers.get(q.type, "Why")
     rationale_html = (
@@ -407,8 +483,10 @@ def _families_for(question: FormQuestion) -> set[str]:
     qtype = question.type
     if qtype == QuestionType.PROGRESS:
         return {"CARDS", "PROGRESS"}  # blocked picker reuses the cards
-    if qtype in (QuestionType.DECISION, QuestionType.PUSHBACK):
-        return {"CARDS"}
+    if qtype in (QuestionType.DECISION, QuestionType.PUSHBACK, QuestionType.DELIBERATION):
+        return {"CARDS"}  # deliberation's seat chips live in CARDS
+    if qtype == QuestionType.TRIAGE:
+        return {"TRIAGE"}
     if qtype == QuestionType.MULTI_SELECT:
         return {"LIST"} if question.list_style else {"CHECKS"}
     if qtype == QuestionType.SINGLE_SELECT:
@@ -508,11 +586,21 @@ def form_to_widget_html(
           vals.push(c.value);
         }});
         answers[fid] = vals;
-      }} else if (ftype === 'decision' || ftype === 'pushback' || ftype === 'progress') {{
+      }} else if (ftype === 'decision' || ftype === 'pushback' ||
+          ftype === 'progress' || ftype === 'deliberation') {{
         // progress: the answer is the selected blocked item; when nothing
         // is blocked there is no radio and no answer is posted (display-only).
         var picked = f.querySelector('[data-control]:checked');
         if (picked) answers[fid] = picked.value;
+      }} else if (ftype === 'triage') {{
+        // triage: rebuild {{item key: disposition}} from the per-row
+        // pickers; rows left unruled are simply absent.
+        var rulings = {{}};
+        f.querySelectorAll('.ae-triage-row').forEach(function(r) {{
+          var p = r.querySelector('[data-control]:checked');
+          if (p) rulings[r.getAttribute('data-item')] = p.value;
+        }});
+        if (Object.keys(rulings).length) answers[fid] = rulings;
       }} else {{
         var el = f.querySelector('[data-control]');
         if (!el) return;
@@ -532,8 +620,11 @@ def form_to_widget_html(
     var missing = [];
     form.querySelectorAll('.ae-field[data-required]').forEach(function(f) {{
       var v = answers[f.getAttribute('data-fid')];
+      // A required triage board is complete only when EVERY row is ruled.
+      var rows = f.querySelectorAll('.ae-triage-row').length;
       var empty = v === undefined || v === '' ||
-        (Array.isArray(v) && v.length === 0);
+        (Array.isArray(v) && v.length === 0) ||
+        (rows > 0 && (!v || Object.keys(v).length < rows));
       f.classList.toggle('ae-field-missing', empty);
       if (empty) {{
         var lbl = f.querySelector('.ae-label');

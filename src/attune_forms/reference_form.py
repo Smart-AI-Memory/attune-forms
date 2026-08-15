@@ -117,6 +117,39 @@ REFERENCE_FORM: dict[str, Any] = {
             "small stacked PRs stay mergeable and reviewable.",
         },
         {
+            # v6: a multi-voice deliberation — endorsements per option, the
+            # chair picks (the synthesis pick is a badge, not the answer)
+            "id": "cache_strategy",
+            "type": "deliberation",
+            "text": "Where should the response cache live?",
+            "options": ["In-process LRU", "Redis sidecar", "No cache yet"],
+            "endorsements": {
+                "In-process LRU": ["claude", "codex"],
+                "Redis sidecar": ["antigravity"],
+            },
+            "recommended": "In-process LRU",
+            "rationale": "Two of three seats favor starting in-process; "
+            "revisit the sidecar when a second consumer appears.",
+        },
+        {
+            # v6: a triage board — every item gets its own ruling; the
+            # stable ids key the answer, labels stay display-only
+            "id": "finding_rulings",
+            "type": "triage",
+            "text": "Rule each review finding.",
+            "triage_items": [
+                {
+                    "id": "retry-loop",
+                    "label": "Unbounded retry loop",
+                    "tag": "high",
+                    "detail": "worker.py:88",
+                },
+                {"id": "stale-doc", "label": "Stale docstring", "tag": "low"},
+            ],
+            "dispositions": ["fix now", "ticket", "dismiss"],
+            "suggested": {"retry-loop": "fix now"},
+        },
+        {
             # v5: a status report whose blocked items are a picker
             "id": "blockers",
             "type": "progress",
@@ -148,5 +181,7 @@ EXAMPLE_ANSWERS: dict[str, Any] = {
     "notes": "Ship behind a flag, measure, then widen.",
     "rollout": "Ship behind a feature flag",
     "branch_strategy": "Short stacked PRs off main",
+    "cache_strategy": "In-process LRU",
+    "finding_rulings": {"retry-loop": "fix now", "stale-doc": "ticket"},
     "blockers": "Design sign-off",
 }

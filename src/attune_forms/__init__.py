@@ -69,7 +69,14 @@ from attune_forms.intake_template import (
     intake_form,
     validate_template,
 )
-from attune_forms.models import FormQuestion, FormResponse, FormSchema, QuestionType
+from attune_forms.markdown_surface import form_to_markdown
+from attune_forms.models import (
+    FormQuestion,
+    FormResponse,
+    FormSchema,
+    QuestionType,
+    triage_item_key,
+)
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 from attune_forms.template_store import form_from_template, list_templates
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
@@ -99,6 +106,7 @@ __all__ = [
     "form_response_summary",
     "form_to_askuserquestion",
     "form_to_elicitation_schema",
+    "form_to_markdown",
     "form_to_widget_html",
     "inferred_field_count",
     "is_fully_inferred",
@@ -108,4 +116,5 @@ __all__ = [
     "needs_widget",
     "select_form_surface",
     "set_keyboard_mode",
+    "triage_item_key",
 ]

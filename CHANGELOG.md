@@ -6,6 +6,37 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+The grammar-expansion tranche, deliberated by the multi-LLM round
+table (thread `q-forms-grammar-expansion-001`: 3/3 on the markdown
+surface and triage, id-keying and strict-degradation amendments
+applied as ruled).
+
+### Added
+- `deliberation` construct: multi-voice endorsements per option
+  (`{option: [voice, ...]}`) rendered as chips, synthesis pick badged,
+  chair picks one; flat fallback folds endorsements into a compact
+  summary; answer validates as a single-select
+- `triage` construct: per-item rulings over a reviewed list
+  (`triage_items` + `dispositions` + optional `suggested`); answer is
+  `{item id: disposition}` keyed on stable per-item ids (label
+  fallback); expands to one single-select per item on flat surfaces
+  via dotted ids that fold back in `collect_form_response`
+- Portable markdown surface (`form_to_markdown`, S4): renders any form
+  for text-only hosts (Codex CLI, Antigravity) and emits the widget's
+  sentinel-marked JSON answer skeleton as the return path — one
+  postback grammar across all four surfaces
+- `triage_item_key` exported: the one keying rule every surface shares
+- Reference form + example answers now cover the two new constructs;
+  widget round-trip, CSS-family, and markdown conformance guards
+  extended to them
+
+### Changed
+- Form theme budget raised 6 KB → 8 KB (7,204 B measured with the
+  TRIAGE family + deliberation seat chips; ratified in this PR's
+  review)
+- MCP field schema documents the new types and extras (tool names and
+  result shapes unchanged)
+
 ## [0.4.0] — 2026-08-14
 
 The plugin release: attune-forms becomes installable as a Claude Code

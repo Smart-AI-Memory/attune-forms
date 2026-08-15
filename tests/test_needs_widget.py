@@ -102,7 +102,7 @@ def test_reference_form_needs_widget() -> None:
 
 
 def test_widget_only_set_is_pinned() -> None:
-    """The routing set is exactly the documented six — a change is deliberate."""
+    """The routing set is exactly the documented eight — a change is deliberate."""
     assert _WIDGET_ONLY_TYPES == {
         QuestionType.NUMBER,
         QuestionType.DATE,
@@ -110,6 +110,8 @@ def test_widget_only_set_is_pinned() -> None:
         QuestionType.DECISION,
         QuestionType.PUSHBACK,
         QuestionType.PROGRESS,
+        QuestionType.DELIBERATION,
+        QuestionType.TRIAGE,
     }
 
 
