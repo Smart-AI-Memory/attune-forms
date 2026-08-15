@@ -710,6 +710,22 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                 )
             )
 
+    # The dotted triage namespace must be collision-free BY DEFINITION:
+    # every flat surface (AskUserQuestion expansion, elicitation schema,
+    # markdown shorthand) writes triage answers as "<board id>.<item>",
+    # and the collect-time fold claims every key with that prefix — a
+    # sibling field id inside the namespace would have its answer stolen
+    # (review finding, 2026-08-14). Rejecting the definition keeps every
+    # downstream consumer safe without per-surface guards.
+    triage_ids = [q.id for q in questions if q.type is QuestionType.TRIAGE]
+    for question in questions:
+        for board_id in triage_ids:
+            if question.id != board_id and question.id.startswith(f"{board_id}."):
+                problems.append(
+                    f"field id {question.id!r} collides with triage {board_id!r}'s "
+                    f"dotted answer namespace ('{board_id}.<item>')"
+                )
+
     if problems:
         raise FormValidationError(problems)
 
@@ -1075,6 +1091,10 @@ def form_response_summary(form: FormSchema, response: FormResponse) -> str:
             rendered = "Yes" if value else "No"
         elif isinstance(value, list):
             rendered = ", ".join(str(item) for item in value) or "(none)"
+        elif isinstance(value, dict):
+            # A triage board's mapping answer: per-item rulings, never
+            # the raw dict repr (review finding, 2026-08-14).
+            rendered = "; ".join(f"{k}: {v}" for k, v in value.items()) or "(none)"
         else:
             rendered = str(value)
         lines.append(f"- {question.text}: **{rendered}**")

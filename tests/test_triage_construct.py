@@ -269,3 +269,36 @@ class TestTriageWidget:
         )
         assert "<b>" not in html
         assert "<keep>" not in html
+
+
+class TestReviewFindingRegressions:
+    """Regressions for the 2026-08-14 review findings owned by triage."""
+
+    def test_sibling_id_in_dotted_namespace_rejected(self) -> None:
+        # The fold claims every "<board>." key, so a sibling field inside
+        # the namespace would have its answer stolen — reject at definition.
+        data = _triage()
+        data["fields"].append(
+            {"id": "findings.notes", "type": "text_input", "text": "n", "required": False}
+        )
+        with pytest.raises(FormValidationError, match="dotted answer namespace"):
+            form_from_dict(data)
+
+    def test_summary_renders_rulings_not_dict_repr(self) -> None:
+        from attune_forms import form_response_summary
+
+        form = form_from_dict(_triage())
+        resp = collect_form_response(
+            form,
+            {"findings": {"retry": "fix now", "doc": "ticket", "Naming nit": "dismiss"}},
+        )
+        summary = form_response_summary(form, resp)
+        assert "retry: fix now; doc: ticket; Naming nit: dismiss" in summary
+        assert "{'" not in summary  # never the raw dict repr
+
+    def test_old_single_payload_contract_raises_loudly(self) -> None:
+        # to_ask_user_format used to fall through to an unrenderable
+        # {"type": "triage", "options": []} payload; now it refuses.
+        form = form_from_dict(_triage())
+        with pytest.raises(ValueError, match="to_ask_user_formats"):
+            form.questions[0].to_ask_user_format()

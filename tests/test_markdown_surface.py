@@ -182,3 +182,16 @@ class TestValidationErrorPath:
         skeleton["answers"].update(answers)
         with pytest.raises(Exception, match="not in options"):
             collect_form_response(form, skeleton["answers"])
+
+
+class TestReviewFindingRegressions:
+    def test_falsy_zero_default_survives_in_skeleton(self) -> None:
+        # `default or recommended` swallowed falsy defaults: a NUMBER
+        # default of 0 must render as 0, never null.
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [{"id": "retries", "type": "number", "text": "Retries?", "default": 0}],
+            }
+        )
+        assert _skeleton(form_to_markdown(form))["answers"]["retries"] == 0
