@@ -28,9 +28,11 @@ The plugin teaches the session the forms discipline (the `forms` skill)
 and serves four MCP tools — `elicitation_render_form`,
 `elicitation_render_widget`, `elicitation_collect_response`,
 `elicitation_ask` — from this package via `uvx`. Decision cards,
-pushback cards, and progress forms work out of the box; rich HTML
-renders where the host supports widgets and degrades to plain questions
-everywhere else.
+pushback cards, progress forms, deliberation cards, triage boards, and
+confirm gates work out of the box; rich HTML renders where the host
+supports widgets, degrades to plain questions where it doesn't, and
+renders as portable markdown on text-only hosts — with typed replies
+parsed back into the same validator.
 
 **As a Python library:**
 
@@ -38,13 +40,13 @@ everywhere else.
 pip install attune-forms
 ```
 
-Python 3.10+, one runtime dependency (structlog), 380+ tests, CI on
+Python 3.10+, one runtime dependency (structlog), 510+ tests, CI on
 Linux/macOS/Windows. Apache 2.0.
 
 ## The grammar
 
 Beyond the plain field types (text, single/multi select, boolean,
-number, date, textarea), three constructs carry conversational meaning:
+number, date, textarea), seven constructs carry conversational meaning:
 
 - **Decision** — the agent proposes: recommended option first, a "why"
   rationale, a one-line tradeoff under every alternative. Validates
@@ -56,6 +58,18 @@ number, date, textarea), three constructs carry conversational meaning:
 - **Progress** — a status report (done / in-flight / blocked) whose
   blocked items become a picker: reading the status and unblocking the
   work are the same gesture.
+- **Deliberation** — several named voices (reviewers, models,
+  teammates) endorse candidate positions; the endorsements render as
+  chips so a 2-1 split is visible at a glance, the synthesis pick is a
+  badge — never the answer — and the user chairs the choice.
+- **Triage** — a ruling per item over a reviewed list (audit findings,
+  review comments): a shared disposition vocabulary, stable item ids,
+  and an answer that is the full `{item: disposition}` mapping.
+- **Confirm** — an approval gate for consequential actions: the
+  consequences are enumerated with severity tags, the answer is one of
+  exactly two options, and nothing is ever pre-selected — a
+  pre-checked approval would defeat the gate, so the validator forbids
+  it.
 
 ## Quick start
 
@@ -78,7 +92,13 @@ if select_form_surface(form) == "widget":
 
 - **Renderers** — `form_to_widget_html` (self-contained interactive
   widget with postback), `form_to_askuserquestion` (batched payloads),
-  `form_to_elicitation_schema` (native MCP elicitation).
+  `form_to_elicitation_schema` (native MCP elicitation), and
+  `form_to_markdown` (portable markdown for text-only hosts, with a
+  JSON answer skeleton as the reply format).
+- **Typed-reply ingestion** — `markdown_to_answers` parses a pasted
+  skeleton or line shorthand deterministically (unknown ids and stray
+  lines become named problems, never guesses);
+  `problems_to_markdown` re-asks exactly the fields that failed.
 - **Surface routing** — `select_form_surface` picks widget vs fallback;
   a keyboard-mode opt-out is persisted per project. The form degrades —
   it never breaks.
