@@ -13,6 +13,7 @@ Licensed under Apache 2.0
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Callable
 from datetime import datetime
@@ -1176,9 +1177,17 @@ def _validate_boolean(question: FormQuestion, value: Any) -> str | None:
 
 
 def _validate_number(question: FormQuestion, value: Any) -> str | None:
-    """NUMBER: value must be numeric and within [minimum, maximum]."""
+    """NUMBER: value must be FINITE numeric within [minimum, maximum].
+
+    Non-finite floats defeat bounds checks (NaN compares False against
+    everything; ±inf slips one-sided bounds) and ``json.loads`` accepts
+    the ``NaN``/``Infinity`` extensions by default, so the guard lives
+    here — once, for every surface (ultrareview finding).
+    """
     if not _is_number(value):
         return f"{question.id!r} expects a number"
+    if isinstance(value, float) and not math.isfinite(value):
+        return f"{question.id!r} {value!r} is not a finite number"
     if question.minimum is not None and value < question.minimum:
         return f"{question.id!r} {value} is below minimum {question.minimum}"
     if question.maximum is not None and value > question.maximum:

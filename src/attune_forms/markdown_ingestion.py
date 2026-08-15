@@ -41,10 +41,14 @@ from attune_forms.models import (
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
 #: A fenced code block with ANY language tag (``` / ```json /
-#: ```python …), lazily matched. Every fence is excluded from line
-#: parsing; only bare/json-tagged bodies are JSON-reply candidates —
-#: a pasted ```python`` snippet must never be ingested as answers.
-_FENCE_RE = re.compile(r"```([A-Za-z0-9_+-]*)[ \t]*\n(.*?)```", re.DOTALL)
+#: ```python / ```c# …), lazily matched. The tag class is CommonMark's
+#: info-string rule — any run of non-whitespace, non-backtick
+#: characters — so tags like ``c#``/``.net`` are fences too
+#: (ultrareview finding: an alnum-only class let their bodies leak
+#: into line parsing). Every fence is excluded from line parsing; only
+#: bare/json-tagged bodies are JSON-reply candidates — a pasted code
+#: snippet must never be ingested as answers.
+_FENCE_RE = re.compile(r"```([^\s`]*)[ \t]*\n(.*?)```", re.DOTALL)
 
 #: One shorthand line: optional list bullet, a key (field id, 1-based
 #: number, or dotted triage row — item keys may contain spaces, since
@@ -202,6 +206,22 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
             continue
         question = by_id.get(answer_key)
         answers[answer_key] = _coerce(question, value) if question else value
+
+    # Typed dotted rows must survive a quoted skeleton that already
+    # carries the board's mapping (a suggested prefill keeps it
+    # non-empty): merge "<board>.<item>" siblings into the mapping,
+    # typed wins — otherwise the collect-time fold, whose mapping-wins
+    # rule serves the other surfaces, strands them and the validator
+    # re-asks an item the user answered (ultrareview finding).
+    for q in form.questions:
+        if q.type is not QuestionType.TRIAGE:
+            continue
+        mapping = answers.get(q.id)
+        if not isinstance(mapping, dict):
+            continue
+        prefix = f"{q.id}."
+        for key in [k for k in answers if k.startswith(prefix)]:
+            mapping[key[len(prefix) :]] = answers.pop(key)
 
     return answers, problems
 
