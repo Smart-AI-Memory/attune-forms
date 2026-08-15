@@ -37,7 +37,7 @@ from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 
 #: data-ftype values the submit script special-cases (read from a
 #: checked control rather than the generic first-control tail).
-_CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation"}
+_CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation", "confirm"}
 
 
 class _WidgetDOM(HTMLParser):

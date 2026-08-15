@@ -19,7 +19,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from attune_forms.models import FormQuestion, FormSchema, QuestionType, triage_item_key
+from attune_forms.models import (
+    FormQuestion,
+    FormSchema,
+    QuestionType,
+    _consequences_summary,
+    triage_item_key,
+)
 
 
 def _property_for(question: FormQuestion) -> dict[str, Any]:
@@ -40,6 +46,9 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
         # one chaired pick.
         QuestionType.PROGRESS,
         QuestionType.DELIBERATION,
+        # CONFIRM: a two-value string enum, never a JSON boolean — the
+        # author-named labels carry meaning, and no default exists (D2).
+        QuestionType.CONFIRM,
     ):
         prop.update(type="string", enum=list(question.options))
     elif question.type == QuestionType.MULTI_SELECT:
@@ -63,6 +72,11 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
 
     if question.help_text:
         prop["description"] = question.help_text
+    if question.type is QuestionType.CONFIRM:
+        summary = _consequences_summary(question.consequences)
+        if summary:
+            existing = prop.get("description")
+            prop["description"] = f"{existing} · {summary}" if existing else summary
     if question.default is not None:
         prop["default"] = question.default
     return prop

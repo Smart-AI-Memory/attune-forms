@@ -477,6 +477,77 @@ def _parse_suggested(
     return suggested, []
 
 
+#: The options a CONFIRM carries when the author names none. Exactly
+#: two, always — the gate is two-way by ruling (confirm-construct D1).
+_CONFIRM_DEFAULT_OPTIONS = ["Approve", "Abort"]
+
+
+def _parse_confirm_extras(
+    where: str, raw: dict[str, Any], qtype: QuestionType, options: list[str]
+) -> tuple[list[dict[str, str]] | None, list[str], list[str]]:
+    """Parse the v7 CONFIRM extras and enforce its gate rules.
+
+    Returns ``(consequences, options, problems)`` — options come back
+    defaulted to :data:`_CONFIRM_DEFAULT_OPTIONS` when the author named
+    none, and any count other than two is a definition error (D1:
+    the gate is two-way, always).
+
+    ``consequences`` is required for CONFIRM (a confirm with nothing to
+    preview is a bare boolean and should be one) and invalid elsewhere:
+    a non-empty list of {label, severity?, detail?} dicts.
+
+    D2 (chair-ratified 2026-08-14): ``default`` and ``recommended`` are
+    REJECTED on a confirm — a pre-selected or pre-badged approval
+    defeats the gate; approving must be an explicit act.
+    """
+    consequences = raw.get("consequences")
+    if qtype is not QuestionType.CONFIRM:
+        if consequences is not None:
+            return (
+                None,
+                options,
+                [f"{where} 'consequences' is only valid on confirm (got {qtype.value})"],
+            )
+        return None, options, []
+
+    problems: list[str] = []
+
+    if not options:
+        options = list(_CONFIRM_DEFAULT_OPTIONS)
+    elif len(options) != 2:
+        problems.append(f"{where} type confirm requires exactly 2 options (got {len(options)})")
+
+    if raw.get("default") is not None:
+        problems.append(
+            f"{where} 'default' is not permitted on confirm (D2: no pre-selected approval)"
+        )
+    if raw.get("recommended") is not None:
+        problems.append(
+            f"{where} 'recommended' is not permitted on confirm (D2: no pre-badged approval)"
+        )
+
+    if consequences is None:
+        problems.append(f"{where} type confirm requires 'consequences'")
+        return None, options, problems
+    if (
+        not isinstance(consequences, list)
+        or not consequences
+        or not all(isinstance(c, dict) for c in consequences)
+    ):
+        problems.append(f"{where} 'consequences' must be a non-empty list of dicts")
+        return None, options, problems
+
+    for idx, item in enumerate(consequences):
+        label = item.get("label")
+        if not isinstance(label, str) or not label:
+            problems.append(f"{where} consequences[{idx}] needs a 'label' string")
+        for extra in ("severity", "detail"):
+            if extra in item and not isinstance(item[extra], str):
+                problems.append(f"{where} consequences[{idx}] '{extra}' must be a string")
+
+    return (consequences if not problems else None), options, problems
+
+
 def _parse_inferred_from(where: str, raw: dict[str, Any]) -> tuple[str | None, list[str]]:
     """Parse ``inferred_from`` — the provenance of an inferred default.
 
@@ -601,6 +672,9 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         )
         problems.extend(suggested_problems)
 
+        consequences, options, confirm_problems = _parse_confirm_extras(where, raw, qtype, options)
+        problems.extend(confirm_problems)
+
         list_style, list_style_problems = _parse_list_style(where, raw, qtype)
         problems.extend(list_style_problems)
 
@@ -630,6 +704,7 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     triage_items=triage_items,
                     dispositions=dispositions,
                     suggested=suggested,
+                    consequences=consequences,
                     list_style=list_style,
                     inferred_from=inferred_from,
                 )
@@ -660,6 +735,7 @@ _WIDGET_ONLY_TYPES = frozenset(
         QuestionType.PROGRESS,
         QuestionType.DELIBERATION,
         QuestionType.TRIAGE,
+        QuestionType.CONFIRM,
     }
 )
 
@@ -1123,6 +1199,7 @@ _ANSWER_VALIDATORS: dict[QuestionType, Callable[[FormQuestion, Any], str | None]
     QuestionType.PROGRESS: _validate_membership,
     QuestionType.DELIBERATION: _validate_membership,
     QuestionType.TRIAGE: _validate_triage,
+    QuestionType.CONFIRM: _validate_membership,
     QuestionType.BOOLEAN: _validate_boolean,
     QuestionType.NUMBER: _validate_number,
     QuestionType.DATE: _validate_date,

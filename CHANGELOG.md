@@ -12,6 +12,13 @@ surface and triage, id-keying and strict-degradation amendments
 applied as ruled).
 
 ### Added
+- `confirm` construct (spec `confirm-construct`, roundtable-ruled
+  "spec next"): action preview with a structured `consequences` list
+  (`{label, severity?, detail?}`) and a two-way approve/abort gate —
+  exactly two options, and `default`/`recommended` are rejected by
+  the validator (a pre-selected approval defeats the gate, D2). Flat
+  surfaces render a two-option single-select with a compact "Will: …"
+  receipt; the markdown skeleton never prefills the answer
 - `deliberation` construct: multi-voice endorsements per option
   (`{option: [voice, ...]}`) rendered as chips, synthesis pick badged,
   chair picks one; flat fallback folds endorsements into a compact

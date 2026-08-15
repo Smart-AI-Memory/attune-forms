@@ -66,6 +66,7 @@ def _field_schema() -> dict[str, Any]:
                     "progress",
                     "deliberation",
                     "triage",
+                    "confirm",
                 ],
                 "description": (
                     "Control type. Core: text_input/single_select/"
@@ -76,7 +77,9 @@ def _field_schema() -> dict[str, Any]:
                     "(done/in_flight/blocked report with a blocked-item "
                     "picker), deliberation (multi-voice endorsements per "
                     "option, chair picks one), triage (per-item rulings "
-                    "over a reviewed list; answer = {item id: disposition})."
+                    "over a reviewed list; answer = {item id: disposition}), "
+                    "confirm (consequences preview + two-way approve/abort "
+                    "gate; no default/recommended permitted)."
                 ),
             },
             "options": {"type": "array", "items": {"type": "string"}},
@@ -108,6 +111,10 @@ def _field_schema() -> dict[str, Any]:
             "suggested": {
                 "type": "object",
                 "description": "triage: {item id: proposed disposition}",
+            },
+            "consequences": {
+                "type": "array",
+                "description": "confirm: [{label, severity?, detail?}, ...]",
             },
             "list_style": {"type": "string", "enum": ["ordered", "unordered"]},
         },

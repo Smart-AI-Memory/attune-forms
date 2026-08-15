@@ -160,6 +160,22 @@ CSS_TRIAGE = """#attune-elicit-form .ae-triage { display:flex; flex-direction:co
   text-transform:uppercase; letter-spacing:.04em; color:var(--text-accent,#a1571c); }
 """
 
+#: CONFIRM — the consequences preview + two-way approve/abort gate.
+CSS_CONFIRM = """#attune-elicit-form .ae-gate { display:flex; flex-direction:column; gap:.35rem; }
+#attune-elicit-form .ae-gate-h { font-size:11px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.03em; color:var(--text-accent,#a1571c); }
+#attune-elicit-form .ae-gate-row { display:flex; align-items:baseline; gap:.5rem;
+  font-size:14px; color:var(--text-secondary,#5f5e59); }
+#attune-elicit-form .ae-gate-label { color:var(--text-primary,#2c2c2a); }
+#attune-elicit-form .ae-gate-detail { font-size:13px; color:var(--text-muted,#8a887f); }
+#attune-elicit-form .ae-gate-tag { flex:none; font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--text-accent,#a1571c);
+  border:1px solid var(--border-accent,#d8b89a); border-radius:3px; padding:0 .3em; }
+#attune-elicit-form .ae-gate-opts { display:flex; gap:1rem; flex-wrap:wrap;
+  margin-top:.25rem; }
+#attune-elicit-form .ae-gate-opt { font-weight:500; cursor:pointer; }
+"""
+
 #: Named family blocks in cascade-emission order (BASE is always first).
 CSS_FAMILIES: list[tuple[str, str]] = [
     ("INPUT", CSS_INPUT),
@@ -168,6 +184,7 @@ CSS_FAMILIES: list[tuple[str, str]] = [
     ("CARDS", CSS_CARDS),
     ("PROGRESS", CSS_PROGRESS),
     ("TRIAGE", CSS_TRIAGE),
+    ("CONFIRM", CSS_CONFIRM),
 ]
 
 #: The full theme: base + every family, in cascade order. This exact

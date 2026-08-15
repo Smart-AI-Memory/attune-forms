@@ -147,6 +147,15 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return _progress_lines(q)
     if q.type == QuestionType.TRIAGE:
         return _triage_lines(q)
+    if q.type == QuestionType.CONFIRM:
+        lines = ["If approved:"]
+        for item in q.consequences or []:
+            tag = f" `{item['severity']}`" if item.get("severity") else ""
+            detail = f" — {item['detail']}" if item.get("detail") else ""
+            lines.append(f"- {item.get('label', '')}{tag}{detail}")
+        lines.append("")
+        lines.append("Answer one of: " + " / ".join(f"**{opt}**" for opt in q.options))
+        return lines
     # SINGLE_SELECT / MULTI_SELECT (and any future select-like fallback)
     lines = _option_lines(q)
     if q.type == QuestionType.MULTI_SELECT:
@@ -181,6 +190,10 @@ def _field_lines(q: FormQuestion) -> list[str]:
 
 def _skeleton_value(q: FormQuestion) -> Any:
     """The reply skeleton's placeholder value for one question."""
+    if q.type == QuestionType.CONFIRM:
+        # Never prefilled — approval must be an explicit act (D2
+        # projected to S4); the construct also has no default to offer.
+        return None
     if q.type == QuestionType.MULTI_SELECT:
         return [q.default] if q.default else []
     if q.type == QuestionType.TRIAGE:

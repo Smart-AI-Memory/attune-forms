@@ -150,6 +150,21 @@ REFERENCE_FORM: dict[str, Any] = {
             "suggested": {"retry-loop": "fix now"},
         },
         {
+            # v7: a confirm — consequences preview + two-way gate; no
+            # default and no recommended, by construction (spec D2)
+            "id": "flag_flip_gate",
+            "type": "confirm",
+            "text": "Enable the feature flag for all users now?",
+            "consequences": [
+                {
+                    "label": "Flag flips to 100% rollout",
+                    "severity": "high",
+                    "detail": "reversible via the same flag",
+                },
+                {"label": "Announcement email sends", "severity": "irreversible"},
+            ],
+        },
+        {
             # v5: a status report whose blocked items are a picker
             "id": "blockers",
             "type": "progress",
@@ -183,5 +198,6 @@ EXAMPLE_ANSWERS: dict[str, Any] = {
     "branch_strategy": "Short stacked PRs off main",
     "cache_strategy": "In-process LRU",
     "finding_rulings": {"retry-loop": "fix now", "stale-doc": "ticket"},
+    "flag_flip_gate": "Approve",
     "blockers": "Design sign-off",
 }
