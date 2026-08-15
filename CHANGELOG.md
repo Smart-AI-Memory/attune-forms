@@ -6,10 +6,15 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-The grammar-expansion tranche, deliberated by the multi-LLM round
+## [0.5.0] — 2026-08-14
+
+The grammar-expansion release: the communication grammar grows from
+five constructs on three surfaces to seven constructs on four — every
+one with a validated round-trip — deliberated by the multi-LLM round
 table (thread `q-forms-grammar-expansion-001`: 3/3 on the markdown
 surface and triage, id-keying and strict-degradation amendments
-applied as ruled).
+applied as ruled), and hardened by a post-merge 8-angle review plus a
+cloud ultrareview before this cut.
 
 ### Added
 - Tolerant markdown ingestion (spec `markdown-ingestion`, the S4
@@ -46,10 +51,24 @@ applied as ruled).
   widget round-trip, CSS-family, and markdown conformance guards
   extended to them
 
+### Fixed
+- Twelve post-merge review findings, each with a pinned regression
+  (#18, #19): typed shorthand now overrides a pasted JSON skeleton
+  (including dotted triage rows merging into a quoted mapping, typed
+  wins); the dotted triage namespace is guarded at definition time;
+  code fences with any language tag are excluded from shorthand
+  parsing; unknown JSON answer keys are named problems; non-finite
+  numbers are rejected by the validator on every surface;
+  label-keyed triage shorthand parses; triage answers render per-item
+  in summaries; `to_ask_user_format` raises loudly for triage; falsy
+  defaults survive into the reply skeleton
+- CSS class-uniqueness guard: no class may be styled by two family
+  blocks — the collision mode the coverage guard cannot see (#17)
+
 ### Changed
-- Form theme budget raised 6 KB → 8 KB (7,204 B measured with the
-  TRIAGE family + deliberation seat chips; ratified in this PR's
-  review)
+- Form theme budget raised 6 KB → 8 KB (8,158 B measured with the
+  TRIAGE + CONFIRM families and deliberation seat chips; ratified
+  with the #14 merge)
 - MCP field schema documents the new types and extras (tool names and
   result shapes unchanged)
 

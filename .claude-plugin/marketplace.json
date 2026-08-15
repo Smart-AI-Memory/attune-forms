@@ -7,14 +7,14 @@
   },
   "metadata": {
     "description": "Structured agent-user communication: validated forms, decision cards with recommendations, structured pushback, and progress reports \u2014 batch questions instead of asking one at a time.",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "plugins": [
     {
       "name": "attune-forms",
       "description": "The communication grammar for AI agents: batch independent questions into ONE validated form; offer recommendations as decision cards with rationales and per-option tradeoffs; disagree constructively via pushback cards; report multi-step progress with a blocked-item picker. Renders rich HTML where the host supports widgets and degrades cleanly to plain questions everywhere else. Powered by the attune-forms PyPI package via a bundled MCP server.",
       "source": "./plugin",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "author": {
         "name": "Smart AI Memory",
         "email": "admin@smartaimemory.com"
