@@ -326,3 +326,67 @@ class TestReviewFindingRegressions:
                     form,
                     {**answers, "env": "staging", "rulings.r1": "fix", "rulings.r2": "fix"},
                 )
+
+
+class TestUltrareviewRegressions:
+    """Regressions for the 2026-08-14 cloud-review findings on PR #18."""
+
+    def test_typed_dotted_row_merges_into_quoted_mapping(self) -> None:
+        # A quoted skeleton with a suggested prefill carries the board's
+        # mapping; a typed dotted row for another item must merge in
+        # (typed wins), never strand as a sibling the fold skips.
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "rulings",
+                        "type": "triage",
+                        "text": "Rule.",
+                        "triage_items": [{"id": "r1", "label": "A"}, {"id": "r2", "label": "B"}],
+                        "dispositions": ["fix", "skip"],
+                        "suggested": {"r1": "fix"},
+                    }
+                ],
+            }
+        )
+        reply = (
+            "rulings.r2: skip\n\n> quoting the form:\n"
+            '```json\n{"answers": {"rulings": {"r1": "fix", "r2": null}}}\n```'
+        )
+        answers, problems = markdown_to_answers(form, reply)
+        assert problems == []
+        assert answers == {"rulings": {"r1": "fix", "r2": "skip"}}
+        resp = collect_form_response(form, answers)
+        assert resp.responses["rulings"] == {"r1": "fix", "r2": "skip"}
+
+    def test_typed_dotted_row_overrides_quoted_mapping_entry(self) -> None:
+        form = form_from_dict(_small_form())
+        reply = (
+            'rulings.r1: skip\n```json\n{"answers": {"rulings": {"r1": "fix", "r2": "fix"}}}\n```'
+        )
+        answers, _ = markdown_to_answers(form, reply)
+        assert answers["rulings"] == {"r1": "skip", "r2": "fix"}
+
+    def test_json_nan_and_infinity_rejected_by_validator(self) -> None:
+        # json.loads accepts NaN/Infinity extensions; the finite guard
+        # lives in the validator so EVERY surface is covered.
+        form = form_from_dict(_small_form())
+        for bad in ("NaN", "Infinity", "-Infinity"):
+            reply = f'```json\n{{"answers": {{"days": {bad}}}}}\n```'
+            answers, problems = markdown_to_answers(form, reply)
+            assert problems == []
+            with pytest.raises(FormValidationError, match="not a finite number"):
+                collect_form_response(
+                    form,
+                    {**answers, "env": "staging", "rulings.r1": "fix", "rulings.r2": "fix"},
+                )
+
+    def test_nonalnum_fence_tags_are_fences_too(self) -> None:
+        # CommonMark info strings allow c#/.net/q#; an alnum-only tag
+        # class let those bodies leak into shorthand parsing.
+        form = form_from_dict(_small_form())
+        reply = 'C# snippet:\n```c#\nenv = "stolen"\nrulings.r1 = "skip"\n```\nenv: staging'
+        answers, problems = markdown_to_answers(form, reply)
+        assert answers == {"env": "staging"}
+        assert problems == ["unparseable line: 'C# snippet:'"]
