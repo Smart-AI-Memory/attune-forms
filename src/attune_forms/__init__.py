@@ -69,6 +69,7 @@ from attune_forms.intake_template import (
     intake_form,
     validate_template,
 )
+from attune_forms.markdown_ingestion import markdown_to_answers, problems_to_markdown
 from attune_forms.markdown_surface import form_to_markdown
 from attune_forms.models import (
     FormQuestion,
@@ -113,7 +114,9 @@ __all__ = [
     "is_trivial_form",
     "keyboard_mode_enabled",
     "list_templates",
+    "markdown_to_answers",
     "needs_widget",
+    "problems_to_markdown",
     "select_form_surface",
     "set_keyboard_mode",
     "triage_item_key",

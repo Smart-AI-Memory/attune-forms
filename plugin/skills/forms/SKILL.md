@@ -163,9 +163,22 @@ a confirm — ask plainly.
 4. **No widget, no question tool** (text-only hosts): render the form
    with `form_to_markdown` (library) and relay the markdown verbatim.
    It ends with a JSON answer skeleton — the widget's exact postback
-   shape. Map the user's replies into that skeleton yourself and
-   validate with `elicitation_collect_response`; on problems, re-ask
-   only the offending fields in plain text.
+   shape — and documents the line shorthand (`field_id: value`,
+   `N: value`, `field_id.item_id: disposition` for triage rows).
+   Collect the reply in this order:
+   - **Parse first**: run `markdown_to_answers(form, reply)` — it
+     deterministically handles a pasted JSON block or shorthand lines
+     and returns `(answers, problems)`; it never guesses, so every
+     stray line comes back as a named problem.
+   - **Free text is YOUR lane**: when the user answered in prose,
+     map their words into the skeleton yourself — but treat your
+     mapping as a proposal, never a fact. If a value is uncertain,
+     re-ask that field instead of guessing.
+   - **Validate everything** through `elicitation_collect_response` —
+     parser output and your own mappings alike; the validator is the
+     only truth. On problems, relay `problems_to_markdown(form,
+     problems)` — it re-renders exactly the offending fields as a
+     markdown re-ask, never the whole form.
 
 Respect the user's keyboard preference: if they've opted into terse
 mode (`ATTUNE_FORMS_KEYBOARD_MODE=1` or `keyboard_mode` in

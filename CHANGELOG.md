@@ -12,6 +12,15 @@ surface and triage, id-keying and strict-degradation amendments
 applied as ruled).
 
 ### Added
+- Tolerant markdown ingestion (spec `markdown-ingestion`, the S4
+  surface's return path — roundtable-ruled "spec next"):
+  `markdown_to_answers` deterministically parses a typed reply (pasted
+  JSON skeleton or line shorthand — `field_id: value`, `N: value`,
+  dotted triage rows) with every unparseable line and unknown id a
+  named problem, never a guess; `problems_to_markdown` renders
+  validation failures as a markdown re-ask of only the offending
+  fields. Validation truth stays `collect_form_response`; free-text
+  replies remain the host agent's skill-taught lane
 - `confirm` construct (spec `confirm-construct`, roundtable-ruled
   "spec next"): action preview with a structured `consequences` list
   (`{label, severity?, detail?}`) and a two-way approve/abort gate —

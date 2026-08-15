@@ -239,8 +239,9 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
     lines += [
         "",
         "---",
-        "Reply by filling the `answers` values (a triage answer maps each "
-        "item label to one of its dispositions):",
+        "Reply by filling the `answers` values below, or with shorthand "
+        "lines — `field_id: value` or `N: value` (field number); a triage "
+        "row is `field_id.item_id: disposition`:",
         "",
         "```json",
         json.dumps(skeleton, indent=2, ensure_ascii=False),
