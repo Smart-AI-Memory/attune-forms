@@ -1,6 +1,6 @@
 ---
 name: forms
-description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board."
+description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board, gate consequential actions with a confirm card. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board, confirm card, approval gate."
 argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refactor'>"
 ---
 
@@ -124,6 +124,26 @@ required board needs every item ruled; set `required: false` to allow
 partial rulings. On flat surfaces each item becomes its own
 single-select (`"<field id>.<item id>"`); pass those answers straight
 to `elicitation_collect_response` — they fold back automatically.
+
+## The confirm card
+
+A `confirm` is an approval gate for a **consequential action**: the
+question names the action, `consequences` (a non-empty list of
+`{label, severity?, detail?}`; conventional severities `low` /
+`medium` / `high` / `irreversible`) enumerates exactly what will
+happen, and the user answers one of exactly two options (default
+`["Approve", "Abort"]`, renameable — always two). **No `default` and
+no `recommended` are allowed** — a pre-selected approval defeats the
+gate, and the library rejects both.
+
+**The boundary with the "never form a confirm" rule above:** a bare
+re-confirmation of something already decided ("go", "yes", "proceed
+as planned") stays conversational — that rule stands. The confirm
+card is reserved for actions whose consequences *deserve enumeration*
+— destructive, costly, or outward-facing steps (a release, a deletion,
+a spend, a public post) where "here is exactly what will happen" is
+the point. If you have no consequences worth listing, you don't have
+a confirm — ask plainly.
 
 ## Choosing a surface
 

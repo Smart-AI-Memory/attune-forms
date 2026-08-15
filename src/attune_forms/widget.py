@@ -312,6 +312,43 @@ def _control_triage_html(q: FormQuestion) -> str:
     return f'<div class="ae-triage">{rows}</div>'
 
 
+def _control_confirm_html(q: FormQuestion) -> str:
+    """Render a CONFIRM control: consequences preview + two-way gate.
+
+    The consequences render first, each with its severity visibly
+    tagged; the two options render as UNCHECKED radios — by D2 nothing
+    is ever pre-selected or badged, so approving is an explicit act.
+    """
+    rows = ""
+    for item in q.consequences or []:
+        tag = (
+            f'<span class="ae-gate-tag">{_esc(item["severity"])}</span>'
+            if item.get("severity")
+            else ""
+        )
+        detail = (
+            f'<span class="ae-gate-detail">{_esc(item["detail"])}</span>'
+            if item.get("detail")
+            else ""
+        )
+        rows += (
+            f'<div class="ae-gate-row">{tag}'
+            f'<span class="ae-gate-label">{_esc(item.get("label", ""))}</span>'
+            f"{detail}</div>"
+        )
+    opts = "".join(
+        f'<label class="ae-gate-opt"><input type="radio" '
+        f'name="{_esc(q.id)}" data-control value="{_esc(opt)}"> '
+        f"<span>{_esc(opt)}</span></label>"
+        for opt in q.options
+    )
+    return (
+        f'<div class="ae-gate"><div class="ae-gate-h">If approved:</div>'
+        f"{rows}"
+        f'<div class="ae-gate-opts" role="radiogroup">{opts}</div></div>'
+    )
+
+
 def _control_multi_select_html(q: FormQuestion) -> str:
     """Render MULTI_SELECT: a list_style list, or plain checkboxes."""
     if q.list_style:
@@ -385,6 +422,7 @@ _CONTROL_RENDERERS: dict[QuestionType, Callable[[FormQuestion], str]] = {
     QuestionType.PUSHBACK: _control_pushback_html,
     QuestionType.DELIBERATION: _control_deliberation_html,
     QuestionType.TRIAGE: _control_triage_html,
+    QuestionType.CONFIRM: _control_confirm_html,
     QuestionType.MULTI_SELECT: _control_multi_select_html,
     QuestionType.SINGLE_SELECT: _control_single_select_html,
     QuestionType.BOOLEAN: _control_boolean_html,
@@ -487,6 +525,8 @@ def _families_for(question: FormQuestion) -> set[str]:
         return {"CARDS"}  # deliberation's seat chips live in CARDS
     if qtype == QuestionType.TRIAGE:
         return {"TRIAGE"}
+    if qtype == QuestionType.CONFIRM:
+        return {"CONFIRM"}
     if qtype == QuestionType.MULTI_SELECT:
         return {"LIST"} if question.list_style else {"CHECKS"}
     if qtype == QuestionType.SINGLE_SELECT:
@@ -587,7 +627,8 @@ def form_to_widget_html(
         }});
         answers[fid] = vals;
       }} else if (ftype === 'decision' || ftype === 'pushback' ||
-          ftype === 'progress' || ftype === 'deliberation') {{
+          ftype === 'progress' || ftype === 'deliberation' ||
+          ftype === 'confirm') {{
         // progress: the answer is the selected blocked item; when nothing
         // is blocked there is no radio and no answer is posted (display-only).
         var picked = f.querySelector('[data-control]:checked');

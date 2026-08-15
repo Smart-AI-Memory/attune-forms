@@ -67,6 +67,34 @@ class QuestionType(str, Enum):
     # non-widget surfaces it expands to one single-select per item
     # (ids ``"<id>.<label>"``) and folds back at collection time.
     TRIAGE = "triage"
+    # v7 (communication grammar member #7): a confirm — an action
+    # preview with an explicit ``consequences`` list and a two-way
+    # approve/abort gate (exactly two author-nameable options, default
+    # ["Approve", "Abort"]). No default and no recommended are permitted
+    # — a pre-selected approval defeats the gate (confirm-construct spec
+    # D2); approving is an explicit act on every surface. The answer is
+    # one of the two options (validated as a single-select).
+    CONFIRM = "confirm"
+
+
+def _consequences_summary(consequences: list[dict[str, str]] | None) -> str | None:
+    """One-line "Will: ..." digest of a confirm's consequences.
+
+    The flat-surface projection of the preview: label, severity in
+    parentheses, detail after a dash — compact enough for help_text or
+    an elicitation description without dumping a paragraph per item.
+    """
+    if not consequences:
+        return None
+    bits = []
+    for item in consequences:
+        bit = item.get("label", "")
+        if item.get("severity"):
+            bit += f" ({item['severity']})"
+        if item.get("detail"):
+            bit += f" — {item['detail']}"
+        bits.append(bit)
+    return "Will: " + "; ".join(bits)
 
 
 def triage_item_key(item: dict[str, str]) -> str:
@@ -141,6 +169,12 @@ class FormQuestion:
             proposed ruling per item, rendered pre-selected and marked
             "suggested" (a guess to confirm, never silently accepted).
             Keys must be item labels, values dispositions. None = none
+        consequences: CONFIRM only — what happens if the action is
+            approved, as a non-empty list of {label, severity?, detail?}
+            dicts (severity a free tag; conventional vocabulary low /
+            medium / high / irreversible). Required for CONFIRM — a
+            confirm with nothing to preview is a bare boolean and should
+            be one. None = none
         list_style: SINGLE_SELECT/MULTI_SELECT only — render the options as
             an "ordered" (numbered) or "unordered" (bulleted) selectable
             list instead of the default dropdown/checkboxes. Pure
@@ -175,6 +209,7 @@ class FormQuestion:
     triage_items: list[dict[str, str]] | None = None
     dispositions: list[str] | None = None
     suggested: dict[str, str] | None = None
+    consequences: list[dict[str, str]] | None = None
     list_style: str | None = None
     inferred_from: str | None = None
 
@@ -231,6 +266,23 @@ class FormQuestion:
                 "type": "single_select",
                 "options": opts,
                 "default": self.default or self.recommended,
+                "help_text": help_text,
+            }
+
+        # CONFIRM: a two-option single-select; the consequences preview
+        # folds compactly into help_text (the ruled degradation — never a
+        # silent boolean that hides the receipt). No default, ever (D2).
+        if self.type is QuestionType.CONFIRM:
+            help_text = self._fallback_help()
+            summary = _consequences_summary(self.consequences)
+            if summary:
+                help_text = f"{help_text} · {summary}" if help_text else summary
+            return {
+                "question_id": self.id,
+                "question": self.text,
+                "type": "single_select",
+                "options": list(self.options),
+                "default": None,
                 "help_text": help_text,
             }
 
