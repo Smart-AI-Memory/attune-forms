@@ -1,6 +1,6 @@
 ---
 name: forms
-description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board, gate consequential actions with a confirm card, order options with a ranking list. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board, confirm card, approval gate, ranking, rank these, prioritize."
+description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board, gate consequential actions with a confirm card, order options with a ranking list, surface inferred assumptions for accept/edit/reject with an assumption review. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board, confirm card, approval gate, ranking, rank these, prioritize, assumption review, check my assumptions, here's what I'm assuming."
 argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refactor'>"
 ---
 
@@ -164,6 +164,39 @@ answers straight to `elicitation_collect_response`, they fold back and
 a repeated option is a named problem. On markdown hosts the reply is a
 comma list in order (`field_id: b, a, c`) or one slot per line.
 
+## The assumption review
+
+An `assumption_review` shows the assumptions you **inferred** from
+context and lets the user rule each one `accept` / `edit` / `reject`,
+typing replacement text for an edit. It is "Infer first" made into an
+artifact: instead of silently acting on an inference or re-asking it
+cold, you show it, say where it came from, and act on the ruling.
+
+Extra keys: `assumptions` (a list of `{label, id?, detail?, source?}` —
+`source` is where you inferred it from: "README §Install", "your
+message at 10:02"; give items stable ids), optional `suggested`
+(`{item id: "accept"}` — pre-marks accept visibly as your proposal;
+**accept only**, never edit or reject on the user's behalf). The
+vocabulary is fixed — there is no `dispositions` key, and **no
+`default`**; the library rejects both. The answer is `{item id:
+"accept" | "reject" | {"edit": "<replacement text>"}}`; an edit
+without text is a named problem. On flat surfaces each item becomes a
+single-select over the three rulings **paired with** an optional text
+question `"<field id>.<item id>.text"` (a host question tool can't
+branch); pass everything to `elicitation_collect_response` — the text
+is kept only when the ruling is edit, and required then. On markdown
+hosts a row is `field_id.item_id: accept`, `…: reject`, or
+`…: edit: <replacement text>`.
+
+**The boundary with "Infer first":** a dimension the user already
+*settled* is omitted or prefilled — never re-asked, and never put in a
+review. The review is for dimensions you *inferred* and are about to
+act on. Use it when **two or more** inferences carry real consequences
+if wrong; a single safe inference is stated in prose ("assuming Python
+3.10+, since pyproject says so") and acted on. An agent that turns
+every inference into a review row is the bureaucratizing failure mode
+wearing a new construct.
+
 ## Choosing a surface
 
 1. **Widget host** (the client renders HTML): call
@@ -179,13 +212,15 @@ comma list in order (`field_id: b, a, c`) or one slot per line.
    constructs → single-select with the recommended option first and
    tradeoffs folded into option descriptions (a triage board arrives
    pre-expanded as one single-select per item; a ranking as one
-   single-select per rank slot).
+   single-select per rank slot; an assumption review as one
+   single-select per assumption plus its paired text question).
 4. **No widget, no question tool** (text-only hosts): render the form
    with `form_to_markdown` (library) and relay the markdown verbatim.
    It ends with a JSON answer skeleton — the widget's exact postback
    shape — and documents the line shorthand (`field_id: value`,
    `N: value`, `field_id.item_id: disposition` for triage rows,
-   `field_id: b, a, c` or `field_id.1: b` for a ranking).
+   `field_id: b, a, c` or `field_id.1: b` for a ranking,
+   `field_id.item_id: edit: <text>` for an assumption edit).
    Collect the reply in this order:
    - **Parse first**: run `markdown_to_answers(form, reply)` — it
      deterministically handles a pasted JSON block or shorthand lines

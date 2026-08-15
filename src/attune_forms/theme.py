@@ -207,6 +207,15 @@ CSS_RANK = """#attune-elicit-form .ae-rank { display:flex; flex-direction:column
 #attune-elicit-form .ae-rank-ranked [data-rank="add"] { display:none; }
 """
 
+#: ASSUME — the assumption review's additions to the triage row family:
+#: the muted "from <source>" note and the replacement-text box, hidden
+#: until the row's ruling is "edit" (the script toggles the class).
+CSS_ASSUME = """#attune-elicit-form .ae-assume-src { font-size:12px; font-style:italic;
+  color:var(--text-muted,#8a887f); }
+#attune-elicit-form .ae-assume-edit { display:none; margin-top:.25rem; }
+#attune-elicit-form .ae-assume-editing .ae-assume-edit { display:block; }
+"""
+
 #: Named family blocks in cascade-emission order (BASE is always first).
 CSS_FAMILIES: list[tuple[str, str]] = [
     ("INPUT", CSS_INPUT),
@@ -217,6 +226,7 @@ CSS_FAMILIES: list[tuple[str, str]] = [
     ("TRIAGE", CSS_TRIAGE),
     ("CONFIRM", CSS_CONFIRM),
     ("RANK", CSS_RANK),
+    ("ASSUME", CSS_ASSUME),
 ]
 
 #: The full theme: base + every family, in cascade order. This exact

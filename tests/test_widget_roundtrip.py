@@ -40,8 +40,9 @@ from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 _CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation", "confirm"}
 
 #: data-ftype values whose answer is a collection the script rebuilds
-#: from several controls (checked boxes, per-row radios, ranked rows).
-_COLLECTION_FTYPES = {"multi_select", "triage", "ranking"}
+#: from several controls (checked boxes, per-row radios, ranked rows,
+#: per-row radios + a paired text box).
+_COLLECTION_FTYPES = {"multi_select", "triage", "ranking", "assumption_review"}
 
 
 class _WidgetDOM(HTMLParser):
@@ -117,9 +118,16 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
             continue
         value = answers[field["fid"]]
         if isinstance(value, dict):
-            # Triage: per-row radios — check the row's chosen disposition.
+            # Triage / assumption review: per-row radios — check the row's
+            # chosen ruling; an edit ruling also types its replacement text
+            # into the row's text box.
             for ctl in field["controls"]:
-                ctl["checked"] = value.get(ctl.get("item")) == ctl["value"]
+                ruling = value.get(ctl.get("item"))
+                if ctl["type"] == "radio":
+                    wanted_value = "edit" if isinstance(ruling, dict) else ruling
+                    ctl["checked"] = wanted_value == ctl["value"]
+                elif ctl["type"] == "text" and isinstance(ruling, dict):
+                    ctl["value"] = ruling.get("edit", "")
             continue
         wanted = [str(v) for v in (value if isinstance(value, list) else [value])]
         if field["ftype"] == "ranking":
@@ -153,6 +161,17 @@ def _submit(dom: _WidgetDOM) -> dict[str, Any]:
             # The ranked list's rows in DOM order; untouched posts nothing.
             if field.get("ranked"):
                 answers[fid] = list(field["ranked"])
+        elif ftype == "assumption_review":
+            rulings: dict[str, Any] = {}
+            texts = {c["item"]: c["value"] for c in controls if c["type"] == "text"}
+            for c in controls:
+                if c["type"] == "radio" and c.get("checked"):
+                    item = c["item"]
+                    rulings[item] = (
+                        {"edit": texts.get(item, "")} if c["value"] == "edit" else c["value"]
+                    )
+            if rulings:
+                answers[fid] = rulings
         elif ftype in _CHECKED_FTYPES:
             picked = next((c for c in controls if c.get("checked")), None)
             if picked:

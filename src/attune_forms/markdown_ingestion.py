@@ -33,6 +33,7 @@ from typing import Any
 
 from attune_forms.markdown_surface import _field_lines
 from attune_forms.models import (
+    ASSUMPTION_TEXT_SUFFIX,
     FormQuestion,
     FormSchema,
     QuestionType,
@@ -58,6 +59,11 @@ _LINE_RE = re.compile(r"^\s*(?:[-*]\s+)?([^:=]+?)\s*[:=]\s*(.+?)\s*$")
 
 #: A leading ordinal on one entry of a typed ranking ("1. b", "2) a").
 _ORDINAL_PREFIX_RE = re.compile(r"^\d+[.)]\s*")
+
+#: A typed assumption edit: ``edit: <replacement text>`` (or ``edit =``);
+#: a bare ``edit`` with no text is shaped to ``{"edit": ""}`` so the
+#: validator names it — never guessed into an accept.
+_ASSUMPTION_EDIT_RE = re.compile(r"^edit(?:\s*[:=]\s*(.*))?$", re.DOTALL)
 
 
 def _coerce(question: FormQuestion, value: str) -> Any:
@@ -103,6 +109,10 @@ def _known_keys(form: FormSchema) -> set[str]:
             keys |= {f"{q.id}.{triage_item_key(it)}" for it in q.triage_items or []}
         elif q.type is QuestionType.RANKING:
             keys |= {f"{q.id}.{k}" for k in range(1, ranking_slot_count(q) + 1)}
+        elif q.type is QuestionType.ASSUMPTION_REVIEW:
+            for it in q.assumptions or []:
+                keys.add(f"{q.id}.{triage_item_key(it)}")
+                keys.add(f"{q.id}.{triage_item_key(it)}{ASSUMPTION_TEXT_SUFFIX}")
     return keys
 
 
@@ -132,6 +142,7 @@ def _json_block_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any] | 
         if not isinstance(answers, dict):
             return None, ["json block has no 'answers' object"]
         known = _known_keys(form)
+        by_id = {q.id: q for q in form.questions}
         problems: list[str] = []
         cleaned: dict[str, Any] = {}
         for key, value in answers.items():
@@ -144,11 +155,48 @@ def _json_block_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any] | 
             if key not in known:
                 problems.append(f"unknown field: {key!r}")
                 continue
-            cleaned[key] = value
+            cleaned[key] = _shape_assumption_json(form, by_id, key, value)
         return cleaned, problems
     if candidates:
         return None, ["fenced code block is not valid JSON"]
     return None, []
+
+
+def _shape_edit_ruling(value: Any) -> Any:
+    """Shape one typed assumption ruling: ``edit: <text>`` (the form the
+    rendered rule line teaches) becomes ``{"edit": text}``; a bare
+    ``edit`` becomes ``{"edit": ""}`` so the validator names it; anything
+    else passes through untouched for the validator to judge.
+    """
+    if not isinstance(value, str):
+        return value
+    match = _ASSUMPTION_EDIT_RE.match(value)
+    return {"edit": (match.group(1) or "").strip()} if match else value
+
+
+def _shape_assumption_json(
+    form: FormSchema, by_id: dict[str, FormQuestion], key: str, value: Any
+) -> Any:
+    """Apply :func:`_shape_edit_ruling` inside a JSON reply — to the values
+    of an assumption review's mapping and to its dotted per-item keys —
+    so the ``edit: <text>`` string form the markdown rule line documents
+    is accepted on the JSON path exactly as on the shorthand path (never
+    a guess: the same deterministic regex).
+    """
+    question = by_id.get(key)
+    if question is not None and question.type is QuestionType.ASSUMPTION_REVIEW:
+        if isinstance(value, dict):
+            return {item: _shape_edit_ruling(ruling) for item, ruling in value.items()}
+        return value
+    root_id, _, suffix = key.partition(".")
+    root = by_id.get(root_id) if suffix else None
+    if (
+        root is not None
+        and root.type is QuestionType.ASSUMPTION_REVIEW
+        and not suffix.endswith(ASSUMPTION_TEXT_SUFFIX)
+    ):
+        return _shape_edit_ruling(value)
+    return value
 
 
 def _resolve_line_key(form: FormSchema, key: str) -> tuple[str | None, str | None]:
@@ -172,6 +220,16 @@ def _resolve_line_key(form: FormSchema, key: str) -> tuple[str | None, str | Non
         if root in by_id:
             if by_id[root].type is QuestionType.TRIAGE:
                 return key, None
+            if by_id[root].type is QuestionType.ASSUMPTION_REVIEW:
+                known = {triage_item_key(it) for it in by_id[root].assumptions or []}
+                bare = (
+                    suffix[: -len(ASSUMPTION_TEXT_SUFFIX)]
+                    if suffix.endswith(ASSUMPTION_TEXT_SUFFIX)
+                    else suffix
+                )
+                if suffix in known or (bare != suffix and bare in known):
+                    return key, None
+                return None, f"unknown assumption: {key!r}"
             if by_id[root].type is QuestionType.RANKING:
                 if suffix.isdigit() and 1 <= int(suffix) <= ranking_slot_count(by_id[root]):
                     return key, None
@@ -225,10 +283,20 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
             continue
         question = by_id.get(answer_key)
         if question is None and "." in answer_key:
-            # A dotted rank slot carries ONE option — never comma-split it.
             root = by_id.get(answer_key.split(".", 1)[0])
             if root is not None and root.type is QuestionType.RANKING:
+                # A dotted rank slot carries ONE option — never comma-split it.
                 answers[answer_key] = _ORDINAL_PREFIX_RE.sub("", value)
+                continue
+            if (
+                root is not None
+                and root.type is QuestionType.ASSUMPTION_REVIEW
+                and not answer_key.endswith(ASSUMPTION_TEXT_SUFFIX)
+            ):
+                # ``edit: <text>`` shapes to the edit lane; accept/reject
+                # (or anything else) pass through for the validator. A
+                # typed ``<id>.<key>.text`` line is raw text for the fold.
+                answers[answer_key] = _shape_edit_ruling(value)
                 continue
         answers[answer_key] = _coerce(question, value) if question else value
 
@@ -246,6 +314,29 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
                 continue
             for key in [k for k in answers if k.startswith(prefix)]:
                 mapping[key[len(prefix) :]] = answers.pop(key)
+        elif q.type is QuestionType.ASSUMPTION_REVIEW:
+            mapping = answers.get(q.id)
+            if not isinstance(mapping, dict):
+                continue
+            typed = {
+                k[len(prefix) :]: answers.pop(k) for k in list(answers) if k.startswith(prefix)
+            }
+            # Rulings first, then text lanes pair onto edit rulings (a text
+            # for a non-edit ruling is dropped — it is only read on edit).
+            for item, value in typed.items():
+                if not item.endswith(ASSUMPTION_TEXT_SUFFIX):
+                    mapping[item] = value
+            for item, value in typed.items():
+                if not item.endswith(ASSUMPTION_TEXT_SUFFIX):
+                    continue
+                target = item[: -len(ASSUMPTION_TEXT_SUFFIX)]
+                current = mapping.get(target)
+                # Same precedence as the collect-time fold: a text lane
+                # fills an EMPTY edit; inline `edit: <text>` wins otherwise.
+                if current == "edit" or (
+                    isinstance(current, dict) and not str(current.get("edit") or "").strip()
+                ):
+                    mapping[target] = {"edit": value}
         elif q.type is QuestionType.RANKING:
             # Same rule for a ranking: typed slots overlay a quoted list
             # (the skeleton may carry the proposed order); the merged
@@ -283,10 +374,17 @@ def problems_to_markdown(form: FormSchema, problems: list[str]) -> str:
     known_ids = {q.id for q in form.questions}
     offender_ids: list[str] = []
     for problem in problems:
-        for quoted in _QUOTED_ID_RE.findall(problem):
-            root = quoted.split(".", 1)[0]
-            if root in known_ids and root not in offender_ids:
-                offender_ids.append(root)
+        # Attribute by the FIRST quoted token only: every collect-time
+        # problem opens with the offending field id, and later quoted
+        # tokens are values or vocabulary that may collide with a sibling
+        # field's id (review finding, 2026-08-15 — a field named "edit"
+        # was re-asked for an assumption board's bad ruling).
+        quoted_tokens = _QUOTED_ID_RE.findall(problem)
+        if not quoted_tokens:
+            continue
+        root = quoted_tokens[0].split(".", 1)[0]
+        if root in known_ids and root not in offender_ids:
+            offender_ids.append(root)
 
     lines = ["Some answers need another pass:"]
     lines += [f"- {problem}" for problem in problems]

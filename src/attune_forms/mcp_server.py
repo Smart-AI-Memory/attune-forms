@@ -68,6 +68,7 @@ def _field_schema() -> dict[str, Any]:
                     "triage",
                     "confirm",
                     "ranking",
+                    "assumption_review",
                 ],
                 "description": (
                     "Control type. Core: text_input/single_select/"
@@ -83,7 +84,10 @@ def _field_schema() -> dict[str, Any]:
                     "gate; no default/recommended permitted), ranking (order "
                     "the options, optionally only the top_n; answer = ordered "
                     "list; a suggested order is a visible proposal, no default "
-                    "permitted)."
+                    "permitted), assumption_review (the agent's inferred "
+                    "assumptions, each ruled accept / edit / reject — fixed "
+                    "vocabulary; answer = {item id: 'accept' | 'reject' | "
+                    "{edit: text}}; suggested may pre-mark accept only)."
                 ),
             },
             "options": {"type": "array", "items": {"type": "string"}},
@@ -116,8 +120,16 @@ def _field_schema() -> dict[str, Any]:
                 "type": ["object", "array"],
                 "description": (
                     "triage: {item id: proposed disposition}; ranking: the "
-                    "proposed order as [option, ...] (rendered as a proposal, "
-                    "never the answer)"
+                    "proposed order as [option, ...]; assumption_review: "
+                    "{item id: 'accept'} only (rendered as a proposal, never "
+                    "the answer)"
+                ),
+            },
+            "assumptions": {
+                "type": "array",
+                "description": (
+                    "assumption_review: [{label, id?, detail?, source?}, ...] — "
+                    "the inferred assumptions; source = where it was inferred from"
                 ),
             },
             "top_n": {

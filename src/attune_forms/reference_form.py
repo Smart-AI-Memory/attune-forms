@@ -175,6 +175,29 @@ REFERENCE_FORM: dict[str, Any] = {
             "suggested": ["staging", "canary", "eu-prod"],
         },
         {
+            # v8: an assumption review — the agent's inferred assumptions,
+            # each ruled accept / edit / reject; one edit exercises the
+            # replacement-text lane
+            "id": "inferred_scope",
+            "type": "assumption_review",
+            "text": "I inferred these from context — rule each one.",
+            "assumptions": [
+                {
+                    "id": "py-floor",
+                    "label": "Python 3.10 is the floor",
+                    "source": "pyproject.toml requires-python",
+                },
+                {
+                    "id": "host",
+                    "label": "Claude Code is the only host",
+                    "detail": "the plugin manifest names it",
+                    "source": "plugin/.claude-plugin/marketplace.json",
+                },
+                {"label": "Tests run in CI on every push"},
+            ],
+            "suggested": {"py-floor": "accept"},
+        },
+        {
             # v5: a status report whose blocked items are a picker
             "id": "blockers",
             "type": "progress",
@@ -210,5 +233,10 @@ EXAMPLE_ANSWERS: dict[str, Any] = {
     "finding_rulings": {"retry-loop": "fix now", "stale-doc": "ticket"},
     "flag_flip_gate": "Approve",
     "rollout_order": ["staging", "canary", "us-prod"],
+    "inferred_scope": {
+        "py-floor": "accept",
+        "host": {"edit": "Claude Code plus any text-only host via markdown"},
+        "Tests run in CI on every push": "reject",
+    },
     "blockers": "Design sign-off",
 }

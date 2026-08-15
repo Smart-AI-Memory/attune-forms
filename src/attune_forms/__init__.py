@@ -72,6 +72,7 @@ from attune_forms.intake_template import (
 from attune_forms.markdown_ingestion import markdown_to_answers, problems_to_markdown
 from attune_forms.markdown_surface import form_to_markdown
 from attune_forms.models import (
+    ASSUMPTION_RULINGS,
     FormQuestion,
     FormResponse,
     FormSchema,
@@ -120,6 +121,7 @@ __all__ = [
     "problems_to_markdown",
     "select_form_surface",
     "set_keyboard_mode",
+    "ASSUMPTION_RULINGS",
     "ranking_slot_count",
     "triage_item_key",
 ]

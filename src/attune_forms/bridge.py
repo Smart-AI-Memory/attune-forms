@@ -22,6 +22,8 @@ from typing import Any
 
 from attune_forms.form_events import log_surface_decision
 from attune_forms.models import (
+    ASSUMPTION_RULINGS,
+    ASSUMPTION_TEXT_SUFFIX,
     FormQuestion,
     FormResponse,
     FormSchema,
@@ -437,6 +439,8 @@ def _parse_dispositions(
         if qtype is QuestionType.TRIAGE:
             return None, [f"{where} type triage requires 'dispositions'"]
         return None, []
+    if qtype is QuestionType.ASSUMPTION_REVIEW:
+        return None, []  # named (with the D2-a reason) by _parse_assumption_extras
     if qtype is not QuestionType.TRIAGE:
         return None, [f"{where} 'dispositions' is only valid on triage (got {qtype.value})"]
     if (
@@ -461,12 +465,16 @@ def _parse_suggested(
     Optional; keys must be item labels, values dispositions.
     """
     suggested = raw.get("suggested")
-    if suggested is None or qtype is QuestionType.RANKING:
-        # A ranking's ``suggested`` is an ORDER (a list), parsed and
-        # validated by ``_parse_ranking_extras``.
+    if suggested is None or qtype in (QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW):
+        # A ranking's ``suggested`` is an ORDER (a list), parsed by
+        # ``_parse_ranking_extras``; an assumption review's is parsed by
+        # ``_parse_assumption_extras`` (accept-only, D2-b).
         return None, []
     if qtype is not QuestionType.TRIAGE:
-        return None, [f"{where} 'suggested' is only valid on triage or ranking (got {qtype.value})"]
+        return None, [
+            f"{where} 'suggested' is only valid on triage, ranking or "
+            f"assumption_review (got {qtype.value})"
+        ]
     if not isinstance(suggested, dict) or not all(
         isinstance(k, str) and isinstance(v, str) for k, v in suggested.items()
     ):
@@ -621,6 +629,111 @@ def _parse_ranking_extras(
     return top_n, suggested, problems
 
 
+def _parse_assumption_extras(
+    where: str, raw: dict[str, Any], qtype: QuestionType
+) -> tuple[list[dict[str, str]] | None, dict[str, str] | None, list[str]]:
+    """Parse the v8 ASSUMPTION_REVIEW extras and enforce its rules (spec R1).
+
+    Returns ``(assumptions, suggested, problems)``.
+
+    - ``assumptions``: required, non-empty list of {label, id?, detail?,
+      source?} — the ``triage_items`` shape plus ``source``; keys
+      (:func:`triage_item_key`) unique.
+    - The ruling vocabulary is FIXED (:data:`ASSUMPTION_RULINGS`, D2-a):
+      ``dispositions`` is rejected here — a renameable vocabulary would
+      let the construct drift into a triage clone.
+    - ``suggested``: optional {item key: "accept"} — accept ONLY (D2-b);
+      pre-marking edit or reject on the user's behalf is rejected.
+    - ``default``: rejected (a pre-marked ruling is ``suggested``).
+
+    ``assumptions`` is invalid on every other type.
+    """
+    assumptions = raw.get("assumptions")
+    if qtype is not QuestionType.ASSUMPTION_REVIEW:
+        if assumptions is not None:
+            return (
+                None,
+                None,
+                [f"{where} 'assumptions' is only valid on assumption_review (got {qtype.value})"],
+            )
+        return None, None, []
+
+    problems: list[str] = []
+    if raw.get("dispositions") is not None:
+        problems.append(
+            f"{where} 'dispositions' is not permitted on assumption_review "
+            f"(D2-a: the vocabulary is fixed — {' / '.join(ASSUMPTION_RULINGS)})"
+        )
+    if raw.get("default") is not None:
+        problems.append(
+            f"{where} 'default' is not permitted on assumption_review "
+            "(a pre-marked ruling is 'suggested')"
+        )
+
+    if assumptions is None:
+        problems.append(f"{where} type assumption_review requires 'assumptions'")
+        return None, None, problems
+    if not isinstance(assumptions, list) or not assumptions:
+        problems.append(f"{where} 'assumptions' must be a non-empty list")
+        return None, None, problems
+
+    seen_keys: set[str] = set()
+    seen_labels: set[str] = set()
+    for idx, item in enumerate(assumptions):
+        if not isinstance(item, dict):
+            problems.append(f"{where} assumptions[{idx}] must be a mapping")
+            continue
+        label = item.get("label")
+        if not isinstance(label, str) or not label:
+            problems.append(f"{where} assumptions[{idx}] needs a 'label' string")
+            continue
+        if "id" in item and (not isinstance(item["id"], str) or not item["id"]):
+            problems.append(f"{where} assumptions[{idx}] 'id' must be a non-empty string")
+            continue
+        key = triage_item_key(item)
+        if key in seen_keys:
+            problems.append(f"{where} assumptions[{idx}] duplicate key {key!r}")
+        else:
+            seen_keys.add(key)
+        if label in seen_labels:
+            # R1: labels unique — two identical rows would be
+            # indistinguishable to the user even with distinct ids.
+            problems.append(f"{where} assumptions[{idx}] duplicate label {label!r}")
+        seen_labels.add(label)
+        if key.endswith(ASSUMPTION_TEXT_SUFFIX):
+            # The paired flat-surface text question is "<id>.<key>.text";
+            # a key that itself ends in ".text" would be read as another
+            # item's text lane.
+            problems.append(
+                f"{where} assumptions[{idx}] key {key!r} may not end with "
+                f"'{ASSUMPTION_TEXT_SUFFIX}' (reserved for the edit-text lane)"
+            )
+        for extra in ("detail", "source"):
+            if extra in item and not isinstance(item[extra], str):
+                problems.append(f"{where} assumptions[{idx}] '{extra}' must be a string")
+
+    suggested = raw.get("suggested")
+    if suggested is not None:
+        if not isinstance(suggested, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in suggested.items()
+        ):
+            problems.append(f"{where} 'suggested' must be a map of item key -> 'accept'")
+            suggested = None
+        else:
+            stray = [k for k in suggested if k not in seen_keys]
+            if stray:
+                problems.append(f"{where} 'suggested' keys not in assumption keys: {stray}")
+            not_accept = [f"{k}: {v!r}" for k, v in suggested.items() if v != "accept"]
+            if not_accept:
+                problems.append(
+                    f"{where} 'suggested' may pre-mark 'accept' only (D2-b): {not_accept}"
+                )
+            if stray or not_accept:
+                suggested = None
+
+    return (assumptions if not problems else None), suggested, problems
+
+
 def _parse_inferred_from(where: str, raw: dict[str, Any]) -> tuple[str | None, list[str]]:
     """Parse ``inferred_from`` — the provenance of an inferred default.
 
@@ -753,6 +866,13 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         if suggested_order is not None:
             suggested = suggested_order
 
+        assumptions, suggested_accepts, assumption_problems = _parse_assumption_extras(
+            where, raw, qtype
+        )
+        problems.extend(assumption_problems)
+        if suggested_accepts is not None:
+            suggested = suggested_accepts
+
         list_style, list_style_problems = _parse_list_style(where, raw, qtype)
         problems.extend(list_style_problems)
 
@@ -786,6 +906,7 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     list_style=list_style,
                     inferred_from=inferred_from,
                     top_n=top_n,
+                    assumptions=assumptions,
                 )
             )
 
@@ -834,6 +955,7 @@ _WIDGET_ONLY_TYPES = frozenset(
         QuestionType.TRIAGE,
         QuestionType.CONFIRM,
         QuestionType.RANKING,
+        QuestionType.ASSUMPTION_REVIEW,
     }
 )
 
@@ -841,8 +963,11 @@ _WIDGET_ONLY_TYPES = frozenset(
 #: EXPANDS to dotted keys (``"<id>.<key>"``) on AskUserQuestion, the
 #: elicitation schema, and markdown shorthand, folding back in
 #: :func:`collect_form_response`: TRIAGE (one key per item) and RANKING
-#: (one key per rank slot, D2-b).
-_EXPANDING_TYPES = frozenset({QuestionType.TRIAGE, QuestionType.RANKING})
+#: (one key per rank slot, D2-b), and ASSUMPTION_REVIEW (one key per
+#: item plus a paired ``"<id>.<key>.text"`` for the edit lane).
+_EXPANDING_TYPES = frozenset(
+    {QuestionType.TRIAGE, QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW}
+)
 
 #: The strict subset with NO portable ``AskUserQuestion`` control at
 #: all. A form using any of these cannot be asked on ``AskUserQuestion``
@@ -1181,9 +1306,16 @@ def form_response_summary(form: FormSchema, response: FormResponse) -> str:
         elif isinstance(value, list):
             rendered = ", ".join(str(item) for item in value) or "(none)"
         elif isinstance(value, dict):
-            # A triage board's mapping answer: per-item rulings, never
-            # the raw dict repr (review finding, 2026-08-14).
-            rendered = "; ".join(f"{k}: {v}" for k, v in value.items()) or "(none)"
+            # A triage board's / assumption review's mapping answer:
+            # per-item rulings, never the raw dict repr (review finding,
+            # 2026-08-14); an edit ruling shows its replacement text.
+            rendered = (
+                "; ".join(
+                    f"{k}: edit → {v.get('edit', '')}" if isinstance(v, dict) else f"{k}: {v}"
+                    for k, v in value.items()
+                )
+                or "(none)"
+            )
         else:
             rendered = str(value)
         lines.append(f"- {question.text}: **{rendered}**")
@@ -1281,6 +1413,49 @@ def _validate_ranking(question: FormQuestion, value: Any) -> str | None:
     return None
 
 
+def _validate_assumption_review(question: FormQuestion, value: Any) -> str | None:
+    """ASSUMPTION_REVIEW: value is {item key: ruling}, ruling one of
+    ``"accept"`` / ``"reject"`` or ``{"edit": "<non-empty text>"}`` (spec
+    R2). Keys must be assumption keys; a required review needs EVERY
+    assumption ruled (partial rulings only on ``required=False``).
+    Every failure names the offending items.
+    """
+    if not isinstance(value, dict):
+        return f"{question.id!r} expects a mapping of assumption key -> ruling"
+    keys = [triage_item_key(it) for it in question.assumptions or []]
+    unknown = [k for k in value if k not in keys]
+    if unknown:
+        return f"{question.id!r} has unknown assumption(s): {unknown}"
+    bad: list[str] = []
+    for key, ruling in value.items():
+        if ruling in ("accept", "reject"):
+            continue
+        if isinstance(ruling, dict) and set(ruling) == {"edit"}:
+            text = ruling["edit"]
+            if isinstance(text, str) and text.strip():
+                continue
+            bad.append(f"{key}: edit needs replacement text")
+            continue
+        if ruling == "edit":
+            bad.append(f'{key}: edit needs replacement text ({{"edit": "<text>"}})')
+            continue
+        bad.append(f"{key}: {ruling!r}")
+    if bad:
+        # The vocabulary hint is deliberately NOT single-quoted: the
+        # markdown re-ask attributes problems by quoted field ids, and a
+        # sibling field named edit / accept / reject must not be re-asked
+        # for this board's problem (review finding, 2026-08-15).
+        return (
+            f"{question.id!r} has invalid ruling(s) — each must be "
+            f'accept, reject, or {{"edit": "<text>"}}: {bad}'
+        )
+    if question.required:
+        missing = [key for key in keys if key not in value]
+        if missing:
+            return f"{question.id!r} missing ruling(s) for: {missing}"
+    return None
+
+
 def _validate_boolean(question: FormQuestion, value: Any) -> str | None:
     """BOOLEAN: value must be exactly one of ``_BOOLEAN_OPTIONS``."""
     if value not in _BOOLEAN_OPTIONS:
@@ -1341,6 +1516,7 @@ _ANSWER_VALIDATORS: dict[QuestionType, Callable[[FormQuestion, Any], str | None]
     QuestionType.DELIBERATION: _validate_membership,
     QuestionType.TRIAGE: _validate_triage,
     QuestionType.RANKING: _validate_ranking,
+    QuestionType.ASSUMPTION_REVIEW: _validate_assumption_review,
     QuestionType.CONFIRM: _validate_membership,
     QuestionType.BOOLEAN: _validate_boolean,
     QuestionType.NUMBER: _validate_number,
@@ -1352,6 +1528,43 @@ def _validate_answer(question: FormQuestion, value: Any) -> str | None:
     """Return a problem string for one answer, or None if it is valid."""
     handler = _ANSWER_VALIDATORS.get(question.type, _validate_text)
     return handler(question, value)
+
+
+def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """Fold one assumption review's dotted keys (mutating ``folded``).
+
+    ``"<id>.<key>"`` carries the ruling and ``"<id>.<key>.text"`` the
+    replacement text (spec R4). Text is kept only when the ruling is
+    ``edit`` (``{"edit": text}``); an ``edit`` ruling with no text folds
+    to ``{"edit": ""}`` so the validator names it rather than the fold
+    guessing. A ruling already shaped as ``{"edit": ...}`` passes through.
+    """
+    rulings: dict[str, Any] = {}
+    texts: dict[str, Any] = {}
+    for key in list(folded):
+        if not key.startswith(prefix):
+            continue
+        item = key[len(prefix) :]
+        if item.endswith(ASSUMPTION_TEXT_SUFFIX):
+            texts[item[: -len(ASSUMPTION_TEXT_SUFFIX)]] = folded.pop(key)
+        else:
+            rulings[item] = folded.pop(key)
+    out: dict[str, Any] = {}
+    for item, ruling in rulings.items():
+        if ruling == "edit":
+            out[item] = {"edit": texts.get(item, "")}
+        elif (
+            isinstance(ruling, dict)
+            and set(ruling) == {"edit"}
+            and not str(ruling.get("edit") or "").strip()
+            and item in texts
+        ):
+            # An edit already shaped but empty (e.g. a typed bare "edit")
+            # takes its paired text lane.
+            out[item] = {"edit": texts[item]}
+        else:
+            out[item] = ruling
+    return out
 
 
 def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
@@ -1387,6 +1600,11 @@ def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dic
             }
             if picks:
                 folded[question.id] = picks
+            continue
+        if question.type is QuestionType.ASSUMPTION_REVIEW:
+            folded_rulings = _fold_assumption_answers(folded, prefix)
+            if folded_rulings:
+                folded[question.id] = folded_rulings
             continue
         slots: dict[int, Any] = {}
         limit = ranking_slot_count(question)
