@@ -1,4 +1,4 @@
-"""Tests for the V4 pushback construct (communication grammar member #3).
+"""Tests for the V4 pushback construct (communication grammar member #2).
 
 A PUSHBACK is a DECISION framed as dissent: the agent disagrees with the
 user's stated approach (``user_position``) and offers a concrete

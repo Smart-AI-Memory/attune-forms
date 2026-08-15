@@ -1,4 +1,4 @@
-"""Tests for the V5 progress construct (communication grammar member #4).
+"""Tests for the V5 progress construct (communication grammar member #3).
 
 A PROGRESS is a status report: the agent reports a set of items by status
 (``done`` / ``in_flight`` / ``blocked``) via ``progress_items`` and offers
