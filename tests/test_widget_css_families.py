@@ -75,6 +75,26 @@ _FORMS: dict[str, dict] = {
         "options": ["A"],
         "progress_items": [{"label": "A", "status": "note"}],
     },
+    "deliberation": {
+        "id": "d",
+        "type": "deliberation",
+        "text": "d",
+        "options": ["a", "b"],
+        "endorsements": {"a": ["claude", "codex"], "b": ["antigravity"]},
+        "recommended": "a",
+        "rationale": "why",
+    },
+    "triage": {
+        "id": "g",
+        "type": "triage",
+        "text": "g",
+        "triage_items": [
+            {"id": "i1", "label": "Item one", "tag": "high", "detail": "ctx"},
+            {"label": "Item two"},
+        ],
+        "dispositions": ["keep", "drop"],
+        "suggested": {"i1": "keep"},
+    },
 }
 
 
@@ -142,6 +162,10 @@ def test_families_for_returns_known_names() -> None:
             fields.update(options=["a", "b"], recommended="a")
         elif qtype == QuestionType.PROGRESS:
             fields.update(options=["X"], progress_items=[{"label": "X", "status": "blocked"}])
+        elif qtype == QuestionType.DELIBERATION:
+            fields.update(options=["a", "b"], endorsements={"a": ["claude"]})
+        elif qtype == QuestionType.TRIAGE:
+            fields.update(triage_items=[{"label": "X"}], dispositions=["keep", "drop"])
         form = form_from_dict({"title": "t", "fields": [fields]})
         families = _families_for(form.questions[0])
         assert families, f"{qtype.value} maps to no family"

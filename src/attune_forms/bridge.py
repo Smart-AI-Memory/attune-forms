@@ -25,6 +25,7 @@ from attune_forms.models import (
     FormResponse,
     FormSchema,
     QuestionType,
+    triage_item_key,
 )
 
 #: The answer values accepted for a BOOLEAN question (its
@@ -101,6 +102,7 @@ _OPTIONS_REQUIRED_TYPES = (
     QuestionType.MULTI_SELECT,
     QuestionType.DECISION,
     QuestionType.PUSHBACK,
+    QuestionType.DELIBERATION,
 )
 
 
@@ -346,6 +348,135 @@ def _parse_progress_extras(
     return progress_style, progress_items, [*style_problems, *item_problems]
 
 
+def _parse_endorsements(
+    where: str, raw: dict[str, Any], qtype: QuestionType, options: list[str]
+) -> tuple[dict[str, list[str]] | None, list[str]]:
+    """Parse the v6 DELIBERATION extra ``endorsements``: {option: [voice,
+    ...]} naming which deliberating voices back each option. Required for
+    DELIBERATION (without it the construct is just a decision), invalid
+    elsewhere. Keys must be options; each value a non-empty list of
+    non-empty names. Options nobody endorsed are allowed — the chair may
+    table a position no voice proposed.
+    """
+    endorsements = raw.get("endorsements")
+    if endorsements is None:
+        if qtype is QuestionType.DELIBERATION:
+            return None, [f"{where} type deliberation requires 'endorsements'"]
+        return None, []
+    if qtype is not QuestionType.DELIBERATION:
+        return None, [f"{where} 'endorsements' is only valid on deliberation (got {qtype.value})"]
+    if not isinstance(endorsements, dict) or not all(
+        isinstance(opt, str)
+        and isinstance(names, list)
+        and names
+        and all(isinstance(n, str) and n for n in names)
+        for opt, names in endorsements.items()
+    ):
+        return None, [f"{where} 'endorsements' must map option -> non-empty list of names"]
+    stray = [opt for opt in endorsements if opt not in options]
+    if stray:
+        return None, [f"{where} 'endorsements' keys not in options: {stray}"]
+    return endorsements, []
+
+
+def _parse_triage_items(
+    where: str, raw: dict[str, Any], qtype: QuestionType
+) -> tuple[list[dict[str, str]] | None, list[str]]:
+    """Parse the v6 TRIAGE extra ``triage_items``: the reviewed items as
+    {label, detail?, tag?} dicts. Required for TRIAGE, invalid elsewhere.
+    Labels must be unique non-empty strings — they key the answer mapping,
+    so a duplicate would make two rulings collide.
+    """
+    triage_items = raw.get("triage_items")
+    if triage_items is None:
+        if qtype is QuestionType.TRIAGE:
+            return None, [f"{where} type triage requires 'triage_items'"]
+        return None, []
+    if qtype is not QuestionType.TRIAGE:
+        return None, [f"{where} 'triage_items' is only valid on triage (got {qtype.value})"]
+    if not isinstance(triage_items, list) or not triage_items:
+        return None, [f"{where} 'triage_items' must be a non-empty list"]
+
+    problems: list[str] = []
+    seen_keys: set[str] = set()
+    for idx, item in enumerate(triage_items):
+        if not isinstance(item, dict):
+            problems.append(f"{where} triage_items[{idx}] must be a mapping")
+            continue
+        label = item.get("label")
+        if not isinstance(label, str) or not label:
+            problems.append(f"{where} triage_items[{idx}] needs a 'label' string")
+            continue
+        if "id" in item and (not isinstance(item["id"], str) or not item["id"]):
+            problems.append(f"{where} triage_items[{idx}] 'id' must be a non-empty string")
+            continue
+        key = triage_item_key(item)
+        if key in seen_keys:
+            problems.append(f"{where} triage_items[{idx}] duplicate key {key!r}")
+        else:
+            seen_keys.add(key)
+        for extra in ("detail", "tag"):
+            if extra in item and not isinstance(item[extra], str):
+                problems.append(f"{where} triage_items[{idx}] '{extra}' must be a string")
+    return (triage_items if not problems else None), problems
+
+
+def _parse_dispositions(
+    where: str, raw: dict[str, Any], qtype: QuestionType
+) -> tuple[list[str] | None, list[str]]:
+    """Parse the v6 TRIAGE extra ``dispositions``: the shared per-item
+    ruling vocabulary. Required for TRIAGE, invalid elsewhere. At least
+    two unique non-empty strings — a one-word vocabulary is a rubber
+    stamp, not a ruling.
+    """
+    dispositions = raw.get("dispositions")
+    if dispositions is None:
+        if qtype is QuestionType.TRIAGE:
+            return None, [f"{where} type triage requires 'dispositions'"]
+        return None, []
+    if qtype is not QuestionType.TRIAGE:
+        return None, [f"{where} 'dispositions' is only valid on triage (got {qtype.value})"]
+    if (
+        not isinstance(dispositions, list)
+        or len(dispositions) < 2
+        or not all(isinstance(d, str) and d for d in dispositions)
+        or len(set(dispositions)) != len(dispositions)
+    ):
+        return None, [f"{where} 'dispositions' must be >=2 unique non-empty strings"]
+    return dispositions, []
+
+
+def _parse_suggested(
+    where: str,
+    raw: dict[str, Any],
+    qtype: QuestionType,
+    triage_items: list[dict[str, str]] | None,
+    dispositions: list[str] | None,
+) -> tuple[dict[str, str] | None, list[str]]:
+    """Parse the v6 TRIAGE extra ``suggested``: {item label: disposition},
+    the agent's proposed ruling per item (rendered pre-selected + marked).
+    Optional; keys must be item labels, values dispositions.
+    """
+    suggested = raw.get("suggested")
+    if suggested is None:
+        return None, []
+    if qtype is not QuestionType.TRIAGE:
+        return None, [f"{where} 'suggested' is only valid on triage (got {qtype.value})"]
+    if not isinstance(suggested, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in suggested.items()
+    ):
+        return None, [f"{where} 'suggested' must be a map of item key -> disposition"]
+    keys = {triage_item_key(it) for it in triage_items or []}
+    stray = [k for k in suggested if k not in keys]
+    if stray:
+        return None, [f"{where} 'suggested' keys not in triage item keys: {stray}"]
+    if dispositions is not None:
+        bad = [f"{k}: {v!r}" for k, v in suggested.items() if v not in dispositions]
+        if bad:
+            return None, [f"{where} 'suggested' values not in dispositions: {bad}"]
+    return suggested, []
+
+
 def _parse_inferred_from(where: str, raw: dict[str, Any]) -> tuple[str | None, list[str]]:
     """Parse ``inferred_from`` — the provenance of an inferred default.
 
@@ -456,6 +587,20 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         )
         problems.extend(progress_problems)
 
+        endorsements, endorsement_problems = _parse_endorsements(where, raw, qtype, options)
+        problems.extend(endorsement_problems)
+
+        triage_items, triage_item_problems = _parse_triage_items(where, raw, qtype)
+        problems.extend(triage_item_problems)
+
+        dispositions, disposition_problems = _parse_dispositions(where, raw, qtype)
+        problems.extend(disposition_problems)
+
+        suggested, suggested_problems = _parse_suggested(
+            where, raw, qtype, triage_items, dispositions
+        )
+        problems.extend(suggested_problems)
+
         list_style, list_style_problems = _parse_list_style(where, raw, qtype)
         problems.extend(list_style_problems)
 
@@ -481,6 +626,10 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     user_position=user_position,
                     progress_items=progress_items,
                     progress_style=progress_style,
+                    endorsements=endorsements,
+                    triage_items=triage_items,
+                    dispositions=dispositions,
+                    suggested=suggested,
                     list_style=list_style,
                     inferred_from=inferred_from,
                 )
@@ -509,6 +658,8 @@ _WIDGET_ONLY_TYPES = frozenset(
         QuestionType.DECISION,
         QuestionType.PUSHBACK,
         QuestionType.PROGRESS,
+        QuestionType.DELIBERATION,
+        QuestionType.TRIAGE,
     }
 )
 
@@ -857,9 +1008,12 @@ def form_response_summary(form: FormSchema, response: FormResponse) -> str:
 def form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[dict[str, Any]]]:
     """Render a form to batched ``AskUserQuestion`` payloads.
 
-    Thin reuse of the model's own batching + per-question conversion.
-    Each inner list is one ``AskUserQuestion`` call (≤ ``batch_size``
-    questions, the tool's limit).
+    Thin reuse of the model's per-question conversion. Each inner list is
+    one ``AskUserQuestion`` call (≤ ``batch_size`` questions, the tool's
+    limit). A TRIAGE question expands to one single-select payload per
+    item (``to_ask_user_formats``), so a board can span calls; the dotted
+    ids fold back into the mapping answer in
+    :func:`collect_form_response`.
 
     Args:
         form: The form to render.
@@ -868,10 +1022,10 @@ def form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[
     Returns:
         A list of batches; each batch a list of question payload dicts.
     """
-    return [
-        [question.to_ask_user_format() for question in batch]
-        for batch in form.get_question_batches(batch_size)
+    payloads = [
+        payload for question in form.questions for payload in question.to_ask_user_formats()
     ]
+    return [payloads[i : i + batch_size] for i in range(0, len(payloads), batch_size)]
 
 
 def _validate_multi_select(question: FormQuestion, value: Any) -> str | None:
@@ -893,6 +1047,28 @@ def _validate_membership(question: FormQuestion, value: Any) -> str | None:
     """
     if value not in question.options:
         return f"{question.id!r} value {value!r} not in options"
+    return None
+
+
+def _validate_triage(question: FormQuestion, value: Any) -> str | None:
+    """TRIAGE: value is {item label: disposition} — keys must be item
+    labels, values dispositions; a required board needs EVERY item ruled
+    (partial rulings are only legal on ``required=False``).
+    """
+    if not isinstance(value, dict):
+        return f"{question.id!r} expects a mapping of item key -> disposition"
+    keys = [triage_item_key(it) for it in question.triage_items or []]
+    unknown = [k for k in value if k not in keys]
+    if unknown:
+        return f"{question.id!r} has unknown item(s): {unknown}"
+    vocabulary = question.dispositions or []
+    bad = [f"{k}: {v!r}" for k, v in value.items() if v not in vocabulary]
+    if bad:
+        return f"{question.id!r} has out-of-disposition ruling(s): {bad}"
+    if question.required:
+        missing = [key for key in keys if key not in value]
+        if missing:
+            return f"{question.id!r} missing ruling(s) for: {missing}"
     return None
 
 
@@ -945,6 +1121,8 @@ _ANSWER_VALIDATORS: dict[QuestionType, Callable[[FormQuestion, Any], str | None]
     QuestionType.DECISION: _validate_membership,
     QuestionType.PUSHBACK: _validate_membership,
     QuestionType.PROGRESS: _validate_membership,
+    QuestionType.DELIBERATION: _validate_membership,
+    QuestionType.TRIAGE: _validate_triage,
     QuestionType.BOOLEAN: _validate_boolean,
     QuestionType.NUMBER: _validate_number,
     QuestionType.DATE: _validate_date,
@@ -955,6 +1133,32 @@ def _validate_answer(question: FormQuestion, value: Any) -> str | None:
     """Return a problem string for one answer, or None if it is valid."""
     handler = _ANSWER_VALIDATORS.get(question.type, _validate_text)
     return handler(question, value)
+
+
+def _fold_triage_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
+    """Fold per-item triage answers back into the mapping shape.
+
+    The non-widget surfaces (AskUserQuestion expansion, MCP elicitation —
+    whose schema must stay flat) carry a TRIAGE answer as one key per
+    item: ``"<question id>.<item label>"``. This pre-pass rebuilds the
+    canonical ``{label: disposition}`` mapping so every surface funnels
+    into the same validator. A mapping answer already present under the
+    question id wins; the input dict is never mutated.
+    """
+    triage_questions = [q for q in form.questions if q.type is QuestionType.TRIAGE]
+    if not triage_questions:
+        return raw_answers
+    folded = dict(raw_answers)
+    for question in triage_questions:
+        if question.id in folded:
+            continue
+        prefix = f"{question.id}."
+        picks = {
+            key[len(prefix) :]: folded.pop(key) for key in list(folded) if key.startswith(prefix)
+        }
+        if picks:
+            folded[question.id] = picks
+    return folded
 
 
 def collect_form_response(
@@ -983,12 +1187,13 @@ def collect_form_response(
     """
     problems: list[str] = []
     responses: dict[str, Any] = {}
+    raw_answers = _fold_triage_answers(form, raw_answers)
 
     for question in form.questions:
         provided = question.id in raw_answers
         value = raw_answers.get(question.id)
 
-        if not provided or value is None or value == "" or value == []:
+        if not provided or value is None or value == "" or value == [] or value == {}:
             if question.required and question.default is None:
                 problems.append(f"{question.id!r} is required")
             elif question.default is not None:

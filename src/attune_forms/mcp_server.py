@@ -64,6 +64,8 @@ def _field_schema() -> dict[str, Any]:
                     "decision",
                     "pushback",
                     "progress",
+                    "deliberation",
+                    "triage",
                 ],
                 "description": (
                     "Control type. Core: text_input/single_select/"
@@ -72,7 +74,9 @@ def _field_schema() -> dict[str, Any]:
                     "single-select with rationale + per-option tradeoffs), "
                     "pushback (decision framed as dissent), progress "
                     "(done/in_flight/blocked report with a blocked-item "
-                    "picker)."
+                    "picker), deliberation (multi-voice endorsements per "
+                    "option, chair picks one), triage (per-item rulings "
+                    "over a reviewed list; answer = {item id: disposition})."
                 ),
             },
             "options": {"type": "array", "items": {"type": "string"}},
@@ -88,6 +92,23 @@ def _field_schema() -> dict[str, Any]:
             "user_position": {"type": "string"},
             "progress_items": {"type": "array"},
             "progress_style": {"type": "string", "enum": ["report"]},
+            "endorsements": {
+                "type": "object",
+                "description": "deliberation: {option: [voice, ...]}",
+            },
+            "triage_items": {
+                "type": "array",
+                "description": "triage: [{label, id?, detail?, tag?}, ...]",
+            },
+            "dispositions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "triage: the shared per-item ruling vocabulary",
+            },
+            "suggested": {
+                "type": "object",
+                "description": "triage: {item id: proposed disposition}",
+            },
             "list_style": {"type": "string", "enum": ["ordered", "unordered"]},
         },
         "required": ["id", "text", "type"],

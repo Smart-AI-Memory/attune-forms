@@ -1,6 +1,6 @@
 ---
 name: forms
-description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form."
+description: "Structured agent-user communication: batch independent questions into ONE validated form, offer recommendations as decision cards, disagree via a pushback card, report progress with a blocked-item picker, present multi-voice positions as a deliberation card, collect per-item rulings with a triage board. Triggers on: use a form, ask as a form, form question, structured ask, decision card, pushback card, progress form, deliberation card, triage board."
 argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refactor'>"
 ---
 
@@ -97,6 +97,34 @@ blocker should we tackle?"). `progress_items` is a list of
 With nothing blocked, set `options: []` and `required: false` — it
 degrades to a pure status display.
 
+## The deliberation card
+
+A `deliberation` presents several **voices'** positions on one choice —
+reviewers, models, teammates — and lets the user chair the pick. Each
+option carries `endorsements` (`{option: [voice, ...]}`) rendered as
+chips, so a 2-1 split and its minority are visible at a glance;
+`recommended` badges the **synthesis pick** (a recommendation, never
+the answer) and `rationale` renders under "Synthesis". Use it when
+distinct sources genuinely disagree — never to dress one opinion as
+many.
+
+Extra keys: `endorsements` (required; keys must be in `options`, values
+non-empty name lists) plus the decision keys.
+
+## The triage board
+
+A `triage` collects a **ruling per item** over a reviewed list — audit
+findings, review comments, backlog candidates. `triage_items` is a list
+of `{label, id?, detail?, tag?}`; `dispositions` is the shared ruling
+vocabulary (e.g. `["fix now", "ticket", "dismiss"]`); optional
+`suggested` (`{item id: disposition}`) pre-selects your proposal,
+visibly marked. The answer is `{item id: disposition}` (label is the
+fallback key when an item has no `id` — give items stable ids). A
+required board needs every item ruled; set `required: false` to allow
+partial rulings. On flat surfaces each item becomes its own
+single-select (`"<field id>.<item id>"`); pass those answers straight
+to `elicitation_collect_response` — they fold back automatically.
+
 ## Choosing a surface
 
 1. **Widget host** (the client renders HTML): call
@@ -110,7 +138,14 @@ degrades to a pure status display.
    batched payload to your host's question tool (or plain prose):
    recommendation-first ordering, `multi_select` → multi-select,
    constructs → single-select with the recommended option first and
-   tradeoffs folded into option descriptions.
+   tradeoffs folded into option descriptions (a triage board arrives
+   pre-expanded as one single-select per item).
+4. **No widget, no question tool** (text-only hosts): render the form
+   with `form_to_markdown` (library) and relay the markdown verbatim.
+   It ends with a JSON answer skeleton — the widget's exact postback
+   shape. Map the user's replies into that skeleton yourself and
+   validate with `elicitation_collect_response`; on problems, re-ask
+   only the offending fields in plain text.
 
 Respect the user's keyboard preference: if they've opted into terse
 mode (`ATTUNE_FORMS_KEYBOARD_MODE=1` or `keyboard_mode` in

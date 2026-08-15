@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from attune_forms.models import FormQuestion, FormSchema, QuestionType
+from attune_forms.models import FormQuestion, FormSchema, QuestionType, triage_item_key
 
 
 def _property_for(question: FormQuestion) -> dict[str, Any]:
@@ -36,8 +36,10 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
         QuestionType.PUSHBACK,
         # PROGRESS's answer is one blocked option — a string enum, like the
         # other enriched single-selects (forward-compat; native elicitation
-        # is a non-renderer on CC, D10).
+        # is a non-renderer on CC, D10). DELIBERATION's answer is likewise
+        # one chaired pick.
         QuestionType.PROGRESS,
+        QuestionType.DELIBERATION,
     ):
         prop.update(type="string", enum=list(question.options))
     elif question.type == QuestionType.MULTI_SELECT:
@@ -81,6 +83,32 @@ def form_to_elicitation_schema(form: FormSchema) -> dict[str, Any]:
     Returns:
         The elicitation ``requestedSchema`` dict.
     """
-    properties = {q.id: _property_for(q) for q in form.questions}
-    required = [q.id for q in form.questions if q.required]
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    for q in form.questions:
+        if q.type is QuestionType.TRIAGE:
+            # The elicitation schema must stay a flat object of primitives,
+            # so a triage board flattens to one enum property per item
+            # (``"<id>.<label>"``); ``collect_form_response`` folds the
+            # dotted keys back into the {label: disposition} answer.
+            for item in q.triage_items or []:
+                key = triage_item_key(item)
+                prop: dict[str, Any] = {
+                    "title": f"{q.text} — {item.get('label', '')}",
+                    "type": "string",
+                    "enum": list(q.dispositions or []),
+                }
+                context = " · ".join(b for b in (item.get("tag"), item.get("detail")) if b)
+                if context:
+                    prop["description"] = context
+                pick = (q.suggested or {}).get(key)
+                if pick is not None:
+                    prop["default"] = pick
+                properties[f"{q.id}.{key}"] = prop
+                if q.required:
+                    required.append(f"{q.id}.{key}")
+            continue
+        properties[q.id] = _property_for(q)
+        if q.required:
+            required.append(q.id)
     return {"type": "object", "properties": properties, "required": required}

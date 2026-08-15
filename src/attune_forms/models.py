@@ -51,6 +51,34 @@ class QuestionType(str, Enum):
     # blocked option (validated exactly as a single-select); when nothing
     # is blocked it degrades to a pure status display. Widget-surface only.
     PROGRESS = "progress"
+    # v6 (communication grammar member #5): a deliberation — several
+    # named voices (e.g. the round-table seats claude / antigravity /
+    # codex) each endorse candidate positions via ``endorsements``
+    # ({option: [voice, ...]}); the user chairs the pick. The answer is
+    # one selected option (validated exactly as a single-select); the
+    # per-option endorsement chips and the "synthesis pick" badge are
+    # widget-surface only.
+    DELIBERATION = "deliberation"
+    # v6 (communication grammar member #6): a triage board — a reviewed
+    # list (``triage_items``) where EVERY item gets its own ruling from a
+    # small shared vocabulary (``dispositions``, e.g. fix now / ticket /
+    # dismiss). The answer is a {item label: disposition} mapping — the
+    # one construct whose answer is not a scalar or a flat list. On
+    # non-widget surfaces it expands to one single-select per item
+    # (ids ``"<id>.<label>"``) and folds back at collection time.
+    TRIAGE = "triage"
+
+
+def triage_item_key(item: dict[str, str]) -> str:
+    """The answer key for one triage item: its ``id``, else its ``label``.
+
+    Display labels may be edited or collide; a stable ``id`` keeps the
+    {key: disposition} answer and the dotted-id flat expansion
+    unambiguous. Every consumer (widget, fallback expansion, elicitation
+    schema, markdown skeleton, validator) keys through this one function
+    so the surfaces can never disagree.
+    """
+    return item.get("id") or item.get("label", "")
 
 
 # =============================================================================
@@ -92,6 +120,27 @@ class FormQuestion:
             strikethrough; options may be any subset of item labels, offered
             as a "go deeper" picker). Pure presentation: the answer and its
             validation are unchanged. None = the default task-status render.
+        endorsements: DELIBERATION only — {option: [voice, ...]} naming
+            which deliberating voices endorsed each option; keys must be
+            options, each value a non-empty list of names. Rendered as
+            per-option chips so a 2-1 split (and its minority) is visible
+            at a glance. None = none
+        triage_items: TRIAGE only — the reviewed items as a list of
+            {label, id?, detail?, tag?} dicts (tag is a free-form
+            category, e.g. a severity). The answer keys on the item's
+            ``id`` when present, else its ``label`` (see
+            :func:`triage_item_key`) — a stable id survives label edits
+            and keeps the dotted-id expansion unambiguous (round-table
+            ruling, thread q-forms-grammar-expansion-001). Keys must be
+            unique non-empty strings. None = none
+        dispositions: TRIAGE only — the shared per-item ruling vocabulary
+            (≥2 unique non-empty strings, e.g. ["fix now", "ticket",
+            "dismiss"]). Every ruling in the answer must be one of these.
+            None = none
+        suggested: TRIAGE only — {item label: disposition}: the agent's
+            proposed ruling per item, rendered pre-selected and marked
+            "suggested" (a guess to confirm, never silently accepted).
+            Keys must be item labels, values dispositions. None = none
         list_style: SINGLE_SELECT/MULTI_SELECT only — render the options as
             an "ordered" (numbered) or "unordered" (bulleted) selectable
             list instead of the default dropdown/checkboxes. Pure
@@ -122,6 +171,10 @@ class FormQuestion:
     user_position: str | None = None
     progress_items: list[dict[str, str]] | None = None
     progress_style: str | None = None
+    endorsements: dict[str, list[str]] | None = None
+    triage_items: list[dict[str, str]] | None = None
+    dispositions: list[str] | None = None
+    suggested: dict[str, str] | None = None
     list_style: str | None = None
     inferred_from: str | None = None
 
@@ -157,17 +210,28 @@ class FormQuestion:
             QuestionType.DECISION,
             QuestionType.PUSHBACK,
             QuestionType.PROGRESS,
+            QuestionType.DELIBERATION,
         ):
             opts = list(self.options)
             if self.recommended and self.recommended in opts:
                 opts = [self.recommended] + [o for o in opts if o != self.recommended]
+            # DELIBERATION: the fallback surface has no chip row, so the
+            # per-option endorsements fold into help_text — otherwise the
+            # 2-1 split (the construct's whole payload) would be invisible.
+            help_text = self._fallback_help()
+            if self.type is QuestionType.DELIBERATION and self.endorsements:
+                who = "; ".join(
+                    f"{opt}: {', '.join(names)}" for opt, names in self.endorsements.items()
+                )
+                note = f"Endorsements — {who}"
+                help_text = f"{help_text} · {note}" if help_text else note
             return {
                 "question_id": self.id,
                 "question": self.text,
                 "type": "single_select",
                 "options": opts,
                 "default": self.default or self.recommended,
-                "help_text": self._fallback_help(),
+                "help_text": help_text,
             }
 
         # Boolean questions convert to Yes/No select
@@ -189,6 +253,34 @@ class FormQuestion:
             "default": self.default,
             "help_text": self._fallback_help(),
         }
+
+    def to_ask_user_formats(self) -> list[dict[str, Any]]:
+        """Per-call ``AskUserQuestion`` payloads for this question.
+
+        Every type yields its single :meth:`to_ask_user_format` payload
+        except TRIAGE, whose {item: disposition} answer has no
+        single-question equivalent: it expands to one single-select per
+        item (ids ``"<id>.<label>"``, the suggested ruling as default).
+        :func:`attune_forms.collect_form_response` folds the dotted ids
+        back into the mapping answer, so the round-trip is lossless.
+        """
+        if self.type is not QuestionType.TRIAGE:
+            return [self.to_ask_user_format()]
+        payloads: list[dict[str, Any]] = []
+        for item in self.triage_items or []:
+            key = triage_item_key(item)
+            context = " · ".join(b for b in (item.get("tag"), item.get("detail")) if b)
+            payloads.append(
+                {
+                    "question_id": f"{self.id}.{key}",
+                    "question": f"{self.text} — {item.get('label', '')}",
+                    "type": "single_select",
+                    "options": list(self.dispositions or []),
+                    "default": (self.suggested or {}).get(key),
+                    "help_text": context or None,
+                }
+            )
+        return payloads
 
 
 @dataclass

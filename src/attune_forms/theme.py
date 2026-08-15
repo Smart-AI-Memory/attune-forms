@@ -109,6 +109,11 @@ CSS_CARDS = """#attune-elicit-form .ae-cards { display:flex; flex-direction:colu
 #attune-elicit-form .ae-rationale-h { display:block; font-weight:600;
   font-size:11px; text-transform:uppercase; letter-spacing:.03em;
   color:var(--text-accent,#a1571c); margin-bottom:.15rem; }
+#attune-elicit-form .ae-seats { display:flex; gap:.3rem; flex-wrap:wrap; }
+#attune-elicit-form .ae-seat { font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em;
+  color:var(--text-secondary,#5f5e59); background:var(--surface-1,#f7f6f3);
+  border:1px solid var(--border,#e3e1dc); border-radius:3px; padding:0 .35em; }
 """
 
 #: PROGRESS — the done/in_flight/blocked status rows (pulls CARDS too).
@@ -134,6 +139,27 @@ CSS_PROGRESS = """#attune-elicit-form .ae-progress { display:flex; flex-directio
 #attune-elicit-form .ae-card .ae-prog-icon { margin-right:.15rem; }
 """
 
+#: TRIAGE — the per-item ruling board (self-contained; no CARDS pull).
+CSS_TRIAGE = """#attune-elicit-form .ae-triage { display:flex; flex-direction:column; gap:.6rem; }
+#attune-elicit-form .ae-triage-row { display:flex; flex-direction:column;
+  gap:.35rem; padding:.5rem .75rem; border:1px solid var(--border,#e3e1dc);
+  border-radius:var(--radius,8px); }
+#attune-elicit-form .ae-triage-head { display:flex; align-items:baseline;
+  gap:.5rem; flex-wrap:wrap; }
+#attune-elicit-form .ae-triage-label { font-weight:500;
+  color:var(--text-primary,#2c2c2a); }
+#attune-elicit-form .ae-triage-detail { font-size:13px;
+  color:var(--text-muted,#8a887f); }
+#attune-elicit-form .ae-triage-tag { flex:none; font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted,#8a887f);
+  border:1px solid var(--border,#e3e1dc); border-radius:3px; padding:0 .3em; }
+#attune-elicit-form .ae-triage-opts { display:flex; gap:.75rem; flex-wrap:wrap; }
+#attune-elicit-form .ae-triage-opt { display:inline-flex; align-items:center;
+  gap:.35rem; font-weight:400; cursor:pointer; }
+#attune-elicit-form .ae-triage-sug { font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--text-accent,#a1571c); }
+"""
+
 #: Named family blocks in cascade-emission order (BASE is always first).
 CSS_FAMILIES: list[tuple[str, str]] = [
     ("INPUT", CSS_INPUT),
@@ -141,6 +167,7 @@ CSS_FAMILIES: list[tuple[str, str]] = [
     ("LIST", CSS_LIST),
     ("CARDS", CSS_CARDS),
     ("PROGRESS", CSS_PROGRESS),
+    ("TRIAGE", CSS_TRIAGE),
 ]
 
 #: The full theme: base + every family, in cascade order. This exact
