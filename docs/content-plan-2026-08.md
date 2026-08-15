@@ -4,7 +4,7 @@
 
 Master/projection rule (ratified 2026-08-13): every article's verified master lives in `docs/` in this repo; LinkedIn/blog copies are projections. Divergences are fixed here first, then re-projected.
 
-Count convention (ratified 2026-08-15): the grammar has **six constructs** — decision, pushback, progress, deliberation, triage, confirm — on top of the plain batched form (seven plain field types: text_input, single_select, multi_select, boolean, number, date, textarea). The plain form is the substrate, not a construct. (README §The grammar and CHANGELOG 0.5.0 still say "seven constructs"; that fix is tracked separately, not in this plan.)
+Construct count — **source of truth is `CHANGELOG.md`** (as amended by PR #21, `docs/six-constructs`, 2026-08-15): the 0.5.0 entry reads *"the communication grammar grows from three constructs on three surfaces to six constructs on four"*, and the Fixed entry names them — **decision, pushback, progress, deliberation, triage, confirm**. The plain batched form (seven plain field types: text_input, single_select, multi_select, boolean, number, date, textarea) is the substrate the constructs sit on, not a construct. Every piece in this plan uses that count and names the six whenever the count is stated.
 
 **What 0.5.0 added — "the new dynamic-forms enhancements"** (per README §The grammar / §One schema, every surface, and CHANGELOG 0.5.0; ratified 2026-08-15 as the tutorial's "new elements"):
 
@@ -15,7 +15,7 @@ Count convention (ratified 2026-08-15): the grammar has **six constructs** — d
 | `confirm` construct | `type: "confirm"`, `consequences` | approval gate, exactly two options, nothing pre-selected — validator forbids it |
 | Portable markdown surface (S4) | `form_to_markdown` | any form on text-only hosts, ends with the JSON answer skeleton |
 | Typed-reply ingestion + re-ask | `markdown_to_answers`, `problems_to_markdown` | deterministic parse (never guesses); re-asks exactly the failing fields |
-| Reference form + example answers | `REFERENCE_FORM`, `EXAMPLE_ANSWERS` | now cover all six constructs — the runnable example set |
+| Reference form + example answers | `REFERENCE_FORM`, `EXAMPLE_ANSWERS` | now cover all six constructs (decision, pushback, progress, deliberation, triage, confirm) — the runnable example set |
 
 ---
 
@@ -26,10 +26,10 @@ Count convention (ratified 2026-08-15): the grammar has **six constructs** — d
 | # | Artifact | Where | Status | Covers | Stale vs 0.5.0? |
 |---|----------|-------|--------|--------|-----------------|
 | 1 | **"A Communication Grammar for AI Agents"** (article) | Master: `docs/communication-grammar-article.md`. Projection: LinkedIn, published 2026-08-13 — https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse | Published; thread closed | The idea: a question as a typed, validated artifact; three constructs (decision, pushback, progress); "three surfaces"; the *when-not-to* discipline; a day-in-the-life dogfood story; "380+ tests"; install paths | **Yes, by design (it's a snapshot).** Missing: deliberation, triage, confirm; the fourth (markdown) surface + typed-reply ingestion; test count now 514 collected. Do **not** retro-edit the projection — Article B carries the delta. |
-| 2 | **README.md** | repo root; rendered on GitHub + PyPI | Current (0.5.0 rewrite, #11 + 0.5.0 bump) | Install (plugin + pip), the grammar (six constructs listed), quick start, four surfaces, ingestion, validation, intake templates, telemetry, host seams, provenance | Only the "seven constructs" word (tracked separately). |
+| 2 | **README.md** | repo root; rendered on GitHub + PyPI | Current (0.5.0 rewrite, #11 + 0.5.0 bump) | Install (plugin + pip), the grammar (six constructs listed), quick start, four surfaces, ingestion, validation, intake templates, telemetry, host seams, provenance | Not stale once PR #21 merges ("six constructs", named list already present). |
 | 3 | **`plugin/skills/forms/SKILL.md`** (the Claude Code skill) | `plugin/skills/forms/` | Current | The batching rule, infer-first, all six constructs with their extra keys, the four-step surface choice incl. markdown + ingestion order (parse → your lane → validate), keyboard mode | Not stale. This is the most complete *procedural* text and the tutorial's spine. |
-| 4 | **CHANGELOG.md 0.5.0 entry** | repo root | Current | What landed and why (roundtable thread `q-forms-grammar-expansion-001`, 3/3 rulings), the twelve post-merge review fixes | Says "five → seven constructs on four surfaces" — same count issue. |
-| 5 | **Reference form + example answers** | `src/attune_forms/reference_form.py` (`REFERENCE_FORM`, `EXAMPLE_ANSWERS`, exported) | Current, CI-guarded (one field per `QuestionType`) | The seven plain field types **and** all six constructs in one coherent "new feature intake" scenario, with valid answers | Not stale. The runnable example set for the 0.5.0 enhancements (see the table above) — Article A lifts its construct snippets from here. |
+| 4 | **CHANGELOG.md 0.5.0 entry** | repo root | Current | What landed and why (roundtable thread `q-forms-grammar-expansion-001`, 3/3 rulings), the twelve post-merge review fixes | **Source of truth for the count.** PR #21 amends the 0.5.0 lede to "three constructs on three surfaces to six constructs on four" and adds a Fixed entry naming all six. |
+| 5 | **Reference form + example answers** | `src/attune_forms/reference_form.py` (`REFERENCE_FORM`, `EXAMPLE_ANSWERS`, exported) | Current, CI-guarded (one field per `QuestionType`) | The seven plain field types **and** all six constructs (decision, pushback, progress, deliberation, triage, confirm) in one coherent "new feature intake" scenario, with valid answers | Not stale. The runnable example set for the 0.5.0 enhancements (see the table above) — Article A lifts its construct snippets from here. |
 | 6 | **Dynamic Forms demo script** (video) | attune-ai: `docs/process/DEMO_DYNAMIC_FORMS_script.md` (+ `_transcript.md`) | Draft, dated 2026-07-23/25; version-gated on attune-ai 10.6.0; not published as far as the repo records show | "3 turns → 1 turn" arc, pushback specimen, dogfood close, 60s social cut | Predates the library extraction entirely (attune-ai `/elicit` framing, three constructs). Reusable *specimens* (the security-audit scoping form, the "Scope of the fix" pushback), not reusable framing. |
 | 7 | **attune-ai docs** — `docs/features/elicitation-forms.md`, `docs(elicitation): name attune-forms as the substrate's home` (#2062) | attune-ai | Current | Points attune-ai readers at attune-forms as the substrate | Not a publication; a link-back target. |
 | 8 | Branch `claude/attune-forms-post-144e19` | this repo | Empty (no commits beyond main, clean tree) | — | No post draft exists in-repo. Post drafts live off-repo per the LinkedIn workflow (`~/.attune/scratch/` drafts file with POSTED/UNPOSTED markers). |
@@ -66,14 +66,14 @@ Publish order and dependencies are at the end. Voice for all four: first person 
 
 **Audience:** developers building agents or Claude Code plugins who have read (or skimmed) the concept article and want to *type something in*. Python-literate; no attune context assumed.
 
-**Thesis (one sentence):** Take the six constructs the README already documents, add what 0.5.0 layered on — the three newest constructs as working examples, a fourth surface for text-only hosts, and a typed-reply return path that never guesses — and the same dict renders everywhere and validates through one validator.
+**Thesis (one sentence):** Take the six constructs the changelog and README document — decision, pushback, progress, deliberation, triage, confirm — add what 0.5.0 layered on — the three newest constructs as working examples, a fourth surface for text-only hosts, and a typed-reply return path that never guesses — and the same dict renders everywhere and validates through one validator.
 
 **Master:** `docs/tutorial-dynamic-forms.md` (new). **Projection:** LinkedIn article (+ optionally GitHub Discussions / dev.to). Target **1,800–2,200 words** + code; every snippet must run against 0.5.0 (`pip install attune-forms==0.5.0`), copied from — not paraphrased from — `reference_form.py`, README, SKILL.md.
 
 **Outline:**
 1. *What you'll build* — the reference scenario ("new feature intake" — `REFERENCE_FORM`), the end state (a validated round trip on four surfaces, including a text-only host). Install: plugin path, then `pip install attune-forms`.
 2. *The base form in one breath* — a two-field `form_from_dict` (README quick start) plus the batching rule from SKILL.md in two sentences; show build-time refusal of a malformed definition. Keep it short — this is the substrate, not the subject.
-3. *The six constructs as they stand* — the grammar the README documents, each with its extra keys, one snippet lifted from `REFERENCE_FORM`, and the one-line conversational move. Mark the last three as **new in 0.5.0** — these are the "new examples" the tutorial exists to demonstrate:
+3. *The six constructs as they stand* — decision, pushback, progress, deliberation, triage, confirm — the grammar the changelog and README document, each with its extra keys, one snippet lifted from `REFERENCE_FORM`, and the one-line conversational move. Mark the last three as **new in 0.5.0** — these are the "new examples" the tutorial exists to demonstrate:
    - `decision` (`recommended`, `rationale`, `option_notes`) — recommend
    - `pushback` (`user_position` + decision keys) — dissent
    - `progress` (`progress_items`, blocked → `options`) — report + unblock
@@ -148,4 +148,4 @@ Off-repo state (which posts are POSTED/UNPOSTED, canonical URLs) goes in the dra
 ### Open items / could not verify
 - Whether the attune-ai dynamic-forms **video** was ever published — the repo records only "draft, version-gated". Treat as unpublished; nothing here depends on it.
 - No LinkedIn *post* (as opposed to the article) about attune-forms is recorded in-repo or in memory; if one exists off-repo, add it to the inventory before Post 1 to avoid recycled phrasing.
-- README/CHANGELOG "seven constructs" wording — being fixed separately; Articles A/B use six.
+- Construct count: PR #21 (`docs/six-constructs`) is open, not merged, at time of writing; the plan treats its CHANGELOG wording as final. If it changes before merge, re-sync this doc.
