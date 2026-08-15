@@ -1,6 +1,6 @@
 {
   "name": "attune-forms",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Structured agent-user communication \u2014 validated forms, decision cards, pushback, and progress reports via the attune-forms MCP server.",
   "author": {
     "name": "Smart AI Memory",
