@@ -32,26 +32,27 @@ class QuestionType(str, Enum):
     NUMBER = "number"
     DATE = "date"
     TEXTAREA = "textarea"
-    # v3 (communication grammar): a presentation-enriched single-select.
+    # v3 (communication grammar member #1): a presentation-enriched
+    # single-select.
     # The agent offers a recommended option with rationale + per-option
     # tradeoffs; the answer is one selected option (validated exactly as a
     # single-select). The rich card layout is widget-surface only.
     DECISION = "decision"
-    # v4 (communication grammar member #3): a pushback — the agent
+    # v4 (communication grammar member #2): a pushback — the agent
     # disagrees with the user's stated approach (``user_position``) and
     # offers a concrete alternative (``recommended``) + a disagreement
     # ``rationale``. Same enriched-single-select answer path as DECISION;
     # only the dissent framing (your-approach tag, "I'd suggest instead"
     # badge, "Why I'd push back" callout) differs. Widget-surface only.
     PUSHBACK = "pushback"
-    # v5 (communication grammar member #4): a progress report — the agent
+    # v5 (communication grammar member #3): a progress report — the agent
     # reports a set of items by status (done / in_flight / blocked) via
     # ``progress_items`` and offers the blocked items as a single-select
     # picker ("which blocker to tackle?"). The answer is one selected
     # blocked option (validated exactly as a single-select); when nothing
     # is blocked it degrades to a pure status display. Widget-surface only.
     PROGRESS = "progress"
-    # v6 (communication grammar member #5): a deliberation — several
+    # v6 (communication grammar member #4): a deliberation — several
     # named voices (e.g. the round-table seats claude / antigravity /
     # codex) each endorse candidate positions via ``endorsements``
     # ({option: [voice, ...]}); the user chairs the pick. The answer is
@@ -59,7 +60,7 @@ class QuestionType(str, Enum):
     # per-option endorsement chips and the "synthesis pick" badge are
     # widget-surface only.
     DELIBERATION = "deliberation"
-    # v6 (communication grammar member #6): a triage board — a reviewed
+    # v6 (communication grammar member #5): a triage board — a reviewed
     # list (``triage_items``) where EVERY item gets its own ruling from a
     # small shared vocabulary (``dispositions``, e.g. fix now / ticket /
     # dismiss). The answer is a {item label: disposition} mapping — the
@@ -67,7 +68,7 @@ class QuestionType(str, Enum):
     # non-widget surfaces it expands to one single-select per item
     # (ids ``"<id>.<label>"``) and folds back at collection time.
     TRIAGE = "triage"
-    # v7 (communication grammar member #7): a confirm — an action
+    # v7 (communication grammar member #6): a confirm — an action
     # preview with an explicit ``consequences`` list and a two-way
     # approve/abort gate (exactly two author-nameable options, default
     # ["Approve", "Abort"]). No default and no recommended are permitted

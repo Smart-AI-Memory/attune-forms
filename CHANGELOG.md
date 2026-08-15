@@ -6,10 +6,16 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Docs state the construct count as six (decision, pushback, progress,
+  deliberation, triage, confirm) — the plain batched form is the
+  substrate the constructs sit on, not a construct; the "member #N"
+  numbering in code comments follows the same count
+
 ## [0.5.0] — 2026-08-14
 
 The grammar-expansion release: the communication grammar grows from
-five constructs on three surfaces to seven constructs on four — every
+three constructs on three surfaces to six constructs on four — every
 one with a validated round-trip — deliberated by the multi-LLM round
 table (thread `q-forms-grammar-expansion-001`: 3/3 on the markdown
 surface and triage, id-keying and strict-degradation amendments

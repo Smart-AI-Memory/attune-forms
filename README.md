@@ -46,7 +46,7 @@ Linux/macOS/Windows. Apache 2.0.
 ## The grammar
 
 Beyond the plain field types (text, single/multi select, boolean,
-number, date, textarea), seven constructs carry conversational meaning:
+number, date, textarea), six constructs carry conversational meaning:
 
 - **Decision** — the agent proposes: recommended option first, a "why"
   rationale, a one-line tradeoff under every alternative. Validates
