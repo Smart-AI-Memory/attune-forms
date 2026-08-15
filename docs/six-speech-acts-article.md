@@ -24,11 +24,62 @@ The framing that clarified the design for me: each construct is a *speech act* �
 
 **Report (progress).** Done / in-flight / blocked, where the blocked items are a picker. Unchanged.
 
+The three new ones deserve to be seen as data, not just described. Each example below is lifted verbatim from the library's reference form — a single form with one field per control type that CI keeps complete — with the answer it validates to.
+
 **Deliberate (deliberation) — new.** Several named voices — reviewers, models, teammates — endorse candidate positions. The endorsements render as chips per option, so a 2-1 split and its minority are visible at a glance; a synthesis pick is a badge, never the answer; the human chairs. Two rules live in the validator, not in a style guide: every endorsement list must be non-empty (an option can't be "endorsed by nobody"), and the endorsements must map onto the actual options. The skill text carries the third rule, which no validator can enforce: never dress one opinion as many. The construct exists to make disagreement legible, not to manufacture it.
+
+```python
+{
+    "id": "cache_strategy",
+    "type": "deliberation",
+    "text": "Where should the response cache live?",
+    "options": ["In-process LRU", "Redis sidecar", "No cache yet"],
+    "endorsements": {
+        "In-process LRU": ["claude", "codex"],
+        "Redis sidecar": ["antigravity"],
+    },
+    "recommended": "In-process LRU",
+    "rationale": "Two of three seats favor starting in-process; "
+    "revisit the sidecar when a second consumer appears.",
+}
+# answer: "In-process LRU"  — a single-select; the 2-1 split was the point
+```
 
 **Adjudicate (triage) — new.** A ruling per item over a reviewed list — audit findings, review comments, backlog candidates. Items carry stable ids; the ruling vocabulary is shared across the board (`fix now` / `ticket` / `dismiss`, or whatever the author names); the answer is the whole `{item: disposition}` mapping, not a summary of it. The validator refuses a one-word vocabulary — a board where the only ruling is "accept" is a rubber stamp, and the code comment says so — and it refuses duplicate item keys, because a ruling that can't be attributed to exactly one item is not a ruling. On flat surfaces the board expands to one question per item and folds back into the mapping on collection; the caller never sees the expansion.
 
+```python
+{
+    "id": "finding_rulings",
+    "type": "triage",
+    "text": "Rule each review finding.",
+    "triage_items": [
+        {"id": "retry-loop", "label": "Unbounded retry loop",
+         "tag": "high", "detail": "worker.py:88"},
+        {"id": "stale-doc", "label": "Stale docstring", "tag": "low"},
+    ],
+    "dispositions": ["fix now", "ticket", "dismiss"],
+    "suggested": {"retry-loop": "fix now"},
+}
+# answer: {"retry-loop": "fix now", "stale-doc": "ticket"}  — the whole mapping, keyed on ids
+```
+
 **Consent (confirm) — new.** An approval gate for a consequential action: the question names the action, a `consequences` list enumerates exactly what will happen, each line optionally tagged with a severity (low / medium / high / irreversible), and the answer is one of exactly two options. Here the validator is the whole idea. A confirm with no consequences is rejected — if there's nothing worth listing, ask plainly. A confirm with three options is rejected — it's a gate, not a menu. And a confirm with a `default` or a `recommended` is rejected outright, because a pre-selected approval defeats the gate. That last rule was ratified in the design review with the tradeoff stated out loud: a grammar built around leading with a recommendation was deliberately shipping one construct that refuses to carry one. It was, and it should.
+
+```python
+{
+    "id": "flag_flip_gate",
+    "type": "confirm",
+    "text": "Enable the feature flag for all users now?",
+    "consequences": [
+        {"label": "Flag flips to 100% rollout", "severity": "high",
+         "detail": "reversible via the same flag"},
+        {"label": "Announcement email sends", "severity": "irreversible"},
+    ],
+}
+# answer: "Approve" or "Abort" — the options default to exactly those two.
+# Add "default": "Approve" and form_from_dict refuses the whole form:
+#   'default' is not permitted on confirm (D2: no pre-selected approval)
+```
 
 The confirm construct's own pull request was gated by a live confirm card — consequences enumerated, two options, nothing pre-selected — the same afternoon it was built. I mention it because "the grammar's decisions are made through the grammar" was a claim in the first article, and this is the smallest concrete instance of it since.
 
