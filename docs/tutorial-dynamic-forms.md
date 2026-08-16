@@ -13,17 +13,19 @@
 
 *A hands-on walk from an empty dict to a validated round trip — the six constructs the library documents, the surface each one degrades to, and the return path that never guesses.*
 
-Two earlier pieces argued that an AI agent's question should be a typed, validated artifact — a form — and named the constructs that carry conversational meaning on top of one. This one types it in. By the end you will have built a form that uses every construct in attune-forms — the six those pieces named and the two that 0.6.0 added (§7) — rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
+Two earlier pieces argued that an AI agent's question should be a typed, validated artifact — a form — and named the constructs that carry conversational meaning on top of one. This one types it in.
 
-```
-pip install attune-forms==0.6.0
-```
-
-Or, if you live in Claude Code, the plugin gives you the same engine as a skill plus four MCP tools, no Python setup:
+The fastest way in is two commands in Claude Code's terminal. The plugin gives you the engine as a skill plus four MCP tools — no Python setup — and the next thing you ask for can arrive as a form:
 
 ```
 claude plugin marketplace add Smart-AI-Memory/attune-forms
 claude plugin install attune-forms@attune-forms
+```
+
+This tutorial takes the library path instead, because the point is to show the machinery. By the end you will have built a form that uses every construct in attune-forms — the six those pieces named and the two that 0.6.0 added (§7) — rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
+
+```
+pip install attune-forms==0.6.0
 ```
 
 The library is stdlib plus one runtime dependency; the snippets need nothing else. Where I state a number — bytes, payload counts, line counts — it is the number the code printed when I ran it for this piece.
