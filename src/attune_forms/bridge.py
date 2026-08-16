@@ -1575,11 +1575,12 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
 def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
     """Fold dotted per-item / per-slot answers back into their canonical shape.
 
-    The non-widget surfaces (AskUserQuestion expansion, MCP elicitation —
-    whose schema must stay flat — and markdown shorthand) carry a TRIAGE
-    answer as one key per item (``"<id>.<item key>"``) and a RANKING
-    answer as one key per rank slot (``"<id>.<k>"``, k 1-based). This
-    pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
+    The flat surfaces carry a TRIAGE answer as one key per item
+    (``"<id>.<item key>"``, everywhere) and a RANKING answer as one key
+    per rank slot (``"<id>.<k>"``, k 1-based — AskUserQuestion and
+    markdown shorthand only; the MCP elicitation schema carries a
+    ranking as ONE bounded array property, see ``_EXPANDING_TYPES``).
+    This pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
     ordered list so every surface funnels into the same validator. An
     answer already present under the question id wins; the input dict is
     never mutated.
