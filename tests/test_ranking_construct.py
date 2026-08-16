@@ -285,3 +285,112 @@ class TestRankingIngestion:
         assert "more than once" in re_ask
         assert "**Order the work**" in re_ask
         assert "**Name?**" not in re_ask
+
+
+_DIGIT_LABELS = ["3.12", "2) legacy", "main"]
+
+
+class TestReviewFindings:
+    """Regressions pinned from the 2026-08-16 five-lens review of this
+    construct's diff (four findings confirmed by two skeptics each,
+    three more from the unverified pool reproduced by the lead). Report:
+    ~/.attune/reports/reviews/ranking-construct-review-2026-08-16.json."""
+
+    def test_exact_digit_leading_labels_ingest_exactly(self) -> None:
+        """Confirmed: the ordinal strip ate labels that legitimately
+        start "<digits>." / "<digits>)" — "3.12" ingested as "12",
+        "2) legacy" as "legacy" — so an EXACT typed ranking failed
+        membership and every retry failed identically. The strip now
+        applies only when it turns a non-option into an option."""
+        form = form_from_dict(
+            {
+                "title": "V",
+                "fields": [
+                    {
+                        "id": "ver",
+                        "text": "Order versions",
+                        "type": "ranking",
+                        "options": list(_DIGIT_LABELS),
+                        "top_n": 2,
+                    }
+                ],
+            }
+        )
+        # Comma-list path.
+        answers, problems = markdown_to_answers(form, "ver: 3.12, 2) legacy")
+        assert (answers, problems) == ({"ver": ["3.12", "2) legacy"]}, [])
+        # Dotted-slot path.
+        answers, problems = markdown_to_answers(form, "ver.1: 3.12\nver.2: main")
+        assert (answers, problems) == ({"ver": ["3.12", "main"]}, [])
+        # Shaping noise ("1. billing") still strips …
+        noisy = form_from_dict(_ranking(top_n=2))
+        answers, _ = markdown_to_answers(noisy, "prio: 1. billing, 2) docs")
+        assert answers == {"prio": ["billing", "docs"]}
+        # … and a genuine miss passes through RAW, named as typed.
+        answers, _ = markdown_to_answers(form, "ver: 9. nonsense, main")
+        assert answers == {"ver": ["9. nonsense", "main"]}
+
+    @pytest.mark.parametrize("bad_slot", ["prio.3", "prio.0"])
+    def test_out_of_range_slots_are_named_not_dropped(self, bad_slot: str) -> None:
+        """Confirmed: slot 0 and slots past the budget were silently
+        DISCARDED by the fold, so an over-long dotted ranking was
+        accepted with ranks missing. Every decimal slot now folds and
+        the validator names the wrong length."""
+        form = form_from_dict(_ranking(top_n=2))
+        raw = {"prio.1": "auth", "prio.2": "docs", bad_slot: "search"}
+        with pytest.raises(FormValidationError, match=r"exactly 2 option\(s\) \(got 3\)"):
+            collect_form_response(form, raw)
+
+    def test_unicode_digit_slot_never_raises_raw_valueerror(self) -> None:
+        """Confirmed: str.isdigit() is True for 95 BMP characters int()
+        rejects (², ①, …), so a Unicode-digit suffix raised a RAW
+        ValueError out of collect_form_response and the MCP collect tool.
+        decimal_key_number() (ASCII-only) now guards all three sites."""
+        form = form_from_dict(_ranking(top_n=2))
+        # Collect path: not a slot key, ignored like any undeclared key.
+        got = collect_form_response(form, {"prio.²": "auth", "prio.1": "docs", "prio.2": "search"})
+        assert got.responses["prio"] == ["docs", "search"]
+        # Markdown surface: named at parse time, no exception.
+        _, problems = markdown_to_answers(form, "prio.²: auth")
+        assert problems == ["unknown rank slot: 'prio.²'"]
+        # Field-number branch of _resolve_line_key: same guard.
+        _, problems = markdown_to_answers(form, "²: auth")
+        assert problems == ["unknown field: '²'"]
+
+    def test_quoted_slots_never_override_a_typed_list(self) -> None:
+        """Reproduced from the unverified pool: a pasted JSON block's
+        dotted rank slots silently overrode a TYPED `prio: …` line,
+        inverting the typed-beats-quoted contract. Quoted slots now
+        overlay only a quoted base; typed slots still overlay both."""
+        form = form_from_dict(_ranking(top_n=3, suggested=["auth", "search", "billing"]))
+        typed_plus_quoted_slot = (
+            'prio: docs, billing, auth\n```json\n{"answers": {"prio.1": "search"}}\n```'
+        )
+        answers, problems = markdown_to_answers(form, typed_plus_quoted_slot)
+        assert (answers["prio"], problems) == (["docs", "billing", "auth"], [])
+        # Quoted slots still overlay a QUOTED base (the pasted skeleton).
+        quoted_only = (
+            '```json\n{"answers": {"prio": ["auth", "search", "billing"], "prio.1": "docs"}}\n```'
+        )
+        answers, _ = markdown_to_answers(form, quoted_only)
+        assert answers["prio"] == ["docs", "search", "billing"]
+        # And a TYPED slot still overlays a quoted base list.
+        typed_slot = (
+            '```json\n{"answers": {"prio": ["auth", "search", "billing"]}}\n```\nprio.1: docs'
+        )
+        answers, _ = markdown_to_answers(form, typed_slot)
+        assert answers["prio"] == ["docs", "search", "billing"]
+
+    def test_widget_gate_blocks_a_partial_optional_ranking(self) -> None:
+        """Reproduced from the unverified pool: an OPTIONAL ranking with
+        0 < len < slots posted its partial list, which the validator
+        always rejects — after the widget has disabled itself. The
+        submit gate now blocks any partial ranking regardless of
+        `required`, naming the count ("Order the work (1/2)")."""
+        html = form_to_widget_html(
+            form_from_dict(_ranking(top_n=2, required=False)), instance_id="r"
+        )
+        script = html.split("<script>")[1]
+        assert "Rank every slot or none: " in script
+        assert ".ae-field:not([data-required])" in script
+        assert "data-rank-n" in script

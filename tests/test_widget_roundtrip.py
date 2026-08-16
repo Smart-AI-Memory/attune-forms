@@ -301,3 +301,28 @@ class TestFieldIdRoundTrip:
         with pytest.raises(FormValidationError) as excinfo:
             collect_form_response(form, payload["answers"])
         assert "feature_name" in str(excinfo.value)
+
+
+class TestReviewFindings:
+    """Regressions pinned from the 2026-08-16 five-lens review: the
+    simulator diverged from the real submit script on rankings — it
+    never read rows pre-populated in the ranked <ol> and it filled past
+    the slot budget the script caps at."""
+
+    def test_untouched_suggested_ranking_posts_the_proposal(self) -> None:
+        """The reference form's ranking carries a `suggested` order, so
+        its rows render INSIDE the ranked <ol> — an untouched submit
+        posts the proposal (the visible badge plus the submit IS the
+        confirmation, D2-c), never nothing."""
+        form, dom = _render_reference()
+        payload = _submit(dom)  # untouched
+        assert payload["answers"]["rollout_order"] == ["staging", "canary", "eu-prod"]
+
+    def test_fill_caps_ranking_at_the_slot_budget(self) -> None:
+        """The script refuses an "add" past `data-rank-n`; the simulator
+        must model the same cap rather than a fill no user could
+        perform."""
+        _, dom = _render_reference()
+        _fill(dom, {"rollout_order": ["us-prod", "eu-prod", "canary", "staging"]})
+        field = next(f for f in dom.fields if f["fid"] == "rollout_order")
+        assert field["ranked"] == ["us-prod", "eu-prod", "canary"]
