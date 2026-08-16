@@ -118,7 +118,7 @@ claude plugin install attune-forms@attune-forms
 
 Or as a library: `pip install attune-forms` — Python 3.10+, Apache 2.0. Text-only hosts get the markdown surface and the parser above.
 
-Six speech acts was never a claim that six is the right number — it's the number that had survived when I drafted this, and it was already eight by the time I hit publish. That's the second article in a row to go stale on its way out the door, which I've decided is the healthiest thing I can report about the project. Which move is missing from your agent's conversations — the recommendation it doesn't position, the disagreement it buries, the approval it pre-checks?
+Six speech acts was never a claim that six is the right number — it's the number that had survived when I drafted this, and it was already eight by the time I hit publish. That's the second article in a row to go stale on its way out the door. I'll take it. Which move is missing from your agent's conversations — the recommendation it doesn't position, the disagreement it buries, the approval it pre-checks?
 
 ---
 
