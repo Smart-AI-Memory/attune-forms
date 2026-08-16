@@ -1,22 +1,22 @@
 <!--
   This repo copy is the verified MASTER of this tutorial: every code
-  block in §1–§6 was executed against attune-forms 0.5.0 from PyPI in a
-  fresh virtualenv, and §7 against this repository's main, before it was
-  committed. External publications (LinkedIn, blog, dev.to) are
-  projections of it — fix divergences here first, re-run the blocks,
-  then re-project. Companion to communication-grammar-article.md (the
-  concept, published 2026-08-13) and six-speech-acts-article.md (the
-  0.5.0 delta).
+  block — §7 included — was executed against attune-forms 0.6.0 from
+  PyPI in a fresh virtualenv on 2026-08-16 (originally verified against
+  0.5.0 with §7 against main, 2026-08-16 pre-release). External
+  publications (LinkedIn, blog, dev.to) are projections of it — fix
+  divergences here first, re-run the blocks, then re-project. Companion
+  to communication-grammar-article.md (the concept, published
+  2026-08-13) and six-speech-acts-article.md (the 0.5.0 delta).
 -->
 
 # Six Constructs, Four Hosts, One Validator: Building a Dynamic Form with attune-forms
 
 *A hands-on walk from an empty dict to a validated round trip — the six constructs the library documents, the surface each one degrades to, and the return path that never guesses.*
 
-Two earlier pieces argued that an AI agent's question should be a typed, validated artifact — a form — and named the constructs that carry conversational meaning on top of one. This one types it in. By the end you will have built a form that uses every construct in attune-forms 0.5.0, rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
+Two earlier pieces argued that an AI agent's question should be a typed, validated artifact — a form — and named the constructs that carry conversational meaning on top of one. This one types it in. By the end you will have built a form that uses every construct in attune-forms — the six those pieces named and the two that 0.6.0 added (§7) — rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
 
 ```
-pip install attune-forms==0.5.0
+pip install attune-forms==0.6.0
 ```
 
 Or, if you live in Claude Code, the plugin gives you the same engine as a skill plus four MCP tools, no Python setup:
@@ -190,15 +190,16 @@ except FormValidationError as e:
 
 ## 3. Assemble it — or import it
 
-Put the base fields and the six constructs in one `fields` list and you have the reference form. The library ships it as data, with a matching set of valid answers, so the rest of this tutorial uses the import:
+Put the base fields and the constructs in one `fields` list and you have the reference form. The library ships it as data, with a matching set of valid answers, so the rest of this tutorial uses the import. At 0.6.0 it also carries the two §7 constructs, so the count is fifteen:
 
 ```python
 from attune_forms import REFERENCE_FORM, EXAMPLE_ANSWERS, form_from_dict
 
 form = form_from_dict(REFERENCE_FORM)
-print(len(form.questions))                     # 13 — seven plain fields + six constructs
+print(len(form.questions))                     # 15 — seven plain fields + eight constructs
 print([q.type.value for q in form.questions][7:])
-# ['decision', 'pushback', 'deliberation', 'triage', 'confirm', 'progress']
+# ['decision', 'pushback', 'deliberation', 'triage', 'confirm',
+#  'ranking', 'assumption_review', 'progress']
 ```
 
 ## 4. One dict, four hosts
@@ -218,7 +219,7 @@ print(select_form_surface(form))               # 'widget' — or 'ask' where no 
 
 ```python
 html = form_to_widget_html(form, instance_id="tutorial")   # fixed id → reproducible size
-print(len(html))                               # 22200 bytes for the full reference form
+print(len(html))                               # 34574 bytes for the full reference form
 ```
 
 **Batched plain questions** — for hosts with a question tool but no widget. Constructs degrade to a recommendation-first single-select with tradeoffs folded into the descriptions; a triage board arrives pre-expanded as one single-select per item, keyed `"<board id>.<item id>"`, and folds back on collection.
@@ -226,7 +227,9 @@ print(len(html))                               # 22200 bytes for the full refere
 ```python
 batches = form_to_askuserquestion(form)        # ≤ 4 questions per call
 payloads = [p for batch in batches for p in batch]
-print(len(batches), len(payloads))             # 4 14
+print(len(batches), len(payloads))             # 6 23 — the ranking adds one
+                                               # pick per rank slot, the
+                                               # assumption review one per item
 print([p["question_id"] for p in payloads if p["question_id"].startswith("finding_rulings")])
 # ['finding_rulings.retry-loop', 'finding_rulings.stale-doc']
 ```
@@ -235,7 +238,9 @@ print([p["question_id"] for p in payloads if p["question_id"].startswith("findin
 
 ```python
 schema = form_to_elicitation_schema(form)
-print(len(schema["properties"]))               # 14 — the triage board flattens to one enum per item
+print(len(schema["properties"]))               # 21 — triage and assumption review
+                                               # flatten to one primitive per item;
+                                               # the ranking stays one bounded array
 print(schema["properties"]["flag_flip_gate"]["enum"])   # ['Approve', 'Abort']
 ```
 
@@ -243,11 +248,11 @@ print(schema["properties"]["flag_flip_gate"]["enum"])   # ['Approve', 'Abort']
 
 ```python
 md = form_to_markdown(form)
-print(md.count("\n"))                          # 98 lines
+print(md.count("\n"))                          # 122 lines
 print(md[md.rindex("---"):])                   # the reply instructions + the JSON skeleton
 ```
 
-The tail is the skeleton. Note the confirm is `null` — never prefilled — while the constructs that carry a recommendation show it as a visible starting value:
+The tail is the skeleton. Note the confirm is `null` — never prefilled — while the constructs that carry a recommendation or a proposal show it as a visible starting value, the ranking's proposed order included:
 
 ```json
 {
@@ -260,6 +265,9 @@ The tail is the skeleton. Note the confirm is `null` — never prefilled — whi
     "rollout": "Ship behind a feature flag",
     "finding_rulings": {"retry-loop": "fix now", "stale-doc": null},
     "flag_flip_gate": null,
+    "rollout_order": ["staging", "canary", "eu-prod"],
+    "inferred_scope": {"py-floor": "accept", "host": null,
+                       "Tests run in CI on every push": null},
     "blockers": null
   }
 }
@@ -333,7 +341,7 @@ The library will happily render a three-field form for a one-word question, and 
 
 ## 7. Two more constructs (0.6.0)
 
-At the time of writing these are on the repository's `main` and ship in 0.6.0; the snippets were run against `main`, not against 0.5.0.
+These shipped in 0.6.0 on August 16th — like everything above, the snippets run as written against the released package, and both fields are already in the reference form you imported in §3.
 
 **Ranking — order the options,** all of them or only the top `top_n`. The answer is the ordered list; a `suggested` order renders visibly as a proposal, never as the answer, and `default` is refused. On flat surfaces it expands to one single-select per rank slot (`"<id>.1"`, `"<id>.2"`, …) that folds back; the markdown reply is a comma list in order.
 
