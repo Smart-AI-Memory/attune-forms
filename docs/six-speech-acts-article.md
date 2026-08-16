@@ -1,7 +1,9 @@
 <!--
   This repo copy is the verified MASTER of this article: its claims are
-  checked against the code in this repository (attune-forms 0.5.0).
-  External publications (LinkedIn, blog) are projections of it — fix
+  checked against the code in this repository (attune-forms 0.5.0; the
+  status section and the three reference-form snippets re-verified
+  against released 0.6.0 at projection, 2026-08-16). External
+  publications (LinkedIn, blog) are projections of it — fix
   divergences here first. Companion to communication-grammar-article.md
   (published 2026-08-13); this piece carries the delta since.
 -->
@@ -103,7 +105,7 @@ The acceptance test for that loop was small and instructive. I typed `approve` �
 
 The first article promised that constructs which don't earn their place should die. Two amendments from the review that shaped 0.5.0, for the record: triage rulings key on stable item *ids* rather than labels (labels change between renders; rulings shouldn't — the label is only the fallback), and flat-surface degradation was made strict, so a construct that can't render faithfully on a surface fails loudly rather than approximately. Both came out of a three-seat model round table that ruled 3/3 for a markdown-surface-first expansion with a mandatory return path, and 3/3 that triage was the strongest of the proposed constructs. I chaired those rulings through the deliberation card they were partly about, which is either dogfooding or circular reasoning; I've decided it's the former, and I've written down enough that you can decide otherwise.
 
-Still one heavy production consumer — my own stack. 514 tests, CI on three platforms, one runtime dependency. Four items I proposed are on the backlog and unbuilt — three candidate constructs (ranking, hunk review, assumption review) and a surface-capability contract; if you'd want one of them before the others, that's the most useful thing you could tell me.
+Still one heavy production consumer — my own stack. 611 tests, CI on three platforms, one runtime dependency. Four items I proposed were on the backlog and unbuilt when I drafted this. Between drafting and publishing, two of them shipped: ranking and assumption review went out in 0.6.0, each spec-gated and adversarially reviewed before the cut, and the ranking that ordered my own post-release work was the construct's first live answer. The two still unbuilt — a hunk-review construct and a surface-capability contract — are waiting on a real consumer to commit; if you'd want one of them before the other, that's the most useful thing you could tell me.
 
 ## Try it
 
@@ -116,7 +118,7 @@ claude plugin install attune-forms@attune-forms
 
 Or as a library: `pip install attune-forms` — Python 3.10+, Apache 2.0. Text-only hosts get the markdown surface and the parser above.
 
-Six speech acts is not a claim that six is the right number. It's the number that survived. Which one is missing from your agent's conversations — the recommendation it doesn't position, the disagreement it buries, the approval it pre-checks?
+Six speech acts was never a claim that six is the right number — it's the number that had survived when I drafted this, and it was already eight by the time I hit publish. That's the second article in a row to go stale on its way out the door, which I've decided is the healthiest thing I can report about the project. Which move is missing from your agent's conversations — the recommendation it doesn't position, the disagreement it buries, the approval it pre-checks?
 
 ---
 
