@@ -362,14 +362,19 @@ def _control_ranking_html(q: FormQuestion) -> str:
     Two lists, no drag dependency (spec R3): every option starts in the
     unranked pool with an "add" button; the ranked ``<ol>`` shows the
     order (native numbering) with move-up / move-down / remove buttons.
-    Moving an option is the explicit act — an untouched form posts an
-    empty ranking, never the author's option order by accident. A
-    ``suggested`` order pre-populates the ranked list with a visible
+    Moving an option is the explicit act — with no ``suggested`` order
+    every option starts in the pool, so an untouched form posts nothing
+    at all, never the author's option order by accident.
+
+    A ``suggested`` order pre-populates the ranked list with a visible
     "proposed" badge (D2-c: a proposal to confirm, never silently the
-    answer). Each row carries a hidden ``data-control`` input holding
-    the option, so the submit script (and the round-trip simulator) read
-    the ranked list generically; the answer is the ranked rows' values in
-    DOM order.
+    answer). It is ranked from the start, so submitting without touching
+    it posts the proposal — that submit IS the confirmation, and the
+    badge is what makes it visible rather than silent.
+
+    Each row carries a hidden ``data-control`` input holding the option,
+    so the submit script (and the round-trip simulator) read the ranked
+    list generically; the answer is the ranked rows' values in DOM order.
     """
     slots = ranking_slot_count(q)
     proposed = q.suggested if isinstance(q.suggested, list) else []
@@ -854,8 +859,30 @@ def form_to_widget_html(
           : f.getAttribute('data-fid'));
       }}
     }});
-    if (missing.length) {{
-      err.textContent = 'Required: ' + missing.join(', ');
+    // A ranking is all-or-nothing at the validator — exactly N ranked
+    // or nothing at all, whether or not the field is required — so a
+    // half-filled OPTIONAL ranking is blocked here too. The loop above
+    // never sees it, and posting it would hand the validator the very
+    // payload this gate exists to prevent (review finding, 2026-08-16).
+    var partial = [];
+    form.querySelectorAll('.ae-field:not([data-required])').forEach(function(f) {{
+      var rank = f.querySelector('.ae-rank');
+      if (!rank) return;
+      var v = answers[f.getAttribute('data-fid')];
+      var slots = Number(rank.getAttribute('data-rank-n'));
+      if (!Array.isArray(v) || v.length === 0 || v.length >= slots) return;
+      f.classList.add('ae-field-missing');
+      var lbl = f.querySelector('.ae-label');
+      partial.push((lbl ? lbl.textContent.replace(/\\*$/, '')
+        : f.getAttribute('data-fid')) + ' (' + v.length + '/' + slots + ')');
+    }});
+    if (missing.length || partial.length) {{
+      var notes = [];
+      if (missing.length) notes.push('Required: ' + missing.join(', '));
+      if (partial.length) {{
+        notes.push('Rank every slot or none: ' + partial.join(', '));
+      }}
+      err.textContent = notes.join(' — ');
       return;
     }}
     err.textContent = '';

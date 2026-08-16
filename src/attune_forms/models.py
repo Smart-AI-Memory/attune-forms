@@ -120,6 +120,21 @@ def ranking_slot_count(question: "FormQuestion") -> int:
     return question.top_n if question.top_n is not None else len(question.options)
 
 
+def decimal_key_number(text: str) -> int | None:
+    """Parse a numeric answer key — a 1-based field number or the ``k`` of
+    a dotted rank slot ``"<id>.<k>"`` — or ``None`` when it is not a
+    plain ASCII decimal.
+
+    Every surface parses one through this single function.
+    ``str.isdigit()`` is True for 95 BMP characters ``int()`` rejects
+    (``²``, ``①``, Ethiopic digits …), so pairing the two raised a raw
+    ValueError out of ``collect_form_response`` and the MCP collect tool
+    (which catches only :class:`FormValidationError`) on a superscript
+    suffix — review finding, 2026-08-16.
+    """
+    return int(text) if text.isascii() and text.isdigit() else None
+
+
 def _consequences_summary(consequences: list[dict[str, str]] | None) -> str | None:
     """One-line "Will: ..." digest of a confirm's consequences.
 
