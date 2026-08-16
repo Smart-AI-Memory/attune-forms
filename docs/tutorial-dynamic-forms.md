@@ -22,7 +22,7 @@ claude plugin marketplace add Smart-AI-Memory/attune-forms
 claude plugin install attune-forms@attune-forms
 ```
 
-This tutorial takes the library path instead, because the point is to show the machinery. By the end you will have built a form that uses every construct in attune-forms — the six those pieces named and the two that 0.6.0 added (§7) — rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
+The plugin is for forms in your agent's conversations; the library is for building the host. This tutorial takes the library path, because the point is to show the machinery. By the end you will have built a form that uses every construct in attune-forms — the six those pieces named and the two that 0.6.0 added (§7) — rendered it four ways from the same dict, collected a typed reply from a text-only host, watched the validator refuse a bad answer, and re-asked exactly the field that failed. Everything below runs as written against the published package:
 
 ```
 pip install attune-forms==0.6.0
