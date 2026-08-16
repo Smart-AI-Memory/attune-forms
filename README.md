@@ -41,7 +41,7 @@ parsed back into the same validator.
 pip install attune-forms
 ```
 
-Python 3.10+, one runtime dependency (structlog), 510+ tests, CI on
+Python 3.10+, one runtime dependency (structlog), 610+ tests, CI on
 Linux/macOS/Windows. Apache 2.0.
 
 ## The grammar

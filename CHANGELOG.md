@@ -4,7 +4,15 @@ All notable changes to attune-forms are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] — 2026-08-16
+
+The backlog-constructs release: the communication grammar grows from
+six constructs to eight — `ranking` and `assumption_review`, the two
+backlog candidates the chair ruled into this cut — each spec-driven
+(D1 intake → D2 ratified forks → D3 execution → D4 live AC-4 receipt),
+shipped on all four surfaces with validated round-trips, and hardened
+by a five-lens adversarial review per construct BEFORE the cut, every
+finding fixed with a pinned regression. 611 tests.
 
 ### Added
 - `ranking` construct (spec `ranking-construct`, communication-grammar
@@ -14,14 +22,17 @@ follow [SemVer](https://semver.org/).
   ordered list (distinct, exactly `top_n`/all long, every entry an
   option); a `suggested` order renders visibly as a proposal and is
   never the answer, and `default` is rejected (D2-c). Widget: a ranked
-  list + unranked pool moved by buttons (no drag dependency), an
-  untouched form posts nothing. Flat surfaces expand to one
-  single-select per rank slot (`"<id>.<k>"`, D2-b) and fold back in
-  `collect_form_response`; elicitation schema is a bounded unique
-  array; markdown renders the rule + skeleton and ingests a comma list
-  in order (leading ordinals stripped) or one slot per line, typed
-  slots overriding a pasted skeleton. `ranking_slot_count` exported —
-  the one sizing rule every surface shares
+  list + unranked pool moved by buttons (no drag dependency); with no
+  `suggested` order an untouched form posts nothing, and with one the
+  proposal renders pre-ranked under the visible badge, so submitting
+  untouched posts it — the submit IS the confirmation. Flat surfaces
+  expand to one single-select per rank slot (`"<id>.<k>"`, D2-b) and
+  fold back in `collect_form_response`; elicitation schema is a bounded
+  unique array; markdown renders the rule + skeleton and ingests a
+  comma list in order (a leading ordinal stripped only when the strip
+  lands on an option) or one slot per line, typed slots overriding a
+  pasted skeleton. `ranking_slot_count` exported — the one sizing rule
+  every surface shares
 - `assumption_review` construct (spec `assumption-review-construct`,
   communication-grammar member #8 — roundtable
   `q-forms-grammar-expansion-001` backlog candidate, "the
@@ -73,6 +84,40 @@ follow [SemVer](https://semver.org/).
   deliberation, triage, confirm) — the plain batched form is the
   substrate the constructs sit on, not a construct; the "member #N"
   numbering in code comments follows the same count
+- Seven ranking-ingestion findings from the five-lens review of the
+  construct's diff (2026-08-16; four confirmed by two skeptics each,
+  three reproduced from the unverified pool), every one pinned in
+  `tests/test_ranking_construct.py::TestReviewFindings` and
+  `tests/test_widget_roundtrip.py::TestReviewFindings`:
+  - Ordinal stripping is now option-aware on both markdown paths: an
+    option label that legitimately starts `<digits>.`/`<digits>)`
+    ("3.12", "2) legacy") ingests exactly instead of being mangled into
+    a membership failure no retry could fix; plain shaping noise
+    ("1. billing") still strips
+  - `decimal_key_number` (new, single-sourced, ASCII-only) parses every
+    numeric answer key: a Unicode-digit slot suffix (`prio.²`) can no
+    longer raise a raw `ValueError` out of `collect_form_response` and
+    the MCP collect tool (`str.isdigit()` accepts 95 BMP characters
+    `int()` rejects)
+  - The bridge fold keeps EVERY decimal rank slot — zero and
+    out-of-range included — so an over-long dotted ranking is named by
+    the validator's length check instead of ranks being silently
+    dropped
+  - A pasted JSON block's dotted rank slots no longer override a TYPED
+    list line (the typed-beats-quoted contract held everywhere else);
+    quoted slots overlay only a quoted base
+  - The widget submit gate blocks a partial OPTIONAL ranking
+    (0 < ranked < slots) with "Rank every slot or none: …" — the
+    validator is all-or-nothing whatever `required` says, so posting a
+    partial list after the widget disabled itself dead-ended the form
+  - The round-trip simulator reads rows pre-populated in the ranked
+    list and respects the slot cap, modelling the real submit script
+    instead of a fill no user could perform
+  - Docstrings corrected to match behavior: the elicitation schema
+    carries a ranking as ONE bounded array (only AskUserQuestion and
+    markdown expand to dotted slots), and an untouched ranking with a
+    `suggested` order posts the proposal — visibly badged — rather
+    than "nothing"
 
 ## [0.5.0] — 2026-08-14
 
@@ -172,7 +217,9 @@ verified master.
 - Initial extraction of the attune-ai elicitation subsystem: declarative `FormSchema`, build/collect validation, multi-surface renderers (widget HTML, AskUserQuestion batching, MCP elicitation), surface router, template layer with ask-time intake generation
 - Trusted-publishing release workflow (tag-triggered, PyPI environment)
 
-[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.1.0...v0.2.0
