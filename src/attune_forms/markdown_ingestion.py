@@ -37,6 +37,7 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    decimal_key_number,
     ranking_slot_count,
     triage_item_key,
 )
@@ -66,6 +67,26 @@ _ORDINAL_PREFIX_RE = re.compile(r"^\d+[.)]\s*")
 _ASSUMPTION_EDIT_RE = re.compile(r"^edit(?:\s*[:=]\s*(.*))?$", re.DOTALL)
 
 
+def _rank_entry(question: FormQuestion, part: str) -> str:
+    """Shape ONE typed ranking entry, stripping a leading ordinal only
+    when that strip turns a non-option into an option.
+
+    A user re-typing the rendered list often carries its numbering
+    ("1. billing"), which is shaping noise. But an option label may
+    itself begin with digits and a dot or paren — "3.12", "2) Ship",
+    "10.5%" — and stripping unconditionally ate the label the user
+    copied EXACTLY, so the validator then named entries ('12', 'Ship')
+    nobody typed and every retry failed identically (review finding,
+    2026-08-16). Membership is still the validator's call: an entry
+    that matches nothing either way passes through RAW, so a genuine
+    miss is named as the user typed it (ingestion D1).
+    """
+    if part in question.options:
+        return part
+    stripped = _ORDINAL_PREFIX_RE.sub("", part)
+    return stripped if stripped in question.options else part
+
+
 def _coerce(question: FormQuestion, value: str) -> Any:
     """Type-aware value shaping for one shorthand value.
 
@@ -90,13 +111,12 @@ def _coerce(question: FormQuestion, value: str) -> Any:
         return [part.strip() for part in value.split(",") if part.strip()]
     if question.type is QuestionType.RANKING:
         # An ordered comma list; a leading ordinal ("1. b", "2) a") is
-        # shaping noise, stripped deterministically. Membership, repeats,
-        # and length stay the validator's call.
+        # shaping noise, stripped by :func:`_rank_entry` only when the
+        # strip finds an option. Membership, repeats, and length stay
+        # the validator's call.
         if value in question.options:
             return [value]
-        return [
-            _ORDINAL_PREFIX_RE.sub("", part.strip()) for part in value.split(",") if part.strip()
-        ]
+        return [_rank_entry(question, part.strip()) for part in value.split(",") if part.strip()]
     return value
 
 
@@ -210,8 +230,9 @@ def _resolve_line_key(form: FormSchema, key: str) -> tuple[str | None, str | Non
     by_id = {q.id: q for q in form.questions}
     if key in by_id:
         return key, None
-    if key.isdigit():
-        index = int(key) - 1
+    number = decimal_key_number(key)
+    if number is not None:
+        index = number - 1
         if 0 <= index < len(form.questions):
             return form.questions[index].id, None
         return None, f"unknown field number: {key}"
@@ -231,7 +252,8 @@ def _resolve_line_key(form: FormSchema, key: str) -> tuple[str | None, str | Non
                     return key, None
                 return None, f"unknown assumption: {key!r}"
             if by_id[root].type is QuestionType.RANKING:
-                if suffix.isdigit() and 1 <= int(suffix) <= ranking_slot_count(by_id[root]):
+                slot = decimal_key_number(suffix)
+                if slot is not None and 1 <= slot <= ranking_slot_count(by_id[root]):
                     return key, None
                 return None, f"unknown rank slot: {key!r}"
             return None, f"dotted key on a field that has no dotted rows: {key!r}"
@@ -263,6 +285,9 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
     answers: dict[str, Any] = dict(json_answers or {})
 
     by_id = {q.id: q for q in form.questions}
+    # Which keys the user TYPED (vs quoted in a pasted block) — the
+    # ranking merge below needs the difference to keep typed precedence.
+    typed_keys: set[str] = set()
     text_outside_fences = _FENCE_RE.sub("", reply)
     for line in text_outside_fences.splitlines():
         if not line.strip():
@@ -281,12 +306,14 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
             if not has_block:
                 problems.append(problem)
             continue
+        typed_keys.add(answer_key)
         question = by_id.get(answer_key)
         if question is None and "." in answer_key:
             root = by_id.get(answer_key.split(".", 1)[0])
             if root is not None and root.type is QuestionType.RANKING:
-                # A dotted rank slot carries ONE option — never comma-split it.
-                answers[answer_key] = _ORDINAL_PREFIX_RE.sub("", value)
+                # A dotted rank slot carries ONE option — never comma-split it,
+                # and strip its ordinal only when that finds an option.
+                answers[answer_key] = _rank_entry(root, value)
                 continue
             if (
                 root is not None
@@ -341,16 +368,23 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
             # Same rule for a ranking: typed slots overlay a quoted list
             # (the skeleton may carry the proposed order); the merged
             # list is rebuilt in slot order so the validator sees one
-            # answer, not a stranded slot.
-            typed = {
-                int(k[len(prefix) :]): answers.pop(k)
-                for k in list(answers)
-                if k.startswith(prefix) and k[len(prefix) :].isdigit()
-            }
-            if not typed:
+            # answer, not a stranded slot. Quoted slots only overlay a
+            # quoted list — never a TYPED one, which would invert this
+            # function's precedence rule and discard the line the user
+            # actually wrote (review finding, 2026-08-16).
+            typed: dict[int, Any] = {}
+            quoted: dict[int, Any] = {}
+            for key in [k for k in answers if k.startswith(prefix)]:
+                slot = decimal_key_number(key[len(prefix) :])
+                if slot is None:
+                    continue
+                (typed if key in typed_keys else quoted)[slot] = answers.pop(key)
+            if not typed and not quoted:
                 continue
             base = answers.get(q.id)
             slots = {i + 1: v for i, v in enumerate(base)} if isinstance(base, list) else {}
+            if not (q.id in typed_keys and slots):
+                slots.update(quoted)
             slots.update(typed)
             answers[q.id] = [slots[k] for k in sorted(slots)]
 

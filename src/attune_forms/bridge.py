@@ -28,6 +28,7 @@ from attune_forms.models import (
     FormResponse,
     FormSchema,
     QuestionType,
+    decimal_key_number,
     ranking_slot_count,
     triage_item_key,
 )
@@ -960,11 +961,15 @@ _WIDGET_ONLY_TYPES = frozenset(
 )
 
 #: Types whose answer has no single flat-surface payload and therefore
-#: EXPANDS to dotted keys (``"<id>.<key>"``) on AskUserQuestion, the
-#: elicitation schema, and markdown shorthand, folding back in
+#: EXPANDS to dotted keys (``"<id>.<key>"``), folding back in
 #: :func:`collect_form_response`: TRIAGE (one key per item) and RANKING
 #: (one key per rank slot, D2-b), and ASSUMPTION_REVIEW (one key per
-#: item plus a paired ``"<id>.<key>.text"`` for the edit lane).
+#: item plus a paired ``"<id>.<key>.text"`` for the edit lane). Which
+#: surfaces expand differs by type: AskUserQuestion and markdown
+#: shorthand expand all three, while the elicitation schema expands
+#: triage and assumption review but carries a ranking as ONE bounded
+#: array property (``elicitation_schema._property_for``) — the fold
+#: accepts either shape.
 _EXPANDING_TYPES = frozenset(
     {QuestionType.TRIAGE, QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW}
 )
@@ -1570,19 +1575,26 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
 def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
     """Fold dotted per-item / per-slot answers back into their canonical shape.
 
-    The non-widget surfaces (AskUserQuestion expansion, MCP elicitation —
-    whose schema must stay flat — and markdown shorthand) carry a TRIAGE
-    answer as one key per item (``"<id>.<item key>"``) and a RANKING
-    answer as one key per rank slot (``"<id>.<k>"``, k 1-based). This
-    pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
+    The flat surfaces carry a TRIAGE answer as one key per item
+    (``"<id>.<item key>"``, everywhere) and a RANKING answer as one key
+    per rank slot (``"<id>.<k>"``, k 1-based — AskUserQuestion and
+    markdown shorthand only; the MCP elicitation schema carries a
+    ranking as ONE bounded array property, see ``_EXPANDING_TYPES``).
+    This pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
     ordered list so every surface funnels into the same validator. An
     answer already present under the question id wins; the input dict is
     never mutated.
 
-    Ranking slots fold in slot order; a non-integer or out-of-range slot
-    suffix is left in place (so it surfaces as an unknown key rather
-    than silently vanishing), and gaps are simply absent — the validator
-    then names the wrong length.
+    Ranking slots fold in slot order. EVERY decimal slot suffix folds —
+    including ``0`` and suffixes past the last slot — so an over-long
+    ranking is named by the validator's length check exactly as the list
+    shape is, never accepted by silently dropping the extra ranks
+    (review finding, 2026-08-16). Gaps are simply absent, so the
+    validator names the wrong length there too. A NON-decimal suffix
+    (``"prio.²"``) is not a slot key at all: it stays in place and is
+    ignored here like any other key the form does not declare — the
+    markdown surface, which is where a human types one, names it as an
+    unknown rank slot at parse time.
     """
     expanding = [q for q in form.questions if q.type in _EXPANDING_TYPES]
     if not expanding:
@@ -1607,13 +1619,12 @@ def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dic
                 folded[question.id] = folded_rulings
             continue
         slots: dict[int, Any] = {}
-        limit = ranking_slot_count(question)
         for key in list(folded):
             if not key.startswith(prefix):
                 continue
-            suffix = key[len(prefix) :]
-            if suffix.isdigit() and 1 <= int(suffix) <= limit:
-                slots[int(suffix)] = folded.pop(key)
+            slot = decimal_key_number(key[len(prefix) :])
+            if slot is not None:
+                slots[slot] = folded.pop(key)
         if slots:
             folded[question.id] = [slots[k] for k in sorted(slots)]
     return folded

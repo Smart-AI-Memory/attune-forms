@@ -59,6 +59,7 @@ class _WidgetDOM(HTMLParser):
         self._select: dict[str, Any] | None = None
         self._textarea: dict[str, Any] | None = None
         self._item: str | None = None
+        self._in_ranked = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
@@ -69,12 +70,27 @@ class _WidgetDOM(HTMLParser):
         if "data-fid" in a:
             self.fields.append({"fid": a["data-fid"], "ftype": a.get("data-ftype"), "controls": []})
             self._item = None
+        if "data-rank-n" in a and self.fields:
+            # The ranking's slot budget, which the script reads off the
+            # same attribute to cap "add" clicks.
+            self.fields[-1]["slots"] = int(a["data-rank-n"] or 0)
+        if "ae-rank-ranked" in (a.get("class") or ""):
+            # Rows rendered INSIDE the ranked <ol> (a `suggested` order
+            # pre-populates it) are already the answer the script reads
+            # at submit — the simulator must see them without a _fill,
+            # or it claims an untouched form posts nothing when the real
+            # widget posts the proposal (review finding, 2026-08-16).
+            self._in_ranked = True
+        elif "ae-rank-pool" in (a.get("class") or ""):
+            self._in_ranked = False
         if "data-item" in a and self.fields:
             # A triage row: subsequent controls belong to this item, the
             # way the submit script scopes its per-row query.
             self._item = a["data-item"]
         if "data-control" in a and self.fields:
             controls = self.fields[-1]["controls"]
+            if self._in_ranked and tag == "input":
+                self.fields[-1].setdefault("ranked", []).append(a.get("value", "") or "")
             if tag == "input":
                 controls.append(
                     {
@@ -133,7 +149,11 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
         if field["ftype"] == "ranking":
             # Ranking: the user moves rows into the ranked list in the
             # answer's order — the DOM order the script reads at submit.
-            field["ranked"] = [v for v in wanted if v in {c["value"] for c in field["controls"]}]
+            # The script refuses an "add" past the slot budget, so the
+            # simulator caps too rather than modelling a fill no user
+            # could perform.
+            picked = [v for v in wanted if v in {c["value"] for c in field["controls"]}]
+            field["ranked"] = picked[: field.get("slots", len(picked))]
             continue
         for ctl in field["controls"]:
             if ctl["type"] in ("checkbox", "radio"):
@@ -281,3 +301,28 @@ class TestFieldIdRoundTrip:
         with pytest.raises(FormValidationError) as excinfo:
             collect_form_response(form, payload["answers"])
         assert "feature_name" in str(excinfo.value)
+
+
+class TestReviewFindings:
+    """Regressions pinned from the 2026-08-16 five-lens review: the
+    simulator diverged from the real submit script on rankings — it
+    never read rows pre-populated in the ranked <ol> and it filled past
+    the slot budget the script caps at."""
+
+    def test_untouched_suggested_ranking_posts_the_proposal(self) -> None:
+        """The reference form's ranking carries a `suggested` order, so
+        its rows render INSIDE the ranked <ol> — an untouched submit
+        posts the proposal (the visible badge plus the submit IS the
+        confirmation, D2-c), never nothing."""
+        form, dom = _render_reference()
+        payload = _submit(dom)  # untouched
+        assert payload["answers"]["rollout_order"] == ["staging", "canary", "eu-prod"]
+
+    def test_fill_caps_ranking_at_the_slot_budget(self) -> None:
+        """The script refuses an "add" past `data-rank-n`; the simulator
+        must model the same cap rather than a fill no user could
+        perform."""
+        _, dom = _render_reference()
+        _fill(dom, {"rollout_order": ["us-prod", "eu-prod", "canary", "staging"]})
+        field = next(f for f in dom.fields if f["fid"] == "rollout_order")
+        assert field["ranked"] == ["us-prod", "eu-prod", "canary"]
