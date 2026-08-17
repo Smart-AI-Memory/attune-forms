@@ -26,8 +26,10 @@ from attune_forms.models import (
     FormSchema,
     QuestionType,
     _consequences_summary,
+    expansion_items,
+    item_context,
     ranking_slot_count,
-    triage_item_key,
+    suggested_pick,
 )
 
 
@@ -123,17 +125,16 @@ def form_to_elicitation_schema(form: FormSchema) -> dict[str, Any]:
             # so a triage board flattens to one enum property per item
             # (``"<id>.<label>"``); ``collect_form_response`` folds the
             # dotted keys back into the {label: disposition} answer.
-            for item in q.triage_items or []:
-                key = triage_item_key(item)
+            for key, item in expansion_items(q):
                 prop: dict[str, Any] = {
                     "title": f"{q.text} — {item.get('label', '')}",
                     "type": "string",
                     "enum": list(q.dispositions or []),
                 }
-                context = " · ".join(b for b in (item.get("tag"), item.get("detail")) if b)
+                context = item_context(q, item)
                 if context:
                     prop["description"] = context
-                pick = (q.suggested or {}).get(key)
+                pick = suggested_pick(q, key)
                 if pick is not None:
                     prop["default"] = pick
                 properties[f"{q.id}.{key}"] = prop
@@ -146,17 +147,16 @@ def form_to_elicitation_schema(form: FormSchema) -> dict[str, Any]:
             # edit lane (``"<id>.<key>.text"``); the fold keeps the text
             # only when the ruling is edit, and the validator requires it
             # then.
-            for item in q.assumptions or []:
-                key = triage_item_key(item)
+            for key, item in expansion_items(q):
                 prop = {
                     "title": f"{q.text} — {item.get('label', '')}",
                     "type": "string",
                     "enum": list(ASSUMPTION_RULINGS),
                 }
-                context = " · ".join(b for b in (item.get("source"), item.get("detail")) if b)
+                context = item_context(q, item)
                 if context:
                     prop["description"] = context
-                pick = (q.suggested or {}).get(key) if isinstance(q.suggested, dict) else None
+                pick = suggested_pick(q, key)
                 if pick is not None:
                     prop["default"] = pick
                 properties[f"{q.id}.{key}"] = prop

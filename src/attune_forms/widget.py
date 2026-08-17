@@ -31,8 +31,9 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    expansion_items,
     ranking_slot_count,
-    triage_item_key,
+    suggested_pick,
 )
 from attune_forms.theme import CSS_BASE as _CSS_BASE
 from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
@@ -287,18 +288,16 @@ def _control_triage_html(q: FormQuestion) -> str:
     ``data-item`` so the submit script can rebuild the
     ``{label: disposition}`` mapping generically.
     """
-    suggested = q.suggested or {}
     rows = ""
-    for idx, item in enumerate(q.triage_items or []):
+    for idx, (key, item) in enumerate(expansion_items(q)):
         label = item.get("label", "")
-        key = triage_item_key(item)
         tag = f'<span class="ae-triage-tag">{_esc(item["tag"])}</span>' if item.get("tag") else ""
         detail = (
             f'<span class="ae-triage-detail">{_esc(item["detail"])}</span>'
             if item.get("detail")
             else ""
         )
-        pick = suggested.get(key)
+        pick = suggested_pick(q, key)
         opts = ""
         for disposition in q.dispositions or []:
             checked = " checked" if pick == disposition else ""
@@ -425,11 +424,9 @@ def _control_assumption_review_html(q: FormQuestion) -> str:
     ``{key: ruling}`` mapping generically; the text input is
     ``data-control`` too, so the round-trip simulator sees it.
     """
-    suggested = q.suggested if isinstance(q.suggested, dict) else {}
     rows = ""
-    for idx, item in enumerate(q.assumptions or []):
+    for idx, (key, item) in enumerate(expansion_items(q)):
         label = item.get("label", "")
-        key = triage_item_key(item)
         source = (
             f'<span class="ae-assume-src">from {_esc(item["source"])}</span>'
             if item.get("source")
@@ -440,7 +437,7 @@ def _control_assumption_review_html(q: FormQuestion) -> str:
             if item.get("detail")
             else ""
         )
-        pick = suggested.get(key)
+        pick = suggested_pick(q, key)
         opts = ""
         for ruling in ASSUMPTION_RULINGS:
             checked = " checked" if pick == ruling else ""
