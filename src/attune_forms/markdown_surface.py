@@ -26,8 +26,9 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    expansion_items,
     ranking_slot_count,
-    triage_item_key,
+    suggested_pick,
 )
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
@@ -102,14 +103,13 @@ def _triage_lines(q: FormQuestion) -> list[str]:
     """Item rows + the shared ruling vocabulary for a TRIAGE question."""
     vocabulary = " / ".join(f"`{d}`" for d in q.dispositions or [])
     lines = [f"Rule each item as one of: {vocabulary}"]
-    suggested = q.suggested or {}
-    for item in q.triage_items or []:
-        key = triage_item_key(item)
+    for key, item in expansion_items(q):
         tag = f" `{item['tag']}`" if item.get("tag") else ""
         detail = f" — {item['detail']}" if item.get("detail") else ""
         line = f"- **{item.get('label', '')}**{tag}{detail}"
-        if key in suggested:
-            line += f" → suggested: `{suggested[key]}`"
+        pick = suggested_pick(q, key)
+        if pick is not None:
+            line += f" → suggested: `{pick}`"
         lines.append(line)
     return lines
 
@@ -129,14 +129,13 @@ def _assumption_lines(q: FormQuestion) -> list[str]:
     """Assumption rows + the fixed ruling rule for an ASSUMPTION_REVIEW."""
     accept, edit, reject = ASSUMPTION_RULINGS
     lines = [f"Rule each assumption: `{accept}` / `{edit}: <replacement text>` / `{reject}`"]
-    suggested = q.suggested if isinstance(q.suggested, dict) else {}
-    for item in q.assumptions or []:
-        key = triage_item_key(item)
+    for key, item in expansion_items(q):
         detail = f" — {item['detail']}" if item.get("detail") else ""
         source = f" *(from {item['source']})*" if item.get("source") else ""
         line = f"- **{item.get('label', '')}**{detail}{source}"
-        if key in suggested:
-            line += f" → suggested: `{suggested[key]}`"
+        pick = suggested_pick(q, key)
+        if pick is not None:
+            line += f" → suggested: `{pick}`"
         lines.append(line)
     return lines
 
@@ -238,17 +237,8 @@ def _skeleton_value(q: FormQuestion) -> Any:
         # The proposed order prefills (a visible proposal — the reply
         # rules say typed shorthand overrides it); else an empty list.
         return list(q.suggested) if isinstance(q.suggested, list) else []
-    if q.type == QuestionType.TRIAGE:
-        return {
-            triage_item_key(item): (q.suggested or {}).get(triage_item_key(item))
-            for item in q.triage_items or []
-        }
-    if q.type == QuestionType.ASSUMPTION_REVIEW:
-        suggested = q.suggested if isinstance(q.suggested, dict) else {}
-        return {
-            triage_item_key(item): suggested.get(triage_item_key(item))
-            for item in q.assumptions or []
-        }
+    if q.type in (QuestionType.TRIAGE, QuestionType.ASSUMPTION_REVIEW):
+        return {key: suggested_pick(q, key) for key, _ in expansion_items(q)}
     # `is not None`, never truthiness: a falsy default (0, "") is still
     # a default, not "unanswered" (review finding, 2026-08-14).
     if q.default is not None:

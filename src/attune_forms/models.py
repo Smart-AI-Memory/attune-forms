@@ -167,6 +167,60 @@ def triage_item_key(item: dict[str, str]) -> str:
     return item.get("id") or item.get("label", "")
 
 
+#: The options a CONFIRM carries when the author names none. Exactly
+#: two, always — the gate is two-way by ruling (confirm-construct D1).
+#: Single-sourced here so ``form_from_dict`` and a directly-built
+#: :class:`FormQuestion` default identically (0.5.0 cleanup batch).
+CONFIRM_DEFAULT_OPTIONS = ("Approve", "Abort")
+
+
+def expansion_items(question: "FormQuestion") -> list[tuple[str, dict[str, str]]]:
+    """The reviewed rows of an item-keyed construct as ``(key, item)``
+    pairs — TRIAGE's ``triage_items`` or ASSUMPTION_REVIEW's
+    ``assumptions``, keyed by :func:`triage_item_key`.
+
+    Every surface that expands per item (AskUserQuestion payloads, the
+    elicitation schema, markdown rows, the collect-time fold and
+    validators) iterates through this one function, so the item set and
+    its keys can never differ between surfaces (0.5.0 cleanup batch:
+    triage-expansion unification).
+    """
+    if question.type is QuestionType.TRIAGE:
+        items = question.triage_items
+    elif question.type is QuestionType.ASSUMPTION_REVIEW:
+        items = question.assumptions
+    else:
+        items = None
+    return [(triage_item_key(item), item) for item in items or []]
+
+
+def suggested_pick(question: "FormQuestion", key: str) -> str | None:
+    """The agent's proposed value for one expanded row, or ``None``.
+
+    ``suggested`` is a union type (mapping for item-keyed constructs, a
+    list for RANKING) — this guard belongs in exactly one place: a
+    direct-built question carrying the wrong shape degrades to "no
+    suggestion" instead of crashing whichever surface forgot its own
+    isinstance check (0.5.0 cleanup batch: helper dedup).
+    """
+    if isinstance(question.suggested, dict):
+        return question.suggested.get(key)
+    return None
+
+
+def item_context(question: "FormQuestion", item: dict[str, str]) -> str | None:
+    """The one-line context of an expanded row, or ``None`` when bare.
+
+    TRIAGE rows carry ``tag · detail``, ASSUMPTION_REVIEW rows
+    ``source · detail`` — the same join every flat surface shows
+    (AskUserQuestion help text, elicitation property description).
+    Markdown keeps its own per-field decoration deliberately.
+    """
+    fields = ("tag", "detail") if question.type is QuestionType.TRIAGE else ("source", "detail")
+    joined = " · ".join(b for b in (item.get(f) for f in fields) if b)
+    return joined or None
+
+
 # =============================================================================
 # Form Components
 # =============================================================================
@@ -283,6 +337,18 @@ class FormQuestion:
     inferred_from: str | None = None
     top_n: int | None = None
     assumptions: list[dict[str, str]] | None = None
+
+    def __post_init__(self) -> None:
+        """Default a CONFIRM's options to the two-way gate.
+
+        ``form_from_dict`` has always defaulted them; a directly-built
+        question skipped that path and rendered a gate with no options
+        (0.5.0 review, queued with the cleanup batch). The gate is
+        two-way by ruling (confirm-construct D1) on every construction
+        path.
+        """
+        if self.type is QuestionType.CONFIRM and not self.options:
+            self.options = list(CONFIRM_DEFAULT_OPTIONS)
 
     def _fallback_help(self) -> str | None:
         """Help text for AskUserQuestion, carrying any inference provenance.
@@ -444,21 +510,15 @@ class FormQuestion:
             # offered; the collect-time fold keeps it only when the ruling
             # is edit, and the validator requires it then.
             payloads: list[dict[str, Any]] = []
-            for item in self.assumptions or []:
-                key = triage_item_key(item)
-                context = " · ".join(b for b in (item.get("source"), item.get("detail")) if b)
+            for key, item in expansion_items(self):
                 payloads.append(
                     {
                         "question_id": f"{self.id}.{key}",
                         "question": f"{self.text} — {item.get('label', '')}",
                         "type": "single_select",
                         "options": list(ASSUMPTION_RULINGS),
-                        "default": (
-                            (self.suggested or {}).get(key)
-                            if isinstance(self.suggested, dict)
-                            else None
-                        ),
-                        "help_text": context or None,
+                        "default": suggested_pick(self, key),
+                        "help_text": item_context(self, item),
                     }
                 )
                 payloads.append(
@@ -475,17 +535,15 @@ class FormQuestion:
         if self.type is not QuestionType.TRIAGE:
             return [self.to_ask_user_format()]
         payloads = []
-        for item in self.triage_items or []:
-            key = triage_item_key(item)
-            context = " · ".join(b for b in (item.get("tag"), item.get("detail")) if b)
+        for key, item in expansion_items(self):
             payloads.append(
                 {
                     "question_id": f"{self.id}.{key}",
                     "question": f"{self.text} — {item.get('label', '')}",
                     "type": "single_select",
                     "options": list(self.dispositions or []),
-                    "default": (self.suggested or {}).get(key),
-                    "help_text": context or None,
+                    "default": suggested_pick(self, key),
+                    "help_text": item_context(self, item),
                 }
             )
         return payloads

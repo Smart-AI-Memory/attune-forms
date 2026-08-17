@@ -29,6 +29,7 @@ from attune_forms.models import (
     FormSchema,
     QuestionType,
     decimal_key_number,
+    expansion_items,
     ranking_slot_count,
     triage_item_key,
 )
@@ -1379,7 +1380,7 @@ def _validate_triage(question: FormQuestion, value: Any) -> str | None:
     """
     if not isinstance(value, dict):
         return f"{question.id!r} expects a mapping of item key -> disposition"
-    keys = [triage_item_key(it) for it in question.triage_items or []]
+    keys = [k for k, _ in expansion_items(question)]
     unknown = [k for k in value if k not in keys]
     if unknown:
         return f"{question.id!r} has unknown item(s): {unknown}"
@@ -1427,7 +1428,7 @@ def _validate_assumption_review(question: FormQuestion, value: Any) -> str | Non
     """
     if not isinstance(value, dict):
         return f"{question.id!r} expects a mapping of assumption key -> ruling"
-    keys = [triage_item_key(it) for it in question.assumptions or []]
+    keys = [k for k, _ in expansion_items(question)]
     unknown = [k for k in value if k not in keys]
     if unknown:
         return f"{question.id!r} has unknown assumption(s): {unknown}"

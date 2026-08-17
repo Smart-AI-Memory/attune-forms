@@ -4,6 +4,29 @@ All notable changes to attune-forms are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- A directly-built CONFIRM (constructed in Python rather than through
+  `form_from_dict`) now defaults its options to the two-way gate
+  (`Approve` / `Abort`) like every other construction path — before,
+  it rendered a gate nothing could approve (0.5.0 review, queued with
+  the cleanup batch); `CONFIRM_DEFAULT_OPTIONS` is single-sourced in
+  `models`
+- A directly-built item-keyed construct carrying the wrong `suggested`
+  shape (a list where a mapping belongs) degrades to "no suggestion"
+  on every surface instead of crashing the elicitation schema
+
+### Changed
+- Item-keyed expansion unified (0.5.0 cleanup batch): every surface —
+  AskUserQuestion payloads, the elicitation schema, markdown rows and
+  skeleton, the widget rows, and the validators — iterates TRIAGE and
+  ASSUMPTION_REVIEW rows through one set of shared helpers
+  (`expansion_items` / `suggested_pick` / `item_context` in `models`),
+  so the item set, its keys, the suggested lookup, and the context
+  line can never differ between surfaces. Rendering output is
+  byte-identical; presentation stays per-surface
+
 ## [0.6.0] — 2026-08-16
 
 The backlog-constructs release: the communication grammar grows from
