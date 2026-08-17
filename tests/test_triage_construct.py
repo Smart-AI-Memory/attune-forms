@@ -254,8 +254,10 @@ class TestTriageWidget:
 
     def test_submit_script_rebuilds_the_mapping(self) -> None:
         html = form_to_widget_html(form_from_dict(_triage()))
-        assert "ftype === 'triage'" in html
-        assert "ae-triage-row" in html.split("<script>")[1]
+        assert 'data-collect="rulings"' in html
+        script = html.split("<script>")[1]
+        assert "mode === 'rulings'" in script
+        assert "data-item" in script  # rows scoped generically, not by class
 
     def test_labels_and_dispositions_are_escaped(self) -> None:
         html = form_to_widget_html(

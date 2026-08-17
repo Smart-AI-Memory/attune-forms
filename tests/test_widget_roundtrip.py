@@ -3,7 +3,7 @@
 Exercises the real renderer→validator loop the manual live-widget
 ritual guards: ``form_to_widget_html`` emits the DOM + submit script;
 a small DOM simulator reads the emitted HTML the way the submit
-script's reader does (by ``data-fid`` / ``data-ftype`` /
+script's reader does (by ``data-fid`` / ``data-collect`` /
 ``data-control``); the resulting payload is validated through
 ``collect_form_response``, asserting the ``__elicitation_response__``
 sentinel contract and the field-id round trip.
@@ -35,20 +35,26 @@ from attune_forms import (
 )
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 
-#: data-ftype values the submit script special-cases (read from a
-#: checked control rather than the generic first-control tail).
-_CHECKED_FTYPES = {"decision", "pushback", "progress", "deliberation", "confirm"}
-
-#: data-ftype values whose answer is a collection the script rebuilds
-#: from several controls (checked boxes, per-row radios, ranked rows,
-#: per-row radios + a paired text box).
-_COLLECTION_FTYPES = {"multi_select", "triage", "ranking", "assumption_review"}
+#: The full ``data-collect`` vocabulary the renderer can emit — HOW the
+#: submit script reads each field's answer out of the DOM (mirrors
+#: ``widget._COLLECT_MODES`` plus its ``value`` default). The script
+#: switches on the attribute, never on the construct type; ``value`` is
+#: the switch's else-tail (read the field's one control directly), so it
+#: never appears as a literal case in the script.
+_COLLECT_VOCABULARY = {
+    "value",
+    "checked-one",
+    "checked-many",
+    "rulings",
+    "ranked",
+    "rulings-with-text",
+}
 
 
 class _WidgetDOM(HTMLParser):
     """Parse the emitted widget HTML into fields the way the submit
     script sees them: ``.ae-field`` wrappers carrying ``data-fid`` /
-    ``data-ftype``, each holding its ``[data-control]`` elements."""
+    ``data-collect``, each holding its ``[data-control]`` elements."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -68,7 +74,14 @@ class _WidgetDOM(HTMLParser):
         elif tag == "script":
             self._in_script = True
         if "data-fid" in a:
-            self.fields.append({"fid": a["data-fid"], "ftype": a.get("data-ftype"), "controls": []})
+            self.fields.append(
+                {
+                    "fid": a["data-fid"],
+                    "ftype": a.get("data-ftype"),
+                    "collect": a.get("data-collect"),
+                    "controls": [],
+                }
+            )
             self._item = None
         if "data-rank-n" in a and self.fields:
             # The ranking's slot budget, which the script reads off the
@@ -146,7 +159,7 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
                     ctl["value"] = ruling.get("edit", "")
             continue
         wanted = [str(v) for v in (value if isinstance(value, list) else [value])]
-        if field["ftype"] == "ranking":
+        if field["collect"] == "ranked":
             # Ranking: the user moves rows into the ranked list in the
             # answer's order — the DOM order the script reads at submit.
             # The script refuses an "add" past the slot budget, so the
@@ -167,21 +180,22 @@ def _fill(dom: _WidgetDOM, answers: dict[str, Any]) -> None:
 
 
 def _submit(dom: _WidgetDOM) -> dict[str, Any]:
-    """Build the payload the submit script posts, per its reader logic."""
+    """Build the payload the submit script posts, per its reader logic:
+    a switch on each field's ``data-collect`` mode."""
     answers: dict[str, Any] = {}
     for field in dom.fields:
-        fid, ftype, controls = field["fid"], field["ftype"], field["controls"]
-        if ftype == "multi_select":
+        fid, mode, controls = field["fid"], field["collect"], field["controls"]
+        if mode == "checked-many":
             answers[fid] = [c["value"] for c in controls if c.get("checked")]
-        elif ftype == "triage":
+        elif mode == "checked-one":
+            picked = next((c for c in controls if c.get("checked")), None)
+            if picked:
+                answers[fid] = picked["value"]
+        elif mode == "rulings":
             rulings = {c["item"]: c["value"] for c in controls if c.get("checked")}
             if rulings:
                 answers[fid] = rulings
-        elif ftype == "ranking":
-            # The ranked list's rows in DOM order; untouched posts nothing.
-            if field.get("ranked"):
-                answers[fid] = list(field["ranked"])
-        elif ftype == "assumption_review":
+        elif mode == "rulings-with-text":
             rulings: dict[str, Any] = {}
             texts = {c["item"]: c["value"] for c in controls if c["type"] == "text"}
             for c in controls:
@@ -192,20 +206,19 @@ def _submit(dom: _WidgetDOM) -> dict[str, Any]:
                     )
             if rulings:
                 answers[fid] = rulings
-        elif ftype in _CHECKED_FTYPES:
-            picked = next((c for c in controls if c.get("checked")), None)
-            if picked:
-                answers[fid] = picked["value"]
+        elif mode == "ranked":
+            # The ranked list's rows in DOM order; untouched posts nothing.
+            if field.get("ranked"):
+                answers[fid] = list(field["ranked"])
         else:
+            # 'value': the field's one control, read directly; a number
+            # input posts a Number (the control type, not the construct,
+            # decides).
             if not controls:
                 continue
             el = controls[0]
-            if el["type"] == "radio":
-                picked = next((c for c in controls if c.get("checked")), None)
-                if picked:
-                    answers[fid] = picked["value"]
-            elif el["value"] != "":
-                answers[fid] = float(el["value"]) if ftype == "number" else el["value"]
+            if el["value"] != "":
+                answers[fid] = float(el["value"]) if el["type"] == "number" else el["value"]
     payload = {WIDGET_RESPONSE_MARKER: True, "title": dom.title, "answers": answers}
     # The payload must survive the JSON.stringify → agent-parse hop.
     return json.loads(json.dumps(payload))
@@ -231,12 +244,17 @@ class TestSentinelContract:
         assert payload[WIDGET_RESPONSE_MARKER] is True
         assert payload["title"] == form.title
 
-    def test_script_special_cases_cover_the_construct_types(self) -> None:
-        """Drift catcher: every ftype the script must read from a checked
-        control is actually special-cased in the emitted reader."""
+    def test_script_switch_covers_the_emitted_collect_modes(self) -> None:
+        """Drift catcher: the ``data-collect`` modes the renderer emits
+        and the cases the emitted reader switches on are both exactly
+        the pinned vocabulary (``value`` is the switch's else-tail, so
+        it never appears as a literal case). A new construct type must
+        reuse a handled mode — or add its case to the script AND here."""
         _, dom = _render_reference()
-        handled = set(re.findall(r"ftype === '(\w+)'", dom.script))
-        assert _CHECKED_FTYPES | _COLLECTION_FTYPES <= handled
+        handled = set(re.findall(r"mode === '([\w-]+)'", dom.script)) | {"value"}
+        emitted = {f["collect"] for f in dom.fields}
+        assert emitted == _COLLECT_VOCABULARY  # reference form spans it
+        assert handled == _COLLECT_VOCABULARY
 
 
 class TestFieldIdRoundTrip:
@@ -292,6 +310,34 @@ class TestFieldIdRoundTrip:
         assert payload["answers"]["route"] == spicy
         response = collect_form_response(form, payload["answers"])
         assert response.responses["route"] == spicy
+
+    def test_list_style_single_select_collects_as_checked_one(self) -> None:
+        """A ``list_style`` SINGLE_SELECT renders radios, not a native
+        ``<select>`` — its field must emit ``data-collect="checked-one"``
+        so the reader picks the checked radio (the render-time mode
+        switch is what replaced the reader's old radio sniffing), and
+        the answer must round-trip."""
+        form = form_from_dict(
+            {
+                "title": "List pick",
+                "fields": [
+                    {
+                        "id": "route",
+                        "type": "single_select",
+                        "text": "Which route?",
+                        "options": ["a", "b"],
+                        "list_style": "ordered",
+                    }
+                ],
+            }
+        )
+        dom = _WidgetDOM()
+        dom.feed(form_to_widget_html(form, instance_id="ls"))
+        assert dom.fields[0]["collect"] == "checked-one"
+        _fill(dom, {"route": "b"})
+        payload = _submit(dom)
+        response = collect_form_response(form, payload["answers"])
+        assert response.responses["route"] == "b"
 
     def test_unanswered_required_fields_fail_validation_by_name(self) -> None:
         """R4 seam: an empty submit must be rejected naming the missing

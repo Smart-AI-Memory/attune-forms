@@ -5,7 +5,8 @@
       "name": "widget-preview",
       "runtimeExecutable": "python3",
       "runtimeArgs": [".claude/preview_widget.py"],
-      "port": 8642
+      "port": 8642,
+      "autoPort": true
     }
   ]
 }

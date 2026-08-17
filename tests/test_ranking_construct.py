@@ -169,6 +169,7 @@ class TestRankingSurfaces:
     def test_widget_renders_pool_and_empty_ranked_list(self) -> None:
         html = form_to_widget_html(form_from_dict(_ranking(top_n=2)), instance_id="r")
         assert 'data-ftype="ranking"' in html
+        assert 'data-collect="ranked"' in html
         assert 'data-rank-n="2"' in html
         ranked = html.split('class="ae-rank-ranked"')[1].split("</ol>")[0]
         pool = html.split('class="ae-rank-pool"')[1].split("</ul>")[0]
@@ -187,7 +188,7 @@ class TestRankingSurfaces:
     def test_widget_script_reads_ranked_order_and_moves_rows(self) -> None:
         html = form_to_widget_html(form_from_dict(_ranking()), instance_id="r")
         script = html.split("<script>")[1]
-        assert "ftype === 'ranking'" in script
+        assert "mode === 'ranked'" in script
         assert ".ae-rank-ranked [data-control]" in script
         for action in ("add", "up", "down", "drop"):
             assert f"'{action}'" in script
