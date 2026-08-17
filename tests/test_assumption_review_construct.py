@@ -208,6 +208,7 @@ class TestSurfaces:
         )
         body = html.split("</style>")[1].split("<script>")[0]
         assert 'data-ftype="assumption_review"' in body
+        assert 'data-collect="rulings-with-text"' in body
         assert body.count("data-assume-row") == 3
         for ruling in ASSUMPTION_RULINGS:
             assert f'data-assume="{ruling}"' in body
@@ -219,7 +220,7 @@ class TestSurfaces:
     def test_widget_script_reads_rulings_and_reveals_edit(self) -> None:
         html = form_to_widget_html(form_from_dict(_review()), instance_id="a")
         script = html.split("<script>")[1]
-        assert "ftype === 'assumption_review'" in script
+        assert "mode === 'rulings-with-text'" in script
         assert "ae-assume-editing" in script
         assert "edit: (t ? t.value : '')" in script
 

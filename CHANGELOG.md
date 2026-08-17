@@ -18,6 +18,16 @@ follow [SemVer](https://semver.org/).
   on every surface instead of crashing the elicitation schema
 
 ### Changed
+- Widget submit script reworked from a per-ftype if/else reader into a
+  `data-collect` attribute switch (0.5.0 cleanup batch): each rendered
+  field now carries `data-collect`
+  (`value` / `checked-one` / `checked-many` / `rulings` / `ranked` /
+  `rulings-with-text`), emitted at render time from a per-type map, and
+  the script switches on that attribute — so a new construct type that
+  answers like an existing one registers its mode in `_COLLECT_MODES`
+  and needs NO script edit. The round-trip simulator mirrors the same
+  switch; the drift catcher now pins the emitted modes against the
+  script's cases. Posted payloads are unchanged
 - Item-keyed expansion unified (0.5.0 cleanup batch): every surface —
   AskUserQuestion payloads, the elicitation schema, markdown rows and
   skeleton, the widget rows, and the validators — iterates TRIAGE and

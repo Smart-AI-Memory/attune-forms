@@ -181,9 +181,9 @@ class TestProgressWidget:
         html = form_to_widget_html(form_from_dict(_progress()))
         assert 'data-ftype="progress"' in html
 
-    def test_submit_script_handles_progress(self) -> None:
+    def test_progress_collects_as_checked_one(self) -> None:
         html = form_to_widget_html(form_from_dict(_progress()))
-        assert "ftype === 'progress'" in html
+        assert 'data-collect="checked-one"' in html
         assert "[data-control]:checked" in html
 
     def test_static_fallback_guard_present(self) -> None:

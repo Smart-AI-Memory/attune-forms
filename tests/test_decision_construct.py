@@ -119,9 +119,9 @@ class TestDecisionWidget:
         html = form_to_widget_html(form_from_dict(_decision()))
         assert 'data-ftype="decision"' in html
 
-    def test_submit_script_has_decision_branch(self) -> None:
+    def test_decision_collects_as_checked_one(self) -> None:
         html = form_to_widget_html(form_from_dict(_decision()))
-        assert "ftype === 'decision'" in html
+        assert 'data-collect="checked-one"' in html
         assert "[data-control]:checked" in html
 
     def test_static_fallback_guard_present(self) -> None:

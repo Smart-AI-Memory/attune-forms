@@ -139,8 +139,10 @@ class TestConfirmSurfaces:
         assert "If approved:" in html
         assert 'class="ae-gate-tag"' in html  # severity badge
         assert 'data-ftype="confirm"' in html
-        assert "ftype === 'confirm'" in html
-        assert "checked" not in html.split("<script>")[0]  # nothing pre-selected
+        assert 'data-collect="checked-one"' in html
+        # Nothing pre-selected: no control carries the checked ATTRIBUTE
+        # (always space-prefixed; data-collect="checked-one" is not a hit).
+        assert " checked" not in html.split("<script>")[0]
 
     def test_consequence_text_is_escaped(self) -> None:
         html = form_to_widget_html(

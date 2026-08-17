@@ -568,6 +568,38 @@ def _control_html(q: FormQuestion) -> str:
     return _CONTROL_RENDERERS.get(q.type, _control_text_input_html)(q)
 
 
+#: Per-type ``data-collect`` mode: HOW the submit script reads a field's
+#: answer out of the DOM. Emitted on the field wrapper at render time;
+#: the script switches on the attribute, never on the construct type —
+#: so a new construct that answers like an existing one (one checked
+#: radio, a ranked list, per-row rulings…) registers its mode here and
+#: needs NO script edit. Types absent here collect as ``value`` (the
+#: switch's else-tail: read the field's one control directly).
+_COLLECT_MODES: dict[QuestionType, str] = {
+    QuestionType.DECISION: "checked-one",
+    QuestionType.PUSHBACK: "checked-one",
+    QuestionType.DELIBERATION: "checked-one",
+    QuestionType.PROGRESS: "checked-one",
+    QuestionType.CONFIRM: "checked-one",
+    QuestionType.MULTI_SELECT: "checked-many",
+    QuestionType.TRIAGE: "rulings",
+    QuestionType.ASSUMPTION_REVIEW: "rulings-with-text",
+    QuestionType.RANKING: "ranked",
+}
+
+
+def _collect_mode(q: FormQuestion) -> str:
+    """Return the ``data-collect`` mode for one question's field.
+
+    SINGLE_SELECT is the one type whose mode depends on presentation:
+    a ``list_style`` list renders radios (read the checked one), the
+    default renders a native ``<select>`` (read its value).
+    """
+    if q.type == QuestionType.SINGLE_SELECT and q.list_style:
+        return "checked-one"
+    return _COLLECT_MODES.get(q.type, "value")
+
+
 def _checked(q: FormQuestion, opt: str) -> str:
     """Return ``checked`` if ``opt`` is the question's default selection."""
     return " checked" if q.default is not None and opt == q.default else ""
@@ -614,7 +646,8 @@ def _field_html(q: FormQuestion) -> str:
     required_attr = ' data-required="1"' if q.required else ""
     return (
         f'<div class="ae-field" data-fid="{_esc(q.id)}" '
-        f'data-ftype="{_esc(q.type.value)}"{inferred_attr}{required_attr}>'
+        f'data-ftype="{_esc(q.type.value)}" data-collect="{_collect_mode(q)}"'
+        f"{inferred_attr}{required_attr}>"
         f'<label class="ae-label">{_esc(q.text)}{req}</label>'
         f"{help_html}{inferred_html}{_control_html(q)}{rationale_html}</div>"
     )
@@ -675,8 +708,10 @@ def form_to_widget_html(
 
     All form-supplied text is HTML-escaped, and no form data is
     interpolated into executable script — the submit handler reads the
-    DOM generically by ``data-*`` attributes — so a malicious label or
-    option cannot inject markup or script.
+    DOM generically by ``data-*`` attributes (each field's
+    ``data-collect`` names HOW its answer is read — see
+    :data:`_COLLECT_MODES`) — so a malicious label or option cannot
+    inject markup or script.
 
     Element ids are suffixed per render so two forms shown on the same
     page (e.g. a demo's basic + advanced beats) never collide in the
@@ -765,63 +800,61 @@ def form_to_widget_html(
   }});
   btn.addEventListener('click', function() {{
     var answers = {{}};
+    // The reader switches on data-collect — HOW to read the answer —
+    // never on the construct type, so a new construct that answers like
+    // an existing one needs no edit here (it registers its mode at
+    // render time, in _COLLECT_MODES).
     form.querySelectorAll('.ae-field').forEach(function(f) {{
       var fid = f.getAttribute('data-fid');
-      var ftype = f.getAttribute('data-ftype');
-      if (ftype === 'multi_select') {{
+      var mode = f.getAttribute('data-collect');
+      if (mode === 'checked-many') {{
         var vals = [];
         f.querySelectorAll('[data-control]:checked').forEach(function(c) {{
           vals.push(c.value);
         }});
         answers[fid] = vals;
-      }} else if (ftype === 'decision' || ftype === 'pushback' ||
-          ftype === 'progress' || ftype === 'deliberation' ||
-          ftype === 'confirm') {{
-        // progress: the answer is the selected blocked item; when nothing
-        // is blocked there is no radio and no answer is posted (display-only).
+      }} else if (mode === 'checked-one') {{
+        // the one checked radio; with nothing checked no answer is
+        // posted (e.g. a progress report with nothing blocked is
+        // display-only).
         var picked = f.querySelector('[data-control]:checked');
         if (picked) answers[fid] = picked.value;
-      }} else if (ftype === 'triage') {{
-        // triage: rebuild {{item key: disposition}} from the per-row
+      }} else if (mode === 'rulings') {{
+        // rebuild {{item key: ruling}} from the per-row ([data-item])
         // pickers; rows left unruled are simply absent.
         var rulings = {{}};
-        f.querySelectorAll('.ae-triage-row').forEach(function(r) {{
+        f.querySelectorAll('[data-item]').forEach(function(r) {{
           var p = r.querySelector('[data-control]:checked');
           if (p) rulings[r.getAttribute('data-item')] = p.value;
         }});
         if (Object.keys(rulings).length) answers[fid] = rulings;
-      }} else if (ftype === 'assumption_review') {{
-        // assumption review: {{item key: 'accept' | 'reject' | {{edit: text}}}}
-        // from the per-row pickers; an edit carries the row's text box
-        // (empty text is posted as-is — the validator names it).
+      }} else if (mode === 'rulings-with-text') {{
+        // rulings plus an edit lane: {{item key: ruling | {{edit: text}}}}
+        // — an edit ruling carries the row's text box (empty text is
+        // posted as-is — the validator names it).
         var rulings = {{}};
-        f.querySelectorAll('[data-assume-row]').forEach(function(r) {{
+        f.querySelectorAll('[data-item]').forEach(function(r) {{
           var p = r.querySelector('input[type=radio][data-control]:checked');
           if (!p) return;
-          var t = r.querySelector('.ae-assume-edit');
+          var t = r.querySelector('input[type=text][data-control]');
           rulings[r.getAttribute('data-item')] =
             (p.value === 'edit') ? {{ edit: (t ? t.value : '') }} : p.value;
         }});
         if (Object.keys(rulings).length) answers[fid] = rulings;
-      }} else if (ftype === 'ranking') {{
-        // ranking: the ranked list's rows in DOM order ARE the answer;
-        // an untouched (empty) ranking posts nothing.
+      }} else if (mode === 'ranked') {{
+        // the ranked list's rows in DOM order ARE the answer; an
+        // untouched (empty) ranking posts nothing.
         var order = [];
         f.querySelectorAll('.ae-rank-ranked [data-control]').forEach(function(c) {{
           order.push(c.value);
         }});
         if (order.length) answers[fid] = order;
       }} else {{
+        // 'value': the field's one control, read directly; a number
+        // input posts a Number (el.type, not the construct, decides).
         var el = f.querySelector('[data-control]');
-        if (!el) return;
-        if (el.type === 'radio') {{
-          // single_select rendered as a list (list_style) — read the
-          // checked radio, not the first control.
-          var picked = f.querySelector('[data-control]:checked');
-          if (picked) answers[fid] = picked.value;
-        }} else if (el.value !== '') {{
-          answers[fid] = (ftype === 'number') ? Number(el.value) : el.value;
-        }}
+        if (!el || el.value === '') return;
+        answers[fid] = (el.type === 'number') ? Number(el.value) : el.value;
       }}
     }});
     // Required-field gate: an unanswered required field must surface a
@@ -830,9 +863,10 @@ def form_to_widget_html(
     var missing = [];
     form.querySelectorAll('.ae-field[data-required]').forEach(function(f) {{
       var v = answers[f.getAttribute('data-fid')];
-      // A required triage board is complete only when EVERY row is ruled;
+      // A required rulings board (triage / assumption review — any
+      // [data-item] rows) is complete only when EVERY row is ruled;
       // a required ranking only when EVERY slot is filled.
-      var rows = f.querySelectorAll('.ae-triage-row').length;
+      var rows = f.querySelectorAll('[data-item]').length;
       var rank = f.querySelector('.ae-rank');
       var slots = rank ? Number(rank.getAttribute('data-rank-n')) : 0;
       // An assumption ruled "edit" with no replacement text is not

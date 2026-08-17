@@ -222,14 +222,14 @@ class TestRequiredGate:
         html = _render(self._FIELDS)
         # scope + probes are required (the default); notes is not.
         assert html.count('data-required="1"') == 2
-        assert 'data-fid="notes" data-ftype="text_input">' in html
+        assert 'data-fid="notes" data-ftype="text_input" data-collect="value">' in html
 
     def test_multi_select_checked_boxes_post_as_array(self):
         html = _render(self._FIELDS)
         script = html[html.index("<script>") :]
-        # The multi_select branch collects every checked control into an
+        # The checked-many branch collects every checked control into an
         # array and posts it under the field id.
-        assert "ftype === 'multi_select'" in script
+        assert "mode === 'checked-many'" in script
         assert "[data-control]:checked" in script
         assert "answers[fid] = vals" in script
 

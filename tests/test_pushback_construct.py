@@ -129,9 +129,9 @@ class TestPushbackWidget:
         html = form_to_widget_html(form_from_dict(_pushback()))
         assert 'data-ftype="pushback"' in html
 
-    def test_submit_script_handles_pushback(self) -> None:
+    def test_pushback_collects_as_checked_one(self) -> None:
         html = form_to_widget_html(form_from_dict(_pushback()))
-        assert "ftype === 'pushback'" in html
+        assert 'data-collect="checked-one"' in html
         assert "[data-control]:checked" in html
 
     def test_static_fallback_guard_present(self) -> None:

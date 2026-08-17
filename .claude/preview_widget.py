@@ -9,6 +9,7 @@ every start; serves stdlib-only on 127.0.0.1.
 
 import functools
 import http.server
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -17,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from attune_forms import REFERENCE_FORM, form_from_dict, form_to_widget_html
 
-PORT = 8642  # 8000/8001 are taken by agent-memory / attune-gui
+# Default 8642 (8000/8001 are taken by agent-memory / attune-gui); the
+# PORT env var wins so parallel sessions can each run their own preview.
+PORT = int(os.environ.get("PORT", "8642"))
 
 out = Path(tempfile.gettempdir()) / "attune_forms_widget_preview"
 out.mkdir(exist_ok=True)

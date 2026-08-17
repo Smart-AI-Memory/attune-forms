@@ -140,9 +140,9 @@ class TestDeliberationWidget:
         html = form_to_widget_html(form_from_dict(_deliberation()))
         assert "Synthesis</span>" in html
 
-    def test_submit_script_reads_deliberation_radio(self) -> None:
+    def test_deliberation_collects_as_checked_one(self) -> None:
         html = form_to_widget_html(form_from_dict(_deliberation()))
-        assert "ftype === 'deliberation'" in html
+        assert 'data-collect="checked-one"' in html
 
     def test_recommended_ordered_first(self) -> None:
         html = form_to_widget_html(form_from_dict(_deliberation()))
