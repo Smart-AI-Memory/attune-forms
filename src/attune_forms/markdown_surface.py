@@ -35,6 +35,7 @@ from attune_forms.models import (
 )
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
+
 def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -> list[str]:
     """Bullet (or numbered) lines for a select-like question's options.
 
