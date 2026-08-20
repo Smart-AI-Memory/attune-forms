@@ -139,6 +139,20 @@ def test_field_schema_default_is_answer_shaped_and_inferred_from_declared():
     assert "inferred_from" in props
 
 
+@pytest.mark.parametrize("bad", ["src/", None, ["src/"], 7], ids=lambda v: type(v).__name__)
+def test_collect_response_import_path_guards_non_dict_answers(bad):
+    """Confirmation pass 1 needs-a-look (2026-08-20): a non-dict
+    ``answers`` raised a raw AttributeError/TypeError when the handler
+    is called as an import — the SDK's jsonschema gate only covers the
+    stdio path, and the attune-ai mirror convergence plan makes import
+    reach real. The module's own contract shape must hold instead."""
+    from attune_forms.mcp_server import handle_collect_response
+
+    result = asyncio.run(handle_collect_response({"form": _FORM, "answers": bad}))
+    assert result["success"] is False
+    assert any("answers" in p for p in result["problems"])
+
+
 def test_schema_accepts_legal_triage_object_default():
     """The exact confirmation-pass-1 repro: a form form_from_dict accepts
     must pass the advertised inputSchema (the SDK validates against it

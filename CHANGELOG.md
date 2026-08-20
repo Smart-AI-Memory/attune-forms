@@ -7,6 +7,20 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Confirmation-pass-1 needs-a-look items (library review, 2026-08-20):
+  - `submission_count()` and `inference_rate()` accept the same
+    optional `home` argument as sibling `surface_mix()` — a
+    configured-home reader (the ops dashboard) now reads the store it
+    displays instead of the process-env one
+  - `inference_rate()` skips a line with a FRACTIONAL count
+    (`question_count: 2.7`) as malformed instead of silently
+    truncating it — the same skip-whole-line class as negative and
+    non-numeric counts; an integral float (`5.0`) still counts
+  - MCP `handle_collect_response` called as an import (the attune-ai
+    mirror path, which the SDK's stdio jsonschema gate does not cover)
+    names a non-dict `answers` argument through the module's own
+    `{success: false, problems: [...]}` contract instead of raising a
+    raw `AttributeError`/`TypeError`
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a

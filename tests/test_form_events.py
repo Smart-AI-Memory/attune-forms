@@ -283,3 +283,44 @@ class TestConfirmationPass1:
         assert stats["fields"] == 5
         assert stats["fields_inferred"] == 0
         assert 0.0 <= stats["inferred_share"] <= 1.0
+
+    def test_fractional_counts_skipped_not_truncated(self, _isolated_home: Path) -> None:
+        """Needs-a-look item: ``question_count: 2.7`` was silently
+        truncated by int(); a fractional count is now the same
+        malformed class as a negative one — skipped whole. An
+        INTEGRAL float (5.0) still counts: int() loses nothing."""
+        path = _events_file(_isolated_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = [
+            {"event": "form_surface", "question_count": 2.7, "inferred_fields": 1},
+            {"event": "form_surface", "question_count": 3, "inferred_fields": 0.9},
+            {"event": "form_surface", "question_count": 5.0, "inferred_fields": 2},
+        ]
+        path.write_text("".join(json.dumps(rec) + "\n" for rec in lines), encoding="utf-8")
+        stats = inference_rate()
+        assert stats["forms"] == 1
+        assert stats["fields"] == 5
+        assert stats["fields_inferred"] == 2
+
+    def test_readers_honor_configured_home(self, tmp_path: Path, _isolated_home: Path) -> None:
+        """Needs-a-look item: ``submission_count`` and ``inference_rate``
+        took no ``home`` while sibling ``surface_mix`` did, so a
+        configured-home reader (the ops dashboard) silently read the
+        process-env store instead of the one it displays."""
+        other = tmp_path / "dashboard-home"
+        events = other / "telemetry" / "form_events.jsonl"
+        events.parent.mkdir(parents=True)
+        lines = [
+            {"event": "form_submitted"},
+            {"event": "form_surface", "question_count": 4, "inferred_fields": 3},
+        ]
+        events.write_text("".join(json.dumps(rec) + "\n" for rec in lines), encoding="utf-8")
+        # The process-env home (_isolated_home) is empty: without the
+        # explicit home these must see nothing, with it the real store.
+        assert submission_count() == 0
+        assert submission_count(home=other) == 1
+        assert inference_rate()["forms"] == 0
+        stats = inference_rate(home=other)
+        assert stats["forms"] == 1
+        assert stats["fields"] == 4
+        assert stats["fields_inferred"] == 3

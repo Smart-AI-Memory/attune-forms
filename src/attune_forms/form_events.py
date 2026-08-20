@@ -217,11 +217,16 @@ def maybe_keyboard_hint(keyboard_mode: bool = False) -> str | None:
         return None
 
 
-def submission_count() -> int:
-    """Number of form submissions recorded in the live log."""
+def submission_count(home: Path | None = None) -> int:
+    """Number of form submissions recorded in the live log.
+
+    Args:
+        home: Optional attune-home base to read from; defaults to the
+            process's own (ATTUNE_HOME or ``~/.attune``).
+    """
     count = 0
     try:
-        with _events_path().open(encoding="utf-8") as fh:
+        with _events_path(home).open(encoding="utf-8") as fh:
             for line in fh:
                 try:
                     record = json.loads(line)
@@ -234,7 +239,7 @@ def submission_count() -> int:
     return count
 
 
-def inference_rate() -> dict[str, float | int]:
+def inference_rate(home: Path | None = None) -> dict[str, float | int]:
     """How much inference-first is actually happening.
 
     The decay guard for inference-first: the discipline lives in prompt
@@ -242,13 +247,17 @@ def inference_rate() -> dict[str, float | int]:
     it. A ``fields_inferred`` of zero across many forms means the
     instruction is not firing, whatever the docs say.
 
+    Args:
+        home: Optional attune-home base to read from; defaults to the
+            process's own (ATTUNE_HOME or ``~/.attune``).
+
     Returns:
         ``forms``, ``fields``, ``fields_inferred``, ``fully_inferred``,
         and ``inferred_share`` (0.0–1.0). All zeros when nothing logged.
     """
     forms = fields = inferred = fully = 0
     try:
-        with _events_path().open(encoding="utf-8") as fh:
+        with _events_path(home).open(encoding="utf-8") as fh:
             for line in fh:
                 try:
                     record = json.loads(line)
@@ -260,9 +269,20 @@ def inference_rate() -> dict[str, float | int]:
                 # with non-numeric counts is malformed and skipped whole,
                 # so one corrupt record never breaks the read
                 # (discovery-sweep finding, 2026-08-20).
+                raw_fields = record.get("question_count") or 0
+                raw_inferred = record.get("inferred_fields") or 0
+                if any(
+                    isinstance(raw, float) and not raw.is_integer()
+                    for raw in (raw_fields, raw_inferred)
+                ):
+                    # A fractional count (``question_count: 2.7``) is the
+                    # same malformed class: int() would silently truncate
+                    # it, so the line is skipped whole
+                    # (confirmation pass 1, 2026-08-20).
+                    continue
                 try:
-                    line_fields = int(record.get("question_count") or 0)
-                    line_inferred = int(record.get("inferred_fields") or 0)
+                    line_fields = int(raw_fields)
+                    line_inferred = int(raw_inferred)
                 except (TypeError, ValueError):
                     continue
                 if line_fields < 0 or line_inferred < 0:
