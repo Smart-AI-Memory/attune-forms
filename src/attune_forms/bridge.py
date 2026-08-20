@@ -357,11 +357,13 @@ def _parse_endorsements(
     where: str, raw: dict[str, Any], qtype: QuestionType, options: list[str]
 ) -> tuple[dict[str, list[str]] | None, list[str]]:
     """Parse the v6 DELIBERATION extra ``endorsements``: {option: [voice,
-    ...]} naming which deliberating voices back each option. Required for
-    DELIBERATION (without it the construct is just a decision), invalid
-    elsewhere. Keys must be options; each value a non-empty list of
-    non-empty names. Options nobody endorsed are allowed — the chair may
-    table a position no voice proposed.
+    ...]} naming which deliberating voices back each option. Required
+    and non-empty for DELIBERATION (without any endorsement the
+    construct is just a decision — ``{}`` used to satisfy the check
+    vacuously; chair ruling 2026-08-20), invalid elsewhere. Keys must be
+    options; each value a non-empty list of non-empty names. Options
+    nobody endorsed are allowed — the chair may table a position no
+    voice proposed.
     """
     endorsements = raw.get("endorsements")
     if endorsements is None:
@@ -378,6 +380,11 @@ def _parse_endorsements(
         for opt, names in endorsements.items()
     ):
         return None, [f"{where} 'endorsements' must map option -> non-empty list of names"]
+    if not endorsements:
+        return None, [
+            f"{where} type deliberation requires at least one endorsement "
+            "(an empty 'endorsements' is just a decision)"
+        ]
     stray = [opt for opt in endorsements if opt not in options]
     if stray:
         return None, [f"{where} 'endorsements' keys not in options: {stray}"]
@@ -1685,7 +1692,13 @@ def _fold_expanded_answers(
     ranking as ONE bounded array property, see ``_EXPANDING_TYPES``).
     This pre-pass rebuilds the canonical ``{key: disposition}`` mapping /
     ordered list so every surface funnels into the same validator. An
-    answer already present under the question id wins; the input dict is
+    answer already present under the question id makes any dotted
+    sibling a named problem — the old canonical-wins rule silently
+    discarded a contradicting dotted value, the same silent-drop class
+    the slot-collision rule below names (confirmation-pass-1 finding,
+    chair ruling 2026-08-20). The markdown surface merges its dotted
+    rows into the canonical shape before handing off, so a mixed shape
+    here means a confused caller, not a typed reply. The input dict is
     never mutated.
 
     Ranking slots fold in slot order. EVERY decimal slot suffix folds —
@@ -1700,11 +1713,12 @@ def _fold_expanded_answers(
     where a human types one, names it as an unknown rank slot at parse
     time.
 
-    Returns ``(folded, problems)``. The only fold-time problem is two
-    keys claiming the same rank slot (``"r.01"`` and ``"r.1"`` both fold
-    to slot 1): the same silent-drop class as the over-long ranking
-    above, so it is named instead of letting an arbitrary winner
-    validate clean (pilot review finding, 2026-08-19).
+    Returns ``(folded, problems)``. Fold-time problems are the mixed
+    canonical/dotted shape above and two keys claiming the same rank
+    slot (``"r.01"`` and ``"r.1"`` both fold to slot 1): the same
+    silent-drop class as the over-long ranking above, so it is named
+    instead of letting an arbitrary winner validate clean (pilot review
+    finding, 2026-08-19).
     """
     expanding = [q for q in form.questions if q.type in _EXPANDING_TYPES]
     if not expanding:
@@ -1712,9 +1726,16 @@ def _fold_expanded_answers(
     problems: list[str] = []
     folded = dict(raw_answers)
     for question in expanding:
-        if question.id in folded:
-            continue
         prefix = f"{question.id}."
+        if question.id in folded:
+            dotted = sorted(key for key in folded if key.startswith(prefix))
+            if dotted:
+                problems.append(
+                    f"{question.id!r} is supplied both canonically and as "
+                    f"dotted keys ({', '.join(map(repr, dotted))}); "
+                    "supply one shape"
+                )
+            continue
         if question.type is QuestionType.TRIAGE:
             picks = {
                 key[len(prefix) :]: folded.pop(key)
@@ -1767,7 +1788,13 @@ def collect_form_response(
     default passes the same per-type validator an answer would, so a
     directly-built form (bypassing ``form_from_dict``'s definition-time
     check) still cannot launder an invalid default into a validated
-    response. An answer key that matches no question id and no expanding
+    response. A provided answer that is EMPTY (``""``, ``[]``, ``{}``)
+    takes the same default path as an omitted key: empty is the
+    accept-the-default gesture (enter through a prompt, an untouched
+    widget), and this side of the wire cannot tell a deliberately
+    cleared prefill from an untouched one — so a surface that needs a
+    clearable field must not prefill it via ``default`` (chair ruling,
+    2026-08-20). An answer key that matches no question id and no expanding
     question's dotted namespace (``"<id>.<key>"``) is named as unknown —
     a typo'd key against an optional-with-default field would otherwise
     silently collect the default (pilot review finding, 2026-08-19).
