@@ -497,6 +497,25 @@ def _parse_suggested(
 _CONFIRM_DEFAULT_OPTIONS = ["Approve", "Abort"]
 
 
+#: The D2 constructs forbid a ``default`` outright — a pre-selected
+#: approval, a pre-filled order, or a pre-marked ruling defeats the
+#: two-way gate; approving/ordering/ruling must be an explicit act.
+#: Each entry is the rationale clause appended to the rejection message
+#: so one word ("default") keeps one meaning across constructs. The
+#: prohibition is enforced BOTH definition-side (the ``_parse_*_extras``
+#: helpers, via :func:`form_from_dict`) AND on the collect/inject path
+#: (:func:`collect_form_response`) — a :class:`FormQuestion` built
+#: directly by the dataclass constructor bypasses ``form_from_dict``,
+#: and without the collect-path guard an unanswered gate would silently
+#: inject its default as the answer (checkpoint-2 promoted item,
+#: 2026-08-20).
+_NO_DEFAULT_REASON: dict[QuestionType, str] = {
+    QuestionType.CONFIRM: "D2: no pre-selected approval",
+    QuestionType.RANKING: "D2-c: a proposed order is 'suggested'",
+    QuestionType.ASSUMPTION_REVIEW: "a pre-marked ruling is 'suggested'",
+}
+
+
 def _parse_confirm_extras(
     where: str, raw: dict[str, Any], qtype: QuestionType, options: list[str]
 ) -> tuple[list[dict[str, str]] | None, list[str], list[str]]:
@@ -534,7 +553,8 @@ def _parse_confirm_extras(
 
     if raw.get("default") is not None:
         problems.append(
-            f"{where} 'default' is not permitted on confirm (D2: no pre-selected approval)"
+            f"{where} 'default' is not permitted on confirm "
+            f"({_NO_DEFAULT_REASON[QuestionType.CONFIRM]})"
         )
     if raw.get("recommended") is not None:
         problems.append(
@@ -603,7 +623,8 @@ def _parse_ranking_extras(
 
     if raw.get("default") is not None:
         problems.append(
-            f"{where} 'default' is not permitted on ranking (D2-c: a proposed order is 'suggested')"
+            f"{where} 'default' is not permitted on ranking "
+            f"({_NO_DEFAULT_REASON[QuestionType.RANKING]})"
         )
 
     suggested = raw.get("suggested")
@@ -669,7 +690,7 @@ def _parse_assumption_extras(
     if raw.get("default") is not None:
         problems.append(
             f"{where} 'default' is not permitted on assumption_review "
-            "(a pre-marked ruling is 'suggested')"
+            f"({_NO_DEFAULT_REASON[QuestionType.ASSUMPTION_REVIEW]})"
         )
 
     if assumptions is None:
@@ -1738,6 +1759,20 @@ def collect_form_response(
             problems.append(f"unknown answer key {key!r}")
 
     for question in form.questions:
+        # The D2 constructs forbid a `default` outright. `form_from_dict`
+        # rejects it definition-side, but a `FormQuestion` built directly
+        # (dataclass constructor) bypasses that check — so re-enforce here
+        # on the inject path. Without this, an UNANSWERED confirm gate
+        # (or ranking / assumption_review) carrying a default would be
+        # collected as approved/ordered/ruled with no user act, defeating
+        # the two-way gate (checkpoint-2 promoted item, 2026-08-20).
+        if question.default is not None and question.type in _NO_DEFAULT_REASON:
+            problems.append(
+                f"'default' is not permitted on {question.type.value} "
+                f"for {question.id!r} ({_NO_DEFAULT_REASON[question.type]})"
+            )
+            continue
+
         provided = question.id in raw_answers
         value = raw_answers.get(question.id)
 

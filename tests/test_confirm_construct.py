@@ -179,3 +179,87 @@ class TestConfirmSurfaces:
         assert "Answer one of: **Approve** / **Abort**" in md
         skeleton = json.loads(md.split("```json")[1].split("```")[0])
         assert skeleton["answers"]["release_gate"] is None
+
+
+class TestConfirmationPass2:
+    """Collect-path bypass (checkpoint-2 promoted item, 2026-08-20):
+    the no-`default` rule for the D2 constructs was enforced ONLY
+    definition-side in `form_from_dict`. A FormQuestion built DIRECTLY
+    (dataclass constructor) with a `default` slipped past it, and
+    `collect_form_response({})` then auto-injected the default — so an
+    UNANSWERED confirm gate collected as *approved* with no user act,
+    the exact thing the two-way gate exists to prevent. The guard now
+    lives on the collect/inject path too, where it can't be bypassed."""
+
+    def test_directly_built_confirm_with_default_rejected_at_collect(self) -> None:
+        from attune_forms.models import FormSchema
+
+        form = FormSchema(
+            title="Release gate",
+            description="",
+            questions=[
+                FormQuestion(
+                    id="gate",
+                    type=QuestionType.CONFIRM,
+                    text="Approve?",
+                    options=["Approve", "Abort"],
+                    consequences=[{"label": "irreversible"}],
+                    default="Approve",
+                )
+            ],
+        )
+        # An unanswered gate must NOT silently collect the default.
+        with pytest.raises(FormValidationError) as exc:
+            collect_form_response(form, {})
+        (problem,) = exc.value.problems
+        assert "'default' is not permitted on confirm" in problem
+        assert "D2: no pre-selected approval" in problem
+        assert "'gate'" in problem
+
+    def test_directly_built_ranking_with_default_rejected_at_collect(self) -> None:
+        from attune_forms.models import FormSchema
+
+        form = FormSchema(
+            title="Order",
+            description="",
+            questions=[
+                FormQuestion(
+                    id="rk",
+                    type=QuestionType.RANKING,
+                    text="Order",
+                    options=["A", "B", "C"],
+                    default=["A", "B", "C"],
+                )
+            ],
+        )
+        with pytest.raises(FormValidationError) as exc:
+            collect_form_response(form, {})
+        (problem,) = exc.value.problems
+        assert "'default' is not permitted on ranking" in problem
+        assert "a proposed order is 'suggested'" in problem
+
+    def test_directly_built_assumption_review_with_default_rejected_at_collect(self) -> None:
+        from attune_forms.models import FormSchema
+
+        form = FormSchema(
+            title="Review",
+            description="",
+            questions=[
+                FormQuestion(
+                    id="ar",
+                    type=QuestionType.ASSUMPTION_REVIEW,
+                    text="Review the assumptions",
+                    assumptions=[{"label": "x"}],
+                    # A validly-SHAPED default mapping — would otherwise
+                    # inject a pre-marked ruling with no user act.
+                    default={"x": "accept"},
+                )
+            ],
+        )
+        with pytest.raises(FormValidationError) as exc:
+            collect_form_response(form, {})
+        assert any(
+            "'default' is not permitted on assumption_review" in p
+            and "a pre-marked ruling is 'suggested'" in p
+            for p in exc.value.problems
+        )

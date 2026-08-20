@@ -7,6 +7,24 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Directly-built D2 gate with a `default` can no longer pass
+  unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
+  confirmed). The no-`default` rule for the two-way constructs (confirm,
+  ranking, assumption_review) was enforced ONLY definition-side in
+  `form_from_dict`. A `FormQuestion` built directly (dataclass
+  constructor, bypassing `form_from_dict`) with `default="Approve"`
+  slipped past it, and then `collect_form_response({})` auto-injected
+  the default — so an UNANSWERED confirm gate collected as *approved*
+  with no user act, defeating the gate CONFIRM exists to enforce. The
+  prohibition now also lives on the collect/inject path
+  (`collect_form_response`), where it can't be bypassed: a directly-built
+  confirm / ranking / assumption_review carrying a `default` is rejected
+  (`FormValidationError`, wording consistent with the definition-time
+  message) instead of injected. Defense in depth: the elicitation schema
+  no longer emits a `default` for those construct types either, so a
+  bypassing question can't pre-select approval in the client dialog
+  (this also stops a stray `default` from clobbering a ranking's
+  legitimate `suggested`-derived schema default).
 - Confirmation-pass-2 batch (library review, 2026-08-20 — all five
   findings empirically confirmed before fixing):
   - **Silent answer injection closed**: the markdown re-ask
