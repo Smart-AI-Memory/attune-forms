@@ -70,6 +70,13 @@ follow [SemVer](https://semver.org/).
     (`{"keep": true}`) beside a typed text lane is no longer silently
     laundered into a valid `{"edit": …}` that this surface alone
     accepted while the collect path names it
+  - A display-only PROGRESS field (no blocked options) no longer
+    projects to `{"type": "string", "enum": []}` in the elicitation
+    schema — an empty enum is a property no value can satisfy (an
+    unanswerable field, or a whole-schema rejection on a strict
+    client). Such a report is narrated, not answered, so it is now
+    skipped from `properties`/`required` entirely; a PROGRESS that
+    carries blocked options is a real single-pick and still projects
 - `form_from_template` now validates the `slots` argument type *before*
   the `values = slots or {}` coalesce (confirmation-pass-2 needs-a-look,
   2026-08-20). The pass-1 `isinstance(values, dict)` guard ran after the
@@ -80,6 +87,17 @@ follow [SemVer](https://semver.org/).
   non-`dict` `slots` is now named directly; `None` still coalesces to
   an empty mapping. `dict` stays strict so the "mapping" wording matches
   what is accepted — a `Mapping` that is not a `dict` is rejected too
+- The widget's `::` radio-group namespace is now collision-guarded at
+  definition time, symmetric with the existing dotted-key guard
+  (confirmation-pass-2 needs-a-look, 2026-08-20). A TRIAGE or
+  ASSUMPTION_REVIEW board with id `a` renders one radio group per item
+  named `a::<idx>`; a sibling field whose id was literally `a::1` emitted
+  a group sharing that `name`, so the browser fused the two into one
+  mutually-exclusive group and one field became unanswerable in the
+  widget. A field id colliding with a board's `a::<idx>` namespace is now
+  rejected at `form_from_dict` time, so the colliding HTML is never
+  rendered. Low realism (no author writes `::N` ids) but a genuine
+  unguarded namespace analogous to the guarded dotted one
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a

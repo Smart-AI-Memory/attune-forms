@@ -12,6 +12,8 @@ collection time.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from attune_forms import (
@@ -285,6 +287,32 @@ class TestReviewFindingRegressions:
         )
         with pytest.raises(FormValidationError, match="dotted answer namespace"):
             form_from_dict(data)
+
+    def test_colliding_double_colon_field_id_rejected(self) -> None:
+        # The widget renders board "findings" as radio groups named
+        # "findings::0", "findings::1", ... A sibling field whose id is
+        # literally "findings::1" would emit a group sharing that name, so
+        # the browser fuses them into one mutually-exclusive group and one
+        # field becomes unanswerable (confirmation-pass-2, 2026-08-20).
+        # Reject at definition so the colliding HTML is never rendered.
+        data = _triage()
+        data["fields"].append(
+            {"id": "findings::1", "type": "text_input", "text": "n", "required": False}
+        )
+        with pytest.raises(FormValidationError, match="widget radio-group namespace"):
+            form_from_dict(data)
+
+        # And pin the collision the guard prevents on the rendered HTML:
+        # the board's three rows render as three DISTINCT group names
+        # (findings::0/1/2), each carrying only its own disposition radios.
+        # A colliding "findings::1" field would inject a foreign group of
+        # the same name — exactly what the definition guard now forbids.
+        html = form_to_widget_html(form_from_dict(_triage()))
+        names = re.findall(r'<input type="radio" name="([^"]+)"', html)
+        assert set(names) == {"findings::0", "findings::1", "findings::2"}
+        # 3 dispositions × 1 row each: the group name appears once per
+        # disposition and never bleeds across rows or a foreign field.
+        assert names.count("findings::1") == 3
 
     def test_summary_renders_rulings_not_dict_repr(self) -> None:
         from attune_forms import form_response_summary

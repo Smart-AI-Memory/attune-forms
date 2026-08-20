@@ -193,6 +193,17 @@ def form_to_elicitation_schema(form: FormSchema) -> dict[str, Any]:
                 if q.required:
                     required.append(f"{q.id}.{key}")
             continue
+        if q.type is QuestionType.PROGRESS and not q.options:
+            # A display-only PROGRESS (no blocked options) has nothing to
+            # ask — the report is narrated, not answered. Projecting it
+            # would emit ``{"type": "string", "enum": []}``, a property no
+            # value can satisfy (an empty enum is unanswerable, and a
+            # strict client may reject the whole schema over it). Skip it
+            # entirely, mirroring the narrate-instead fallback in
+            # ``to_ask_user_format``. A PROGRESS that DOES carry blocked
+            # options is a real single-pick and still projects below
+            # (confirmation pass 2, 2026-08-20).
+            continue
         properties[q.id] = _property_for(q)
         if q.required:
             required.append(q.id)
