@@ -10,13 +10,16 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
 mcp = pytest.importorskip("mcp")
 
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
-from mcp.client.stdio import stdio_client  # noqa: E402
+from mcp.client.stdio import get_default_environment, stdio_client  # noqa: E402
+
+_SRC = str(Path(__file__).resolve().parents[1] / "src")
 
 _FORM = {
     "title": "Audit scope",
@@ -32,8 +35,17 @@ _FORM = {
 }
 
 
-def _server_params() -> StdioServerParameters:
-    return StdioServerParameters(command=sys.executable, args=["-m", "attune_forms.mcp_server"])
+def _server_params(home: Path) -> StdioServerParameters:
+    """Spawn params with an explicit env: stdio_client's default env strips
+    ATTUNE_HOME (keeping the real HOME), so without this the server
+    subprocess writes telemetry into the developer's live ~/.attune —
+    and PYTHONPATH pins the server to THIS checkout's src (same hazard
+    conftest.py documents for in-process imports)."""
+    return StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "attune_forms.mcp_server"],
+        env={**get_default_environment(), "ATTUNE_HOME": str(home), "PYTHONPATH": _SRC},
+    )
 
 
 def _payload(result) -> dict:
@@ -45,9 +57,9 @@ def _payload(result) -> dict:
     return json.loads(text)
 
 
-async def _round_trip() -> dict[str, dict]:
+async def _round_trip(home: Path) -> dict[str, dict]:
     out: dict[str, dict] = {}
-    async with stdio_client(_server_params()) as (read, write):
+    async with stdio_client(_server_params(home)) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -78,8 +90,8 @@ async def _round_trip() -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def round_trip():
-    return asyncio.run(_round_trip())
+def round_trip(tmp_path_factory):
+    return asyncio.run(_round_trip(tmp_path_factory.mktemp("attune-home")))
 
 
 def test_all_four_tools_listed(round_trip):
@@ -137,6 +149,20 @@ def test_field_schema_default_is_answer_shaped_and_inferred_from_declared():
     props = _field_schema()["properties"]
     assert set(props["default"]["type"]) == {"string", "number", "boolean", "array", "object"}
     assert "inferred_from" in props
+
+
+@pytest.mark.parametrize("bad", ["src/", None, ["src/"], 7], ids=lambda v: type(v).__name__)
+def test_collect_response_import_path_guards_non_dict_answers(bad):
+    """Confirmation pass 1 needs-a-look (2026-08-20): a non-dict
+    ``answers`` raised a raw AttributeError/TypeError when the handler
+    is called as an import — the SDK's jsonschema gate only covers the
+    stdio path, and the attune-ai mirror convergence plan makes import
+    reach real. The module's own contract shape must hold instead."""
+    from attune_forms.mcp_server import handle_collect_response
+
+    result = asyncio.run(handle_collect_response({"form": _FORM, "answers": bad}))
+    assert result["success"] is False
+    assert any("answers" in p for p in result["problems"])
 
 
 def test_schema_accepts_legal_triage_object_default():

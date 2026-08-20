@@ -298,9 +298,21 @@ async def handle_render_widget(args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
+    answers = args.get("answers", {})
+    if not isinstance(answers, dict):
+        # The SDK's jsonschema gate covers the stdio path, but the
+        # handler is also a real import surface (attune-ai mirror), so
+        # the module's own problems contract must hold here too.
+        return {
+            "success": False,
+            "problems": [
+                "'answers' must be an object mapping field ids to "
+                f"answers, got {type(answers).__name__}"
+            ],
+        }
     try:
         form = form_from_dict(args.get("form", {}))
-        response = collect_form_response(form, args.get("answers", {}))
+        response = collect_form_response(form, answers)
     except FormValidationError as e:
         return {"success": False, "problems": e.problems}
     result: dict[str, Any] = {
