@@ -19,6 +19,7 @@ Licensed under Apache 2.0
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from attune_forms.models import (
@@ -34,6 +35,47 @@ from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
 #: Status icon per default-style progress status (matches the widget).
 _PROGRESS_ICONS = {"done": "✓", "in_flight": "◐", "blocked": "✕"}
+
+#: Any run of three or more backticks — a markdown fence opener/closer.
+_FENCE_RUN_RE = re.compile(r"`{3,}")
+
+#: Woven between backticks to defuse a run; invisible in a terminal.
+_FENCE_ZWSP = "​"
+
+
+def _defuse_fences(text: str) -> str:
+    """Break any run of three+ backticks in author/host-supplied text so
+    it can never open or close a markdown fence and desync the trailing
+    reply skeleton (confirmation pass 2, 2026-08-20).
+
+    A fence-bearing label, help text, or OPTION rendered verbatim used to
+    corrupt the delimiting of the ``answers`` skeleton
+    :func:`form_to_markdown` appends — the primary taught JSON-reply path
+    then failed to round-trip (``markdown_to_answers`` saw the wrong
+    fence boundaries). A zero-width space is woven between the backticks:
+    the run still reads as backticks in a terminal but no ``` substring
+    survives, so ``markdown_ingestion._FENCE_RE`` cannot mistake field
+    text for a fenced block. Runs shorter than three (real inline code,
+    `` `x` ``) are left untouched so legitimate inline backticks render.
+    """
+    if "```" not in text:
+        return text
+    return _FENCE_RUN_RE.sub(lambda m: _FENCE_ZWSP.join(m.group()), text)
+
+
+def _skeleton_block(skeleton: dict[str, Any]) -> list[str]:
+    """The trailing ``answers`` skeleton as a fenced ``json`` block.
+
+    Backticks inside the payload are emitted as the JSON escape
+    ``\\u0060`` — a fence-bearing author value that reaches the skeleton
+    (a default/recommended/suggested option carrying ```) would otherwise
+    close this block's own ``json`` fence early and break the paste-back.
+    Every backtick in the dump sits inside a JSON string, where
+    ``\\u0060`` is valid and ``json.loads`` restores it, so exact option
+    matching on ingestion is unchanged (confirmation pass 2, 2026-08-20).
+    """
+    payload = json.dumps(skeleton, indent=2, ensure_ascii=False).replace("`", "\\u0060")
+    return ["```json", payload, "```"]
 
 
 def _ordered_recommended_first(q: FormQuestion) -> list[str]:
@@ -296,7 +338,9 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         field = _field_lines(q)
         field[0] = f"{idx}. {field[0]}"
         lines += ["", *field]
-    skeleton = reply_skeleton(form)
+    # Defuse every author/host line before the machine skeleton: a fence
+    # in field text must not desync the ``answers`` block below it.
+    lines = [_defuse_fences(line) for line in lines]
     lines += [
         "",
         "---",
@@ -307,8 +351,6 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
         "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
-        "```json",
-        json.dumps(skeleton, indent=2, ensure_ascii=False),
-        "```",
+        *_skeleton_block(reply_skeleton(form)),
     ]
     return "\n".join(lines)
