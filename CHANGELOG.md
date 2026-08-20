@@ -6,6 +6,33 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-20
+
+The output of a four-stage library review (checkpoint-1 sweep, a
+bridge.py pilot, two adversarial confirmation passes) plus a
+dynamic-forms architecture review — 23 confirmed correctness fixes,
+policy single-sourcing, and drift catchers so the grammar cannot
+silently rot again.
+
+### ⚠️ Breaking
+- **Stricter input validation now REJECTS input earlier versions
+  silently accepted.** Three tightenings can surface as a
+  `FormValidationError` where 0.6.0 returned clean:
+  - An unknown **definition** key — a typo'd or unrecognized field- or
+    top-level key in a form dict (`{"type": "number", "maximun": 10}`)
+    — is now a named problem, and the mirrored MCP `inputSchema`
+    carries `additionalProperties: false`. Previously the stray key was
+    dropped and the field built without the intended constraint.
+  - An unknown **answer** key against an optional-with-default field is
+    named instead of silently collecting the default.
+  - Supplying an expanding question's answer both canonically and as
+    dotted keys is a named contradiction instead of the canonical value
+    silently winning.
+  Migration: remove stray keys from form definitions and answer maps;
+  every rejection names the exact offending key. **Downstream mirror:**
+  attune-ai hand-maintains its own copy of these MCP tool schemas and
+  must re-sync `additionalProperties` (tracked as a fast-follow).
+
 ### Added
 - Widget gate parity pin (architecture review finding F2, 2026-08-20):
   the submit script's client-side required-field gate (incomplete
@@ -68,19 +95,39 @@ follow [SemVer](https://semver.org/).
     package overview now document `ATTUNE_FORMS_KEYBOARD_MODE` as the
     preferred override with `ATTUNE_KEYBOARD_MODE` as the legacy
     fallback, matching what the code reads
+- `collect_form_response` rejects unknown top-level answer keys,
+  naming them — a typo'd key against an optional-with-default field
+  used to silently collect the default. Keys inside an expanding
+  question's dotted namespace (`"<id>.<key>"`) remain exempt
+- A directly-built CONFIRM (constructed in Python rather than through
+  `form_from_dict`) now defaults its options to the two-way gate
+  (`Approve` / `Abort`) like every other construction path — before,
+  it rendered a gate nothing could approve (0.5.0 review, queued with
+  the cleanup batch); `CONFIRM_DEFAULT_OPTIONS` is single-sourced in
+  `models`
+- A directly-built item-keyed construct carrying the wrong `suggested`
+  shape (a list where a mapping belongs) degrades to "no suggestion"
+  on every surface instead of crashing the elicitation schema
+- Widget submit script reworked from a per-ftype if/else reader into a
+  `data-collect` attribute switch (0.5.0 cleanup batch): each rendered
+  field now carries `data-collect`
+  (`value` / `checked-one` / `checked-many` / `rulings` / `ranked` /
+  `rulings-with-text`), emitted at render time from a per-type map, and
+  the script switches on that attribute — so a new construct type that
+  answers like an existing one registers its mode in `_COLLECT_MODES`
+  and needs NO script edit. The round-trip simulator mirrors the same
+  switch; the drift catcher now pins the emitted modes against the
+  script's cases. Posted payloads are unchanged
+- Item-keyed expansion unified (0.5.0 cleanup batch): every surface —
+  AskUserQuestion payloads, the elicitation schema, markdown rows and
+  skeleton, the widget rows, and the validators — iterates TRIAGE and
+  ASSUMPTION_REVIEW rows through one set of shared helpers
+  (`expansion_items` / `suggested_pick` / `item_context` in `models`),
+  so the item set, its keys, the suggested lookup, and the context
+  line can never differ between surfaces. Rendering output is
+  byte-identical; presentation stays per-surface
 
 ### Fixed
-- Unknown DEFINITION keys are now named problems instead of silently
-  ignored (confirmation-pass-1 chair ruling, 2026-08-20): a typo'd
-  field key (`"maximun": 10`) built a bound-less field that validated
-  any answer clean. `form_from_dict` rejects every unrecognized
-  top-level and field-level key (`unknown definition key '...'`,
-  mirroring #37's answer-side wording; the `label`/`questions` aliases
-  stay accepted), and the MCP `inputSchema` declares
-  `additionalProperties: false` on both the form and field objects so
-  the SDK gate agrees with the parser. The schema is D3-mirrored to
-  attune-ai — the mirror must pick up `additionalProperties` at the
-  next release-gated re-sync
 - Unknown DEFINITION keys are now named problems instead of silently
   ignored (confirmation-pass-1 chair ruling, 2026-08-20): a typo'd
   field key (`"maximun": 10`) built a bound-less field that validated
@@ -281,41 +328,6 @@ follow [SemVer](https://semver.org/).
   `required: true` is a definition problem — before, the definition
   passed and collect failed both ways (no answer → required; any
   answer → not in options)
-
-### Changed
-- `collect_form_response` rejects unknown top-level answer keys,
-  naming them — a typo'd key against an optional-with-default field
-  used to silently collect the default. Keys inside an expanding
-  question's dotted namespace (`"<id>.<key>"`) remain exempt
-- A directly-built CONFIRM (constructed in Python rather than through
-  `form_from_dict`) now defaults its options to the two-way gate
-  (`Approve` / `Abort`) like every other construction path — before,
-  it rendered a gate nothing could approve (0.5.0 review, queued with
-  the cleanup batch); `CONFIRM_DEFAULT_OPTIONS` is single-sourced in
-  `models`
-- A directly-built item-keyed construct carrying the wrong `suggested`
-  shape (a list where a mapping belongs) degrades to "no suggestion"
-  on every surface instead of crashing the elicitation schema
-
-### Changed
-- Widget submit script reworked from a per-ftype if/else reader into a
-  `data-collect` attribute switch (0.5.0 cleanup batch): each rendered
-  field now carries `data-collect`
-  (`value` / `checked-one` / `checked-many` / `rulings` / `ranked` /
-  `rulings-with-text`), emitted at render time from a per-type map, and
-  the script switches on that attribute — so a new construct type that
-  answers like an existing one registers its mode in `_COLLECT_MODES`
-  and needs NO script edit. The round-trip simulator mirrors the same
-  switch; the drift catcher now pins the emitted modes against the
-  script's cases. Posted payloads are unchanged
-- Item-keyed expansion unified (0.5.0 cleanup batch): every surface —
-  AskUserQuestion payloads, the elicitation schema, markdown rows and
-  skeleton, the widget rows, and the validators — iterates TRIAGE and
-  ASSUMPTION_REVIEW rows through one set of shared helpers
-  (`expansion_items` / `suggested_pick` / `item_context` in `models`),
-  so the item set, its keys, the suggested lookup, and the context
-  line can never differ between surfaces. Rendering output is
-  byte-identical; presentation stays per-surface
 
 ## [0.6.0] — 2026-08-16
 
