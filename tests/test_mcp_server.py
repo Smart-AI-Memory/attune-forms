@@ -212,6 +212,8 @@ def test_field_schema_matches_parser_key_set():
 
     advertised = set(_field_schema()["properties"])
     assert advertised | {"label"} == set(_DEFINITION_FIELD_KEYS)
+
+
 def test_field_schema_covers_the_whole_grammar():
     """Drift catcher (architecture review F5, 2026-08-20): the
     hand-maintained tool schema must keep up with the grammar — every
