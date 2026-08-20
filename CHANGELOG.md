@@ -7,6 +7,21 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Supplying an expanding question's answer both canonically and as
+  dotted keys (`{"t": {...}}` plus `"t.i2": "skip"`) is a named
+  validation problem instead of the canonical answer silently winning —
+  the contradicting dotted value used to vanish, the same silent-drop
+  class #39/#40 named for rank slots (chair ruling on
+  confirmation-pass-1, 2026-08-20)
+- A DELIBERATION whose `endorsements` is the empty mapping `{}` is a
+  named definition problem — it satisfied the required check vacuously,
+  yielding exactly the "just a decision, no endorsements" the field
+  exists to prevent (chair ruling on confirmation-pass-1, 2026-08-20)
+- Documented (chair ruling to keep, 2026-08-20): an explicit empty
+  answer (`""`, `[]`, `{}`) on a field with a `default` collects the
+  default — empty is the accept-the-default gesture, indistinguishable
+  from an untouched prefill, so a surface needing a clearable field
+  must not prefill it via `default`
 - **Directly-built D2 gate with a `default` can no longer pass
   unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
   confirmed). The no-`default` rule for the two-way constructs (confirm,

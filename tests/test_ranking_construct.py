@@ -423,6 +423,17 @@ class TestPilotReviewFindings:
         )
         assert response.responses["prio"] == ["auth", "billing", "search", "docs"]
 
+    def test_canonical_list_plus_dotted_slot_is_a_named_contradiction(self) -> None:
+        # Chair ruling 2026-08-20 (confirmation-pass-1): the fold's
+        # canonical-wins rule silently discarded a contradicting dotted
+        # slot; mixed shapes are now a named problem.
+        form = form_from_dict(_ranking())
+        with pytest.raises(FormValidationError, match="supplied both canonically and as dotted"):
+            collect_form_response(
+                form,
+                {"prio": ["auth", "billing", "search", "docs"], "prio.1": "docs"},
+            )
+
     def test_non_decimal_suffix_still_ignored(self) -> None:
         """A non-decimal suffix is not a slot key; it lives inside the
         question's declared dotted namespace, so the unknown-key check

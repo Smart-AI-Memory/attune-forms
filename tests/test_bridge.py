@@ -209,6 +209,27 @@ class TestCollectFormResponse:
         resp = collect_form_response(form, {})
         assert resp.responses["a"] == "fallback"
 
+    def test_explicit_empty_answer_accepts_the_default(self):
+        # Pinned by chair ruling 2026-08-20 (confirmation-pass-1
+        # needs-a-look): an explicit "" is the accept-the-default
+        # gesture, indistinguishable from an untouched prefill — a
+        # surface that needs a clearable field must not prefill it via
+        # `default`. Documented in collect_form_response's docstring.
+        data = {
+            "title": "T",
+            "fields": [
+                {
+                    "id": "a",
+                    "text": "A?",
+                    "type": "text_input",
+                    "required": False,
+                    "default": "fallback",
+                }
+            ],
+        }
+        resp = collect_form_response(form_from_dict(data), {"a": ""})
+        assert resp.responses["a"] == "fallback"
+
     def test_optional_missing_no_default_omitted(self):
         data = {
             "title": "T",
@@ -329,7 +350,9 @@ class TestUnknownAnswerKeys:
     key matching no question id was silently ignored — a typo'd key
     against an optional-with-default field invisibly collected the
     default. Unknown keys are now named; keys inside an expanding
-    question's dotted namespace stay exempt (the fold owns them)."""
+    question's dotted namespace stay exempt from the UNKNOWN check (the
+    fold owns them) — but coexisting with a canonical answer they are a
+    named contradiction (chair ruling, 2026-08-20)."""
 
     def test_typoed_key_is_named(self):
         field = {
@@ -344,9 +367,11 @@ class TestUnknownAnswerKeys:
         with pytest.raises(FormValidationError, match="unknown answer key 'aproach'"):
             collect_form_response(form, {"aproach": "yolo"})
 
-    def test_dotted_keys_under_present_mapping_stay_exempt(self):
-        # Mapping-wins-over-dotted leaves the dotted keys unfolded; they
-        # are declared namespace, not typos.
+    def test_dotted_keys_under_present_mapping_are_a_named_contradiction(self):
+        # Chair ruling 2026-08-20 (confirmation-pass-1): the old
+        # canonical-wins rule silently discarded a contradicting dotted
+        # sibling — same silent-drop class as #39/#40. Mixed shapes are
+        # now a named problem, not an arbitrary winner.
         form = form_from_dict(
             {
                 "title": "T",
@@ -361,8 +386,11 @@ class TestUnknownAnswerKeys:
                 ],
             }
         )
-        response = collect_form_response(
-            form,
-            {"board": {"One": "keep", "Two": "drop"}, "board.One": "drop"},
-        )
-        assert response.responses["board"] == {"One": "keep", "Two": "drop"}
+        with pytest.raises(
+            FormValidationError,
+            match=r"'board' is supplied both canonically and as dotted keys \('board.One'\)",
+        ):
+            collect_form_response(
+                form,
+                {"board": {"One": "keep", "Two": "drop"}, "board.One": "drop"},
+            )
