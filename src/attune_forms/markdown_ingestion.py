@@ -31,7 +31,7 @@ import math
 import re
 from typing import Any
 
-from attune_forms.markdown_surface import _field_lines
+from attune_forms.markdown_surface import _field_lines, reply_skeleton
 from attune_forms.models import (
     ASSUMPTION_TEXT_SUFFIX,
     FormQuestion,
@@ -370,10 +370,19 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
                     )
                     continue
                 current = mapping.get(target)
-                # Same precedence as the collect-time fold: a text lane
-                # fills an EMPTY edit; inline `edit: <text>` wins otherwise.
+                # Same precedence AND same guard as the collect-time fold
+                # (bridge._fold_assumption_answers): a text lane fills a
+                # bare "edit" or an EMPTY {"edit": ""}; inline
+                # `edit: <text>` wins otherwise. The `set(current) ==
+                # {"edit"}` check is load-bearing — without it any dict
+                # lacking a non-empty edit key matched, silently
+                # laundering a non-edit ruling like {"keep": true} into a
+                # valid {"edit": ...} that this surface alone accepted
+                # (confirmation pass 2, 2026-08-20).
                 if current == "edit" or (
-                    isinstance(current, dict) and not str(current.get("edit") or "").strip()
+                    isinstance(current, dict)
+                    and set(current) == {"edit"}
+                    and not str(current.get("edit") or "").strip()
                 ):
                     mapping[target] = {"edit": value}
         elif q.type is QuestionType.RANKING:
@@ -432,6 +441,14 @@ def problems_to_markdown(form: FormSchema, problems: list[str]) -> str:
     root field), each with its original position number so shorthand
     replies keep working. Problems naming no field render in the
     header only. Fields that validated are never re-asked.
+
+    The re-ask ends in a trailing ``answers`` skeleton for exactly the
+    re-asked fields — the same last-block-wins invariant
+    :func:`form_to_markdown` relies on. Without it, a fenced ``answers``
+    block quoted inside an offending field's author-supplied text was
+    the only JSON candidate, so a user quoting the re-ask back ingested
+    answers they never typed with no problem named (confirmation pass 2,
+    2026-08-20).
     """
     known_ids = {q.id for q in form.questions}
     offender_ids: list[str] = []
@@ -450,15 +467,23 @@ def problems_to_markdown(form: FormSchema, problems: list[str]) -> str:
 
     lines = ["Some answers need another pass:"]
     lines += [f"- {problem}" for problem in problems]
+    offenders: list[FormQuestion] = []
     for idx, q in enumerate(form.questions, start=1):
         if q.id not in offender_ids:
             continue
+        offenders.append(q)
         field = _field_lines(q)
         field[0] = f"{idx}. {field[0]}"
         lines += ["", *field]
-    if offender_ids:
+    if offenders:
+        skeleton = reply_skeleton(form, offenders)
         lines += [
             "",
-            "Reply for just these fields — shorthand works (`field_id: value` or `N: value`).",
+            "Reply for just these fields — shorthand works (`field_id: value` "
+            "or `N: value`), or fill the `answers` skeleton below:",
+            "",
+            "```json",
+            json.dumps(skeleton, indent=2, ensure_ascii=False),
+            "```",
         ]
     return "\n".join(lines)

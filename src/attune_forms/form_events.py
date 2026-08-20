@@ -265,11 +265,13 @@ def inference_rate() -> dict[str, float | int]:
                     line_inferred = int(record.get("inferred_fields") or 0)
                 except (TypeError, ValueError):
                     continue
-                if line_fields < 0 or line_inferred < 0:
-                    # A negative count is the same malformed-record
-                    # class: skipped whole, never allowed to poison the
-                    # aggregate (inferred_share left [0,1] on one corrupt
-                    # record — confirmation pass 1, 2026-08-20).
+                if line_fields < 0 or line_inferred < 0 or line_inferred > line_fields:
+                    # Malformed-record class: a negative count, or more
+                    # inferred fields than total fields, is skipped whole
+                    # so one corrupt record never pushes inferred_share
+                    # outside [0, 1] (confirmation passes 1 and 2,
+                    # 2026-08-20 — inferred_fields > question_count drove
+                    # the share to 10.4).
                     continue
                 forms += 1
                 fields += line_fields
