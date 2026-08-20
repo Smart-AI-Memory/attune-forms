@@ -394,3 +394,67 @@ class TestUnknownAnswerKeys:
                 form,
                 {"board": {"One": "keep", "Two": "drop"}, "board.One": "drop"},
             )
+
+
+class TestUnknownDefinitionKeys:
+    """Pinned from the confirmation-pass-1 chair ruling (2026-08-20):
+    the definition-side twin of TestUnknownAnswerKeys. A key the parser
+    never reads was silently ignored — a typo'd 'maximun' built a
+    bound-less number field that validated any answer clean. Unknown
+    top-level and field-level keys are now named definition problems."""
+
+    def test_ledger_repro_typoed_maximum_is_named(self):
+        # The exact confirmation-pass repro: the typo'd bound must not
+        # silently vanish into an unconstrained field.
+        with pytest.raises(
+            FormValidationError, match="field\\[0\\] unknown definition key 'maximun'"
+        ):
+            form_from_dict(
+                {
+                    "title": "T",
+                    "fields": [{"id": "n", "text": "N", "type": "number", "maximun": 10}],
+                }
+            )
+
+    def test_every_unknown_field_key_is_named(self):
+        with pytest.raises(FormValidationError) as exc:
+            form_from_dict(
+                {
+                    "title": "T",
+                    "fields": [
+                        {
+                            "id": "q",
+                            "text": "Q",
+                            "type": "text_input",
+                            "regired": True,
+                            "recomended": "x",
+                        }
+                    ],
+                }
+            )
+        problems = exc.value.problems
+        assert "field[0] unknown definition key 'regired'" in problems
+        assert "field[0] unknown definition key 'recomended'" in problems
+
+    def test_top_level_unknown_key_is_named(self):
+        with pytest.raises(
+            FormValidationError, match="form has unknown definition key 'descripton'"
+        ):
+            form_from_dict(
+                {
+                    "title": "T",
+                    "descripton": "typo",
+                    "fields": [{"id": "q", "text": "Q", "type": "text_input"}],
+                }
+            )
+
+    def test_documented_aliases_stay_accepted(self):
+        # 'label' (for 'text') and 'questions' (for 'fields') are
+        # documented aliases, not strays.
+        form = form_from_dict(
+            {
+                "title": "T",
+                "questions": [{"id": "q", "label": "Q", "type": "text_input"}],
+            }
+        )
+        assert form.questions[0].text == "Q"

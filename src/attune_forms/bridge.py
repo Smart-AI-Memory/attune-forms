@@ -796,12 +796,54 @@ def _parse_list_style(
     return list_style, []
 
 
+# The definition-side twin of the #37 answer-side gate: a key the field
+# parsers never read is a typo or an unsupported construct, and silently
+# ignoring it invents a constraint that does not exist ("maximun": 10 →
+# the bound is never built and collect(99999) validates clean). These
+# sets must track exactly what form_from_dict and its _parse_* helpers
+# read; the parity test against the MCP _field_schema ratchets that.
+_DEFINITION_TOP_KEYS = frozenset({"title", "description", "fields", "questions"})
+_DEFINITION_FIELD_KEYS = frozenset(
+    {
+        "id",
+        "text",
+        "label",
+        "type",
+        "options",
+        "default",
+        "help_text",
+        "required",
+        "minimum",
+        "maximum",
+        "max_length",
+        "rationale",
+        "recommended",
+        "option_notes",
+        "user_position",
+        "progress_items",
+        "progress_style",
+        "endorsements",
+        "triage_items",
+        "dispositions",
+        "suggested",
+        "consequences",
+        "list_style",
+        "inferred_from",
+        "top_n",
+        "assumptions",
+    }
+)
+
+
 def form_from_dict(data: dict[str, Any]) -> FormSchema:
     """Build a :class:`FormSchema` from plain serializable data (D3).
 
     The declarative artifact a skill / future designer / data source
     produces. Validates the form *definition* (not answers) and raises
-    :class:`FormValidationError` listing every problem.
+    :class:`FormValidationError` listing every problem. A key the
+    parser does not read — top-level or field-level — is a definition
+    problem, not ignorable extra data: a typo'd ``"maximun"`` would
+    otherwise silently drop the bound it meant to declare.
 
     Args:
         data: ``{"title": str, "description"?: str, "fields": [ ... ]}``.
@@ -814,7 +856,8 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         A validated :class:`FormSchema`.
 
     Raises:
-        FormValidationError: If the definition is malformed.
+        FormValidationError: If the definition is malformed, including
+            any unknown definition key.
     """
     problems: list[str] = []
 
@@ -830,6 +873,10 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         problems.append("form must have a non-empty 'fields' list")
         raw_fields = []
 
+    for key in data:
+        if key not in _DEFINITION_TOP_KEYS:
+            problems.append(f"form has unknown definition key {key!r}")
+
     seen_ids: set[str] = set()
     questions: list[FormQuestion] = []
     for idx, raw in enumerate(raw_fields):
@@ -837,6 +884,10 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         if not isinstance(raw, dict):
             problems.append(f"{where} must be a mapping")
             continue
+
+        for key in raw:
+            if key not in _DEFINITION_FIELD_KEYS:
+                problems.append(f"{where} unknown definition key {key!r}")
 
         fid, text, id_problems = _parse_field_identity(where, raw, seen_ids)
         problems.extend(id_problems)
