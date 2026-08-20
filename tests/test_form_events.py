@@ -283,3 +283,22 @@ class TestConfirmationPass1:
         assert stats["fields"] == 5
         assert stats["fields_inferred"] == 0
         assert 0.0 <= stats["inferred_share"] <= 1.0
+
+
+class TestConfirmationPass2:
+    """inferred > fields (2026-08-20): fix 6 skipped negatives but a
+    record with more inferred fields than total fields still poisoned
+    the aggregate (inferred_share reached 10.4). Same malformed class,
+    now skipped whole."""
+
+    def test_inferred_exceeding_fields_skipped(self, _isolated_home: Path) -> None:
+        path = _events_file(_isolated_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        good = {"event": "form_surface", "question_count": 4, "inferred_fields": 2}
+        corrupt = {"event": "form_surface", "question_count": 1, "inferred_fields": 50}
+        path.write_text(json.dumps(good) + "\n" + json.dumps(corrupt) + "\n", encoding="utf-8")
+        stats = inference_rate()
+        assert stats["forms"] == 1
+        assert stats["fields"] == 4
+        assert stats["fields_inferred"] == 2
+        assert 0.0 <= stats["inferred_share"] <= 1.0

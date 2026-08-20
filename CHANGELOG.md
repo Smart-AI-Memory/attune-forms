@@ -12,6 +12,32 @@ follow [SemVer](https://semver.org/).
   (lowercase [a-z][a-z0-9_]*)" — instead of the factually-false
   "declares unused slot" it produced even when the literal `{Who}` text
   was present in a field (confirmation-pass-1 needs-a-look, 2026-08-20)
+- Confirmation-pass-2 batch (library review, 2026-08-20 — all five
+  findings empirically confirmed before fixing):
+  - **Silent answer injection closed**: the markdown re-ask
+    (`problems_to_markdown`) now ends in a trailing `answers` skeleton
+    for the re-asked fields, restoring the last-block-wins invariant
+    `form_to_markdown` relies on. A fenced `answers` block quoted
+    inside an offending field's author-supplied text was the only JSON
+    candidate, so a user quoting the re-ask back ingested answers they
+    never typed with no problem named
+  - A BOOLEAN field's elicitation schema is a `["Yes", "No"]` string
+    enum, not `{"type": "boolean"}` — the validator accepts only
+    Yes/No, so the boolean projection was unanswerable in both
+    directions (a conformant client's `true`/`false` bounced at
+    collect; the only collectable answers violated the schema)
+  - Intake prefill: the "was the prefill applied?" check is by
+    identity, not equality — a self-unequal prior answer (`nan != nan`)
+    slipped past the `!=` guard and reopened the whole-build crash the
+    prefill fold otherwise closes
+  - `inference_rate` skips a record with more inferred fields than
+    total fields, the same malformed-record class as negative counts —
+    one such line had pushed `inferred_share` to 10.4
+  - The markdown assumption merge applies the collect fold's
+    `set(current) == {"edit"}` guard: a quoted non-edit dict ruling
+    (`{"keep": true}`) beside a typed text lane is no longer silently
+    laundered into a valid `{"edit": …}` that this surface alone
+    accepted while the collect path names it
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a

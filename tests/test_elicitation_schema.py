@@ -43,8 +43,11 @@ class TestTypeMapping:
         assert "minItems" not in p
 
     def test_boolean(self):
+        # A two-value string enum, not a JSON boolean: the validator
+        # accepts only "Yes"/"No" (confirmation pass 2, 2026-08-20). A
+        # `{"type": "boolean"}` projection was unanswerable both ways.
         p = _prop({"id": "b", "text": "Ship?", "type": "boolean"})
-        assert p == {"title": "Ship?", "type": "boolean"}
+        assert p == {"title": "Ship?", "type": "string", "enum": ["Yes", "No"]}
 
     def test_number_with_bounds(self):
         p = _prop({"id": "n", "text": "Age", "type": "number", "minimum": 0, "maximum": 120})
@@ -92,3 +95,32 @@ class TestSchemaShape:
         assert schema["type"] == "object"
         assert set(schema["properties"]) == {"req", "opt"}
         assert schema["required"] == ["req"]
+
+
+class TestConfirmationPass2:
+    """Boolean mirror-drift (2026-08-20): the derived schema declared
+    `{"type": "boolean"}` while the validator accepts only "Yes"/"No",
+    making a boolean field unanswerable in both directions."""
+
+    def test_boolean_answer_cross_validates_both_ways(self):
+        import pytest
+
+        jsonschema = pytest.importorskip("jsonschema")
+        from attune_forms import collect_form_response
+
+        form = form_from_dict(
+            {"title": "T", "fields": [{"id": "b", "type": "boolean", "text": "Ship?"}]}
+        )
+        schema = form_to_elicitation_schema(form)
+        # The only collectable answers now conform to the schema...
+        for answer in ("Yes", "No"):
+            jsonschema.validate({"b": answer}, schema)
+            assert collect_form_response(form, {"b": answer}).responses["b"] == answer
+        # ...and a raw JSON boolean, which the validator rejects, no
+        # longer conforms to the schema either (no false contract).
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate({"b": True}, schema)
+
+    def test_boolean_default_conforms_to_its_own_type(self):
+        p = _prop({"id": "b", "type": "boolean", "text": "Ship?", "default": "Yes"})
+        assert p["default"] in p["enum"]
