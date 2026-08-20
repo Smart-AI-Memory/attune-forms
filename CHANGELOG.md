@@ -25,6 +25,25 @@ follow [SemVer](https://semver.org/).
   bypassing question can't pre-select approval in the client dialog
   (this also stops a stray `default` from clobbering a ranking's
   legitimate `suggested`-derived schema default).
+- Confirmation-pass-1 needs-a-look items (library review, 2026-08-20):
+  - `submission_count()` and `inference_rate()` accept the same
+    optional `home` argument as sibling `surface_mix()` — a
+    configured-home reader (the ops dashboard) now reads the store it
+    displays instead of the process-env one
+  - `inference_rate()` skips a line with a FRACTIONAL count
+    (`question_count: 2.7`) as malformed instead of silently
+    truncating it — the same skip-whole-line class as negative and
+    non-numeric counts; an integral float (`5.0`) still counts
+  - MCP `handle_collect_response` called as an import (the attune-ai
+    mirror path, which the SDK's stdio jsonschema gate does not cover)
+    names a non-dict `answers` argument through the module's own
+    `{success: false, problems: [...]}` contract instead of raising a
+    raw `AttributeError`/`TypeError`
+- A declared slot name outside the placeholder grammar (e.g. `Who`,
+  `café`) is named as the real problem — "not a valid placeholder name
+  (lowercase [a-z][a-z0-9_]*)" — instead of the factually-false
+  "declares unused slot" it produced even when the literal `{Who}` text
+  was present in a field (confirmation-pass-1 needs-a-look, 2026-08-20)
 - Confirmation-pass-2 batch (library review, 2026-08-20 — all five
   findings empirically confirmed before fixing):
   - **Silent answer injection closed**: the markdown re-ask

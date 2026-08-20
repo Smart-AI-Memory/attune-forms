@@ -43,6 +43,9 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 #: A named substitution point inside a template string field.
 _SLOT_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 
+#: The bare name grammar a placeholder can carry (_SLOT_RE's group).
+_SLOT_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
+
 
 def list_templates() -> list[str]:
     """Return the sorted names of all stored form templates."""
@@ -106,6 +109,17 @@ def _slot_problems(
         return [f"template {name!r} 'slots' must be a list of strings"]
 
     problems: list[str] = []
+    # A name outside the placeholder grammar can never be collected by
+    # _placeholders, so the unused-slot check below would call it
+    # "unused" even when the literal '{Who}' text IS in a field. Name
+    # the real problem — the name itself — and run the declaration/use
+    # checks only on grammatical names (confirmation-pass-1, 2026-08-20).
+    grammatical = {s for s in declared if _SLOT_NAME_RE.fullmatch(s)}
+    for bad in sorted(set(declared) - grammatical):
+        problems.append(
+            f"template {name!r} slot name '{bad}' is not a valid placeholder"
+            " name (lowercase [a-z][a-z0-9_]*)"
+        )
     for missing in sorted(set(declared) - set(values)):
         problems.append(f"missing value for slot '{missing}'")
     for extra in sorted(set(values) - set(declared)):
@@ -118,7 +132,7 @@ def _slot_problems(
     # declared-but-unused slot demands a caller value only to silently
     # discard it (checkpoint-1 finding, 2026-08-20).
     used = _placeholders(data)
-    for unused in sorted(set(declared) - used):
+    for unused in sorted(grammatical - used):
         problems.append(
             f"template {name!r} declares unused slot '{unused}' — no field uses '{{{unused}}}'"
         )
