@@ -34,6 +34,8 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    confirm_consequences,
+    endorsement_map,
     expansion_items,
     ranking_slot_count,
     recommended_first,
@@ -251,7 +253,7 @@ def _control_deliberation_html(q: FormQuestion) -> str:
     path as DECISION — the user chairs the pick.
     """
     notes = q.option_notes or {}
-    endorse = q.endorsements or {}
+    endorse = endorsement_map(q)
     cards = ""
     for opt in recommended_first(q):
         is_rec = opt == q.recommended
@@ -320,7 +322,7 @@ def _control_confirm_html(q: FormQuestion) -> str:
     is ever pre-selected or badged, so approving is an explicit act.
     """
     rows = ""
-    for item in q.consequences or []:
+    for item in confirm_consequences(q):
         tag = (
             f'<span class="ae-gate-tag">{_esc(item["severity"])}</span>'
             if item.get("severity")
