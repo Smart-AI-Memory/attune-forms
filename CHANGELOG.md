@@ -21,6 +21,11 @@ follow [SemVer](https://semver.org/).
     names a non-dict `answers` argument through the module's own
     `{success: false, problems: [...]}` contract instead of raising a
     raw `AttributeError`/`TypeError`
+- A declared slot name outside the placeholder grammar (e.g. `Who`,
+  `café`) is named as the real problem — "not a valid placeholder name
+  (lowercase [a-z][a-z0-9_]*)" — instead of the factually-false
+  "declares unused slot" it produced even when the literal `{Who}` text
+  was present in a field (confirmation-pass-1 needs-a-look, 2026-08-20)
 - Confirmation-pass-2 batch (library review, 2026-08-20 — all five
   findings empirically confirmed before fixing):
   - **Silent answer injection closed**: the markdown re-ask
