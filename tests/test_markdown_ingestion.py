@@ -396,3 +396,51 @@ class TestUltrareviewRegressions:
         answers, problems = markdown_to_answers(form, reply)
         assert answers == {"env": "staging"}
         assert problems == ["unparseable line: 'C# snippet:'"]
+
+
+def _ranking_form() -> dict:
+    return {
+        "title": "Plan",
+        "fields": [
+            {
+                "id": "prio",
+                "type": "ranking",
+                "text": "Order the work",
+                "options": ["auth", "billing", "search", "docs"],
+            }
+        ],
+    }
+
+
+class TestPilotReviewFindings:
+    """The bridge.py collect-time fold names two dotted keys claiming
+    one rank slot (pilot review, 2026-08-19); the markdown fold had the
+    same silent-overwrite (``decimal_key_number("01") == 1``), hidden
+    behind its typed/quoted split. Same rule, same message."""
+
+    def test_typed_slot_collision_is_named(self) -> None:
+        form = form_from_dict(_ranking_form())
+        answers, problems = markdown_to_answers(form, "prio.01: auth\nprio.1: billing")
+        assert problems == [
+            "'prio' rank slot 1 is supplied more than once ('prio.01' and 'prio.1')"
+        ]
+        assert answers == {"prio": ["auth"]}  # first key kept, as in the collect-time fold
+
+    def test_quoted_leading_zero_key_already_named_unknown(self) -> None:
+        # The quoted lane cannot collide: the JSON path admits only the
+        # exact canonical slot strings, so a leading-zero key is named
+        # unknown and excluded before the fold ever sees it.
+        form = form_from_dict(_ranking_form())
+        reply = '```json\n{"answers": {"prio.01": "auth", "prio.1": "billing"}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert problems == ["unknown field: 'prio.01'"]
+        assert answers == {"prio": ["billing"]}
+
+    def test_typed_over_quoted_same_slot_is_precedence_not_collision(self) -> None:
+        # Typed overlaying a quoted slot is this surface's precedence
+        # rule (typed wins), never a named collision.
+        form = form_from_dict(_ranking_form())
+        reply = 'prio.1: billing\n```json\n{"answers": {"prio.1": "auth", "prio.2": "search"}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert problems == []
+        assert answers == {"prio": ["billing", "search"]}

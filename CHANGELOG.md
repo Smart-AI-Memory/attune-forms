@@ -20,6 +20,11 @@ follow [SemVer](https://semver.org/).
 - A ranking answer supplying the same rank slot twice via dotted keys
   (`"r.01"` and `"r.1"` both fold to slot 1) is a named validation
   problem instead of an arbitrary winner validating clean
+- The markdown surface's ranking fold applies the same rule: two typed
+  shorthand lines claiming one rank slot (`prio.01:` and `prio.1:`)
+  are a named problem from `markdown_to_answers` instead of a silent
+  overwrite — the quoted (JSON-block) lane was already collision-proof,
+  admitting only canonical slot keys
 - A PROGRESS with no options (display-only) auto-defaults to
   `required=False` when `required` is omitted, and an explicit
   `required: true` is a definition problem — before, the definition
