@@ -19,29 +19,63 @@ Licensed under Apache 2.0
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
+    PROGRESS_STATUS_ICONS,
+    RATIONALE_HEADERS,
     FormQuestion,
     FormSchema,
     QuestionType,
     expansion_items,
     ranking_slot_count,
+    recommended_first,
     suggested_pick,
 )
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
-#: Status icon per default-style progress status (matches the widget).
-_PROGRESS_ICONS = {"done": "✓", "in_flight": "◐", "blocked": "✕"}
+#: Any run of three or more backticks — a markdown fence opener/closer.
+_FENCE_RUN_RE = re.compile(r"`{3,}")
+
+#: Woven between backticks to defuse a run; invisible in a terminal.
+_FENCE_ZWSP = "​"
 
 
-def _ordered_recommended_first(q: FormQuestion) -> list[str]:
-    """``q.options`` with ``q.recommended`` first, when it names one."""
-    ordered = list(q.options)
-    if q.recommended and q.recommended in ordered:
-        ordered = [q.recommended] + [o for o in ordered if o != q.recommended]
-    return ordered
+def _defuse_fences(text: str) -> str:
+    """Break any run of three+ backticks in author/host-supplied text so
+    it can never open or close a markdown fence and desync the trailing
+    reply skeleton (confirmation pass 2, 2026-08-20).
+
+    A fence-bearing label, help text, or OPTION rendered verbatim used to
+    corrupt the delimiting of the ``answers`` skeleton
+    :func:`form_to_markdown` appends — the primary taught JSON-reply path
+    then failed to round-trip (``markdown_to_answers`` saw the wrong
+    fence boundaries). A zero-width space is woven between the backticks:
+    the run still reads as backticks in a terminal but no ``` substring
+    survives, so ``markdown_ingestion._FENCE_RE`` cannot mistake field
+    text for a fenced block. Runs shorter than three (real inline code,
+    `` `x` ``) are left untouched so legitimate inline backticks render.
+    """
+    if "```" not in text:
+        return text
+    return _FENCE_RUN_RE.sub(lambda m: _FENCE_ZWSP.join(m.group()), text)
+
+
+def _skeleton_block(skeleton: dict[str, Any]) -> list[str]:
+    """The trailing ``answers`` skeleton as a fenced ``json`` block.
+
+    Backticks inside the payload are emitted as the JSON escape
+    ``\\u0060`` — a fence-bearing author value that reaches the skeleton
+    (a default/recommended/suggested option carrying ```) would otherwise
+    close this block's own ``json`` fence early and break the paste-back.
+    Every backtick in the dump sits inside a JSON string, where
+    ``\\u0060`` is valid and ``json.loads`` restores it, so exact option
+    matching on ingestion is unchanged (confirmation pass 2, 2026-08-20).
+    """
+    payload = json.dumps(skeleton, indent=2, ensure_ascii=False).replace("`", "\\u0060")
+    return ["```json", payload, "```"]
 
 
 def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -> list[str]:
@@ -53,7 +87,7 @@ def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -
     """
     badges = badge_for or {}
     notes = q.option_notes or {}
-    ordered = _ordered_recommended_first(q) if badges else list(q.options)
+    ordered = recommended_first(q) if badges else list(q.options)
     lines = []
     for idx, opt in enumerate(ordered):
         marker = f"{idx + 1}." if q.list_style == "ordered" else "-"
@@ -85,7 +119,7 @@ def _progress_lines(q: FormQuestion) -> list[str]:
         if q.progress_style == "report":
             lines.append(f"- `{status}` {label}{detail}")
         else:
-            icon = _PROGRESS_ICONS.get(status, "•")
+            icon = PROGRESS_STATUS_ICONS.get(status, "•")
             lines.append(f"- {icon} {label}{detail}")
     if q.options:
         head = (
@@ -174,7 +208,7 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return [
             line + _endorsement_suffix(q, opt)
             for line, opt in zip(
-                lines, _ordered_recommended_first(q) if badges else list(q.options), strict=False
+                lines, recommended_first(q) if badges else list(q.options), strict=False
             )
         ]
     if q.type == QuestionType.PROGRESS:
@@ -201,14 +235,6 @@ def _control_lines(q: FormQuestion) -> list[str]:
     return lines
 
 
-#: Rationale callout header per construct (matches the widget's).
-_RATIONALE_HEADERS = {
-    QuestionType.PUSHBACK: "Why I'd push back",
-    QuestionType.PROGRESS: "Summary",
-    QuestionType.DELIBERATION: "Synthesis",
-}
-
-
 def _field_lines(q: FormQuestion) -> list[str]:
     """All markdown lines for one question."""
     req = "" if q.required else " *(optional)*"
@@ -221,7 +247,7 @@ def _field_lines(q: FormQuestion) -> list[str]:
         lines.append(f"> guessed: `{q.default}` — {q.inferred_from}")
     lines.extend(_control_lines(q))
     if q.rationale:
-        header = _RATIONALE_HEADERS.get(q.type, "Why")
+        header = RATIONALE_HEADERS.get(q.type, "Why")
         lines.append(f"> **{header}:** {q.rationale}")
     return lines
 
@@ -296,7 +322,9 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         field = _field_lines(q)
         field[0] = f"{idx}. {field[0]}"
         lines += ["", *field]
-    skeleton = reply_skeleton(form)
+    # Defuse every author/host line before the machine skeleton: a fence
+    # in field text must not desync the ``answers`` block below it.
+    lines = [_defuse_fences(line) for line in lines]
     lines += [
         "",
         "---",
@@ -307,8 +335,6 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
         "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
-        "```json",
-        json.dumps(skeleton, indent=2, ensure_ascii=False),
-        "```",
+        *_skeleton_block(reply_skeleton(form)),
     ]
     return "\n".join(lines)

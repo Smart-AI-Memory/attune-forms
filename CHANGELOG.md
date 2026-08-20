@@ -6,6 +6,69 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Widget gate parity pin (architecture review finding F2, 2026-08-20):
+  the submit script's client-side required-field gate (incomplete
+  rulings boards, unfilled ranking slots, blank `edit` text, the
+  optional partial-ranking block) is now ported rule-for-rule into the
+  round-trip simulator and asserted equivalent to the server
+  validators — for every construct × fill state, the gate blocks the
+  post exactly when `collect_form_response` would reject the payload.
+  A structural anchor check also pins the DOM attributes the gate
+  queries (`data-required`, `[data-item]`, `data-rank-n`) to what the
+  renderer emits. Tests only — no behavior change; the previously
+  untested drift class (gate lets an invalid answer post, or blocks a
+  valid one, after the widget is dead) now fails red in CI
+- Drift guards batch (architecture review findings F1/F6/F9,
+  2026-08-20):
+  - `tests/test_grammar_completeness.py` — the F1 pin: every
+    `QuestionType` member must carry a row in the completeness tables
+    (widget collect mode + a wrong-shaped answer), and each of the
+    four surfaces must emit construct-specific output for it — a
+    construct wired into only three surfaces, or a new type added
+    without updating the tables, fails red instead of silently falling
+    through a default branch
+  - `tests/test_docs_drift.py` — the grammar's hand-maintained docs
+    tracked mechanically: README's spelled-out construct count and
+    per-construct coverage, SKILL.md's coverage of every question
+    type, and every MCP tool / `x_to_y` library function the skill
+    names must actually exist (the count had already rotted by hand
+    once, commit 543a7a0)
+  - `docs/adding-a-construct.md` — the ~19-touchpoint checklist for a
+    new construct, with the review's accept-and-pin ruling and the
+    rejected registry/base-class alternatives recorded
+  - Surface-decision authority stated where it was only implicit
+    (F9): `select_form_surface` docstring and README now say the
+    router is advisory in the shipped plugin — the agent's MCP tool
+    choice is the effective decision and the router runs after the
+    fact for telemetry agreement; binding only for library consumers
+    routing their own calls
+
+### Changed
+- 0.6.x cleanup batch (architecture review findings F4/F5/F7,
+  2026-08-20) — single-sourcing and schema hygiene, output
+  byte-identical (pinned by the characterization suite):
+  - The last policy duplications moved into `models`:
+    `BOOLEAN_OPTIONS` (was defined independently in bridge and
+    widget), `recommended_first()` (was implemented three times —
+    widget, markdown surface, and inline in `to_ask_user_format`),
+    `RATIONALE_HEADERS` and `PROGRESS_STATUS_ICONS` (each surface
+    carried its own copy with a "matches the widget" comment nothing
+    enforced). New `tests/test_single_sourcing.py` pins the
+    single-sourcing per surface
+  - `bridge._CONFIRM_DEFAULT_OPTIONS` deleted — the bridge now
+    consumes `models.CONFIRM_DEFAULT_OPTIONS`, making the 0.5.0
+    changelog's single-sourcing claim true
+  - The MCP `_field_schema` types its object-array extras
+    (`progress_items`, `triage_items`, `consequences`, `assumptions`)
+    and gains a drift test: every `QuestionType` value must appear in
+    the schema's type enum and every `FormQuestion` field in its
+    properties (the prose description stays hand-written on purpose)
+  - Stale docstrings corrected: `keyboard_mode_enabled` and the
+    package overview now document `ATTUNE_FORMS_KEYBOARD_MODE` as the
+    preferred override with `ATTUNE_KEYBOARD_MODE` as the legacy
+    fallback, matching what the code reads
+
 ### Fixed
 - Unknown DEFINITION keys are now named problems instead of silently
   ignored (confirmation-pass-1 chair ruling, 2026-08-20): a typo'd
@@ -18,6 +81,22 @@ follow [SemVer](https://semver.org/).
   the SDK gate agrees with the parser. The schema is D3-mirrored to
   attune-ai — the mirror must pick up `additionalProperties` at the
   next release-gated re-sync
+- Author-supplied field text can no longer desync the markdown reply
+  skeleton (confirmation-pass-2 needs-a-look, 2026-08-20 — the LOUD
+  sibling of the pass-2 silent-injection fix). A literal triple-backtick
+  fence inside a label, help text, or OPTION used to open a stray code
+  fence in the rendered form, so the trailing `answers` skeleton was no
+  longer cleanly delimited and paste-back failed loudly ("fenced code
+  block is not valid JSON"). Every author/host line rendered by
+  `form_to_markdown` and the `problems_to_markdown` re-ask is now defused
+  — runs of three+ backticks get a woven zero-width break so no ```
+  substring survives, while inline `` `code` `` (runs under three)
+  renders untouched. A fence-bearing value that reaches the JSON skeleton
+  itself (a default/recommended/suggested option carrying a fence) has
+  each backtick emitted as the JSON unicode escape `\u0060`, which
+  `json.loads` restores on ingestion, so the skeleton's own fence stays
+  intact and exact option matching is unchanged. The widget surface
+  HTML-escapes and was already immune
 - **Directly-built D2 gate with a `default` can no longer pass
   unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
   confirmed). The no-`default` rule for the two-way constructs (confirm,
@@ -81,6 +160,13 @@ follow [SemVer](https://semver.org/).
     (`{"keep": true}`) beside a typed text lane is no longer silently
     laundered into a valid `{"edit": …}` that this surface alone
     accepted while the collect path names it
+  - A display-only PROGRESS field (no blocked options) no longer
+    projects to `{"type": "string", "enum": []}` in the elicitation
+    schema — an empty enum is a property no value can satisfy (an
+    unanswerable field, or a whole-schema rejection on a strict
+    client). Such a report is narrated, not answered, so it is now
+    skipped from `properties`/`required` entirely; a PROGRESS that
+    carries blocked options is a real single-pick and still projects
 - `form_from_template` now validates the `slots` argument type *before*
   the `values = slots or {}` coalesce (confirmation-pass-2 needs-a-look,
   2026-08-20). The pass-1 `isinstance(values, dict)` guard ran after the
@@ -91,6 +177,17 @@ follow [SemVer](https://semver.org/).
   non-`dict` `slots` is now named directly; `None` still coalesces to
   an empty mapping. `dict` stays strict so the "mapping" wording matches
   what is accepted — a `Mapping` that is not a `dict` is rejected too
+- The widget's `::` radio-group namespace is now collision-guarded at
+  definition time, symmetric with the existing dotted-key guard
+  (confirmation-pass-2 needs-a-look, 2026-08-20). A TRIAGE or
+  ASSUMPTION_REVIEW board with id `a` renders one radio group per item
+  named `a::<idx>`; a sibling field whose id was literally `a::1` emitted
+  a group sharing that `name`, so the browser fused the two into one
+  mutually-exclusive group and one field became unanswerable in the
+  widget. A field id colliding with a board's `a::<idx>` namespace is now
+  rejected at `form_from_dict` time, so the colliding HTML is never
+  rendered. Low realism (no author writes `::N` ids) but a genuine
+  unguarded namespace analogous to the guarded dotted one
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a

@@ -212,3 +212,21 @@ def test_field_schema_matches_parser_key_set():
 
     advertised = set(_field_schema()["properties"])
     assert advertised | {"label"} == set(_DEFINITION_FIELD_KEYS)
+def test_field_schema_covers_the_whole_grammar():
+    """Drift catcher (architecture review F5, 2026-08-20): the
+    hand-maintained tool schema must keep up with the grammar — every
+    QuestionType value in its type enum, every FormQuestion field
+    (except the internal timestamp-free ones the schema derives) in its
+    properties. The prose description stays hand-written on purpose; do
+    NOT generate this schema from models."""
+    from dataclasses import fields as dc_fields
+
+    from attune_forms.mcp_server import _field_schema
+    from attune_forms.models import FormQuestion, QuestionType
+
+    schema = _field_schema()
+    assert set(schema["properties"]["type"]["enum"]) == {t.value for t in QuestionType}
+    schema_props = set(schema["properties"])
+    question_fields = {f.name for f in dc_fields(FormQuestion)}
+    missing = question_fields - schema_props
+    assert not missing, f"FormQuestion field(s) absent from _field_schema: {sorted(missing)}"

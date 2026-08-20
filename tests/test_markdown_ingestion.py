@@ -510,3 +510,99 @@ class TestConfirmationPass2:
         assert answers["a"]["item"] == {"keep": True}  # NOT rewritten to {"edit": ...}
         with pytest.raises(FormValidationError, match="invalid ruling"):
             collect_form_response(form, answers)
+
+    def test_fence_bearing_option_keeps_skeleton_parseable(self) -> None:
+        # LOUD variant of the field-text injection: a literal ``` fence
+        # inside an OPTION used to desync `_FENCE_RE`, so the trailing
+        # skeleton was no longer cleanly delimited and paste-back failed
+        # loudly ("fenced code block is not valid JSON"). The rendered
+        # fence is now defused so the round-trip stays clean.
+        form = form_from_dict(
+            {
+                "title": "Demo",
+                "fields": [
+                    {
+                        "id": "pick",
+                        "type": "single_select",
+                        "text": "Choose",
+                        "options": ["ok\n```\nsneaky", "other"],
+                    }
+                ],
+            }
+        )
+        markdown = form_to_markdown(form)
+        answers, problems = markdown_to_answers(form, markdown)
+        assert problems == []  # skeleton still parses; no injected problems
+        assert answers == {}  # nothing picked -> all placeholders unanswered
+        # A real pick typed as shorthand alongside the pasted form resolves.
+        picked, picked_problems = markdown_to_answers(form, markdown + "\npick: other")
+        assert picked == {"pick": "other"}
+        assert picked_problems == []
+
+    def test_fence_bearing_default_survives_in_skeleton(self) -> None:
+        # A fence-bearing value that reaches the JSON skeleton (a default
+        # option carrying ```) would close the skeleton's own ```json
+        # fence early; backticks emit as the \\u0060 escape, which
+        # `json.loads` restores, so the exact option round-trips.
+        form = form_from_dict(
+            {
+                "title": "Demo",
+                "fields": [
+                    {
+                        "id": "pick",
+                        "type": "single_select",
+                        "text": "Choose",
+                        "options": ["a```b", "other"],
+                        "default": "a```b",
+                    }
+                ],
+            }
+        )
+        markdown = form_to_markdown(form)
+        assert "```json" in markdown  # the skeleton fence is intact
+        answers, problems = markdown_to_answers(form, markdown)
+        assert answers == {"pick": "a```b"}  # raw value preserved for matching
+        assert problems == []
+        collect_form_response(form, answers)  # validates against the option
+
+    def test_fence_in_reask_field_text_keeps_reask_skeleton_parseable(self) -> None:
+        # The re-ask path shares `_field_lines`; a fence in a re-asked
+        # field's text must not desync the re-ask skeleton either.
+        form = form_from_dict(
+            {
+                "title": "Demo",
+                "fields": [
+                    {
+                        "id": "pick",
+                        "type": "single_select",
+                        "text": "Choose ```\nfence",
+                        "options": ["x", "y"],
+                    },
+                    {"id": "other", "type": "text_input", "text": "Other"},
+                ],
+            }
+        )
+        reask = problems_to_markdown(form, ["'pick' is not a valid option"])
+        answers, problems = markdown_to_answers(form, reask)
+        assert answers == {}
+        assert problems == []
+
+    def test_inline_backticks_in_field_text_still_render(self) -> None:
+        # Defusing must only touch runs of three+ backticks; real inline
+        # code (single/double backticks) survives verbatim.
+        form = form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "q",
+                        "type": "text_input",
+                        "text": "Use `code` here",
+                        "help_text": "like ``x`` too",
+                    }
+                ],
+            }
+        )
+        markdown = form_to_markdown(form)
+        assert "`code`" in markdown
+        assert "``x``" in markdown
