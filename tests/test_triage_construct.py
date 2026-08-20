@@ -180,13 +180,15 @@ class TestTriageDottedFold:
             "Naming nit": "dismiss",
         }
 
-    def test_mapping_answer_wins_over_dotted(self) -> None:
+    def test_mapping_plus_dotted_is_a_named_contradiction(self) -> None:
+        # Chair ruling 2026-08-20: mapping-wins used to silently discard
+        # the contradicting dotted value; mixed shapes are now named.
         form = form_from_dict(_triage(required=False))
-        resp = collect_form_response(
-            form,
-            {"findings": {"retry": "ticket"}, "findings.retry": "dismiss"},
-        )
-        assert resp.responses["findings"] == {"retry": "ticket"}
+        with pytest.raises(FormValidationError, match="supplied both canonically and as dotted"):
+            collect_form_response(
+                form,
+                {"findings": {"retry": "ticket"}, "findings.retry": "dismiss"},
+            )
 
     def test_fold_never_mutates_the_input(self) -> None:
         form = form_from_dict(_triage(required=False))

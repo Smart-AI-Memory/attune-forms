@@ -65,6 +65,13 @@ class TestDeliberationFormFromDict:
         with pytest.raises(FormValidationError, match="requires 'endorsements'"):
             form_from_dict(_deliberation(endorsements=None))
 
+    def test_empty_endorsements_rejected(self) -> None:
+        # Chair ruling 2026-08-20 (confirmation-pass-1): {} satisfied
+        # the required check vacuously — exactly the "just a decision,
+        # no endorsements" the field exists to prevent.
+        with pytest.raises(FormValidationError, match="requires at least one endorsement"):
+            form_from_dict(_deliberation(endorsements={}))
+
     def test_endorsement_keys_must_be_options(self) -> None:
         with pytest.raises(FormValidationError, match="'endorsements' keys not in options"):
             form_from_dict(_deliberation(endorsements={"Ghost": ["claude"]}))
