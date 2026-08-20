@@ -37,6 +37,20 @@ from attune_forms.models import (
 #: this two-value constant rather than sharing one).
 _BOOLEAN_OPTIONS = ("Yes", "No")
 
+#: The D2 constructs forbid a ``default`` (mirrors
+#: ``bridge._NO_DEFAULT_REASON``). A directly-built question bypasses
+#: ``form_from_dict``'s definition-time rejection, so the generic
+#: ``default`` projection below must not emit one for these types —
+#: a schema ``default`` pre-selects approval / pre-fills an order in the
+#: client dialog, the exact thing the two-way gate forbids. Defense in
+#: depth: the collect path (``bridge.collect_form_response``) is the
+#: primary guard; this stops the leak at the schema surface too. RANKING
+#: carries its own ``suggested``-derived default (a visible proposal),
+#: so guarding here also stops a stray ``default`` from clobbering it.
+_NO_SCHEMA_DEFAULT_TYPES = frozenset(
+    {QuestionType.CONFIRM, QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW}
+)
+
 
 def _property_for(question: FormQuestion) -> dict[str, Any]:
     """Build the elicitation schema property for one question.
@@ -108,7 +122,7 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
         if summary:
             existing = prop.get("description")
             prop["description"] = f"{existing} · {summary}" if existing else summary
-    if question.default is not None:
+    if question.default is not None and question.type not in _NO_SCHEMA_DEFAULT_TYPES:
         prop["default"] = question.default
     return prop
 
