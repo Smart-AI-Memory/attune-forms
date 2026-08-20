@@ -1562,7 +1562,9 @@ def _validate_answer(question: FormQuestion, value: Any) -> str | None:
     return handler(question, value)
 
 
-def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, Any]:
+def _fold_assumption_answers(
+    folded: dict[str, Any], prefix: str
+) -> tuple[dict[str, Any], list[str]]:
     """Fold one assumption review's dotted keys (mutating ``folded``).
 
     ``"<id>.<key>"`` carries the ruling and ``"<id>.<key>.text"`` the
@@ -1570,6 +1572,14 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
     ``edit`` (``{"edit": text}``); an ``edit`` ruling with no text folds
     to ``{"edit": ""}`` so the validator names it rather than the fold
     guessing. A ruling already shaped as ``{"edit": ...}`` passes through.
+
+    Returns ``(rulings, problems)``. A text lane whose item has NO
+    ruling at all — a nonexistent item or a real one the answer never
+    ruled — is a named problem: the text was typed input, and dropping
+    it silently while naming the equivalent orphan RULING key violated
+    the no-silent-drop rule (confirmation pass 1, 2026-08-20). Text
+    beside a non-edit ruling stays a documented drop: it is only read
+    on ``edit``.
     """
     rulings: dict[str, Any] = {}
     texts: dict[str, Any] = {}
@@ -1581,6 +1591,13 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
             texts[item[: -len(ASSUMPTION_TEXT_SUFFIX)]] = folded.pop(key)
         else:
             rulings[item] = folded.pop(key)
+    problems: list[str] = []
+    orphans = sorted(set(texts) - set(rulings))
+    if orphans:
+        problems.append(
+            f"{prefix[:-1]!r} has replacement text for item(s) with no "
+            f"ruling: {orphans} — text is only read with an 'edit' ruling"
+        )
     out: dict[str, Any] = {}
     for item, ruling in rulings.items():
         if ruling == "edit":
@@ -1596,7 +1613,7 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
             out[item] = {"edit": texts[item]}
         else:
             out[item] = ruling
-    return out
+    return out, problems
 
 
 def _fold_expanded_answers(
@@ -1651,7 +1668,8 @@ def _fold_expanded_answers(
                 folded[question.id] = picks
             continue
         if question.type is QuestionType.ASSUMPTION_REVIEW:
-            folded_rulings = _fold_assumption_answers(folded, prefix)
+            folded_rulings, fold_problems = _fold_assumption_answers(folded, prefix)
+            problems.extend(fold_problems)
             if folded_rulings:
                 folded[question.id] = folded_rulings
             continue

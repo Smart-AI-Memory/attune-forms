@@ -128,9 +128,39 @@ def test_field_schema_default_is_answer_shaped_and_inferred_from_declared():
     """Verify-pass finding (2026-08-20): the advertised inputSchema typed
     `default` as string — wrong since defaults validate like answers
     (multi_select: list; number: numeric; boolean: Yes/No) — and omitted
-    inferred_from entirely."""
+    inferred_from entirely. Confirmation pass 1 added "object": a triage
+    default is a legal {item id: disposition} dict, and the SDK's
+    jsonschema gate rejected it at the front door before the tool's
+    problems contract could run."""
     from attune_forms.mcp_server import _field_schema
 
     props = _field_schema()["properties"]
-    assert set(props["default"]["type"]) == {"string", "number", "boolean", "array"}
+    assert set(props["default"]["type"]) == {"string", "number", "boolean", "array", "object"}
     assert "inferred_from" in props
+
+
+def test_schema_accepts_legal_triage_object_default():
+    """The exact confirmation-pass-1 repro: a form form_from_dict accepts
+    must pass the advertised inputSchema (the SDK validates against it
+    before the tool runs)."""
+    jsonschema = pytest.importorskip("jsonschema")
+    from attune_forms import form_from_dict
+    from attune_forms.mcp_server import tool_definitions
+
+    form = {
+        "title": "t",
+        "fields": [
+            {
+                "id": "tri",
+                "type": "triage",
+                "text": "Rule.",
+                "triage_items": [{"id": "t1", "label": "A"}],
+                "dispositions": ["keep", "drop"],
+                "required": False,
+                "default": {"t1": "keep"},
+            }
+        ],
+    }
+    form_from_dict(form)  # legal by the library's own validator
+    tools = {t.name: t for t in tool_definitions()}
+    jsonschema.validate({"form": form}, tools["elicitation_render_form"].inputSchema)

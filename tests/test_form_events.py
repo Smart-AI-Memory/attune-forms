@@ -244,3 +244,42 @@ class TestInferenceRateMalformedCounts:
         assert stats["forms"] == 1
         assert stats["fields"] == 2
         assert stats["fields_inferred"] == 1
+
+
+class TestConfirmationPass1:
+    """Regressions pinned from the 2026-08-20 confirmation-pass-1 review:
+    reserved record keys always win, the never-raises contract covers
+    more than OSError, and negative counts are the same malformed class
+    as non-numeric ones."""
+
+    def test_reserved_keys_cannot_be_clobbered(self, _isolated_home: Path) -> None:
+        log_surface_decision("widget", event="form_submitted", v="9.9", reason="x")
+        line = _events_file(_isolated_home).read_text(encoding="utf-8")
+        record = json.loads(line)
+        assert record["event"] == "form_surface"
+        assert record["v"] == "1.0"
+        assert record["reason"] == "x"  # honest context still lands
+        assert submission_count() == 0  # the forged submission never counted
+
+    def test_never_raises_on_unserializable_context(self, _isolated_home: Path) -> None:
+        circular: dict = {}
+        circular["self"] = circular  # json.dump -> ValueError, not OSError
+        log_surface_decision("widget", ctx=circular)
+
+        class _Hostile:
+            def __str__(self) -> str:
+                raise RuntimeError("boom")
+
+        log_surface_decision("widget", ctx=_Hostile())  # default=str re-raises
+
+    def test_negative_counts_skipped_like_non_numeric(self, _isolated_home: Path) -> None:
+        path = _events_file(_isolated_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        good = {"event": "form_surface", "question_count": 5, "inferred_fields": 0}
+        corrupt = {"event": "form_surface", "question_count": -4, "inferred_fields": -2}
+        path.write_text(json.dumps(good) + "\n" + json.dumps(corrupt) + "\n", encoding="utf-8")
+        stats = inference_rate()
+        assert stats["forms"] == 1
+        assert stats["fields"] == 5
+        assert stats["fields_inferred"] == 0
+        assert 0.0 <= stats["inferred_share"] <= 1.0

@@ -7,6 +7,30 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
+  findings empirically confirmed before fixing):
+  - An assumption-review text lane whose item has NO ruling (a
+    nonexistent item, or a real one the answer never ruled) is a named
+    problem from the collect-time fold and the markdown merge — typed
+    replacement text no longer vanishes from a response that validates
+    clean (text beside a non-edit ruling stays a documented drop)
+  - `form_from_template` names a non-mapping `slots` argument through
+    its normal problems seam instead of crashing with `AttributeError`
+  - Telemetry: reserved record keys (`v`/`ts`/`event`/`surface`) can no
+    longer be clobbered by caller kwargs (a forged `form_submitted`
+    advanced the keyboard-hint counter); the "never raises" contract
+    now covers more than `OSError` (a circular context raised
+    `ValueError` through live surface routing); `inference_rate` skips
+    NEGATIVE counts like any other malformed record instead of letting
+    one corrupt line push `inferred_share` outside 0–1
+  - Intake prefill fold: a prior answer is kept iff it validates for
+    the built field — an invalid string (e.g. the `other` free-text
+    lane's prior answer) no longer crashes the whole intake build, and
+    faithful list/number prefills on multi-select/number slots are no
+    longer blanket-dropped
+  - MCP `inputSchema` types `default` to include `"object"` — a legal
+    triage default (`{item id: disposition}`) no longer rejected by
+    the SDK's schema gate before the tool's problems contract can run
 - `inference_rate()` skips a telemetry line with non-numeric counts
   instead of raising `ValueError` — matching the skip-don't-raise
   contract of its sibling readers (discovery-sweep, 2026-08-20)

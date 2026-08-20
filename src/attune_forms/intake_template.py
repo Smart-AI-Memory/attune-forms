@@ -37,7 +37,7 @@ from typing import Any
 
 import structlog
 
-from attune_forms.bridge import form_from_dict
+from attune_forms.bridge import FormValidationError, form_from_dict
 from attune_forms.models import FormSchema
 
 logger = structlog.get_logger(__name__)
@@ -178,14 +178,15 @@ def _slot_field(
         base["required"] = slot.required
     if slot.default is not None:
         base["default"] = slot.default
-    if isinstance(prefilled, str):
+    if prefilled is not None:
+        # Tentative: a prior answer of ANY shape overlays the default
+        # here, and `_settle_prefill` keeps it only if it validates for
+        # the BUILT field. Blanket-skipping non-strings dropped faithful
+        # list/number prefills, while an invalid string (the `other`
+        # free-text lane's prior answer, by construction not a
+        # candidate) crashed the whole build under #37's default
+        # validation (confirmation pass 1, 2026-08-20).
         base["default"] = prefilled
-    elif prefilled is not None:
-        # A non-string prior answer (e.g. a multi-select's list) has no
-        # faithful scalar rendering — repr-coercing it presented junk
-        # like "['src/', 'tests/']" as a settled value. Skip the prefill
-        # and keep the slot's own default (discovery-sweep, 2026-08-20).
-        prefilled = None
 
     if slot.provider is not None:
         if overrides is not None and slot.key in overrides:
@@ -215,6 +216,30 @@ def _slot_field(
     return base
 
 
+def _settle_prefill(field: dict[str, Any], slot: FieldSlot, ctx: ProviderContext) -> dict[str, Any]:
+    """Keep a prior-answer prefill only if it validates for the built field.
+
+    A prefill that fails the field's own default validation (a stale
+    ex-candidate, the ``other`` lane's free text, a list on a
+    single-select) is dropped and the slot's authored default restored —
+    the form renders without the prefill instead of the whole intake
+    dying on it. An invalid AUTHORED default still fails the final
+    ``form_from_dict`` exactly as before: only the prefill overlay
+    degrades.
+    """
+    prefilled = ctx.answered.get(slot.key)
+    if prefilled is None or field.get("default") != prefilled:
+        return field
+    try:
+        form_from_dict({"title": "prefill probe", "fields": [dict(field)]})
+    except FormValidationError:
+        if slot.default is not None:
+            field["default"] = slot.default
+        else:
+            field.pop("default", None)
+    return field
+
+
 def build_form(
     template: FormTemplate,
     ctx: ProviderContext,
@@ -226,7 +251,10 @@ def build_form(
         {
             "title": template.title,
             "description": template.description,
-            "fields": [_slot_field(slot, ctx, candidates_override) for slot in template.fields],
+            "fields": [
+                _settle_prefill(_slot_field(slot, ctx, candidates_override), slot, ctx)
+                for slot in template.fields
+            ],
         }
     )
 
