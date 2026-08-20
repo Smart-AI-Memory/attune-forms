@@ -23,25 +23,17 @@ from typing import Any
 
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
+    PROGRESS_STATUS_ICONS,
+    RATIONALE_HEADERS,
     FormQuestion,
     FormSchema,
     QuestionType,
     expansion_items,
     ranking_slot_count,
+    recommended_first,
     suggested_pick,
 )
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
-
-#: Status icon per default-style progress status (matches the widget).
-_PROGRESS_ICONS = {"done": "✓", "in_flight": "◐", "blocked": "✕"}
-
-
-def _ordered_recommended_first(q: FormQuestion) -> list[str]:
-    """``q.options`` with ``q.recommended`` first, when it names one."""
-    ordered = list(q.options)
-    if q.recommended and q.recommended in ordered:
-        ordered = [q.recommended] + [o for o in ordered if o != q.recommended]
-    return ordered
 
 
 def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -> list[str]:
@@ -53,7 +45,7 @@ def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -
     """
     badges = badge_for or {}
     notes = q.option_notes or {}
-    ordered = _ordered_recommended_first(q) if badges else list(q.options)
+    ordered = recommended_first(q) if badges else list(q.options)
     lines = []
     for idx, opt in enumerate(ordered):
         marker = f"{idx + 1}." if q.list_style == "ordered" else "-"
@@ -85,7 +77,7 @@ def _progress_lines(q: FormQuestion) -> list[str]:
         if q.progress_style == "report":
             lines.append(f"- `{status}` {label}{detail}")
         else:
-            icon = _PROGRESS_ICONS.get(status, "•")
+            icon = PROGRESS_STATUS_ICONS.get(status, "•")
             lines.append(f"- {icon} {label}{detail}")
     if q.options:
         head = (
@@ -174,7 +166,7 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return [
             line + _endorsement_suffix(q, opt)
             for line, opt in zip(
-                lines, _ordered_recommended_first(q) if badges else list(q.options), strict=False
+                lines, recommended_first(q) if badges else list(q.options), strict=False
             )
         ]
     if q.type == QuestionType.PROGRESS:
@@ -201,14 +193,6 @@ def _control_lines(q: FormQuestion) -> list[str]:
     return lines
 
 
-#: Rationale callout header per construct (matches the widget's).
-_RATIONALE_HEADERS = {
-    QuestionType.PUSHBACK: "Why I'd push back",
-    QuestionType.PROGRESS: "Summary",
-    QuestionType.DELIBERATION: "Synthesis",
-}
-
-
 def _field_lines(q: FormQuestion) -> list[str]:
     """All markdown lines for one question."""
     req = "" if q.required else " *(optional)*"
@@ -221,7 +205,7 @@ def _field_lines(q: FormQuestion) -> list[str]:
         lines.append(f"> guessed: `{q.default}` — {q.inferred_from}")
     lines.extend(_control_lines(q))
     if q.rationale:
-        header = _RATIONALE_HEADERS.get(q.type, "Why")
+        header = RATIONALE_HEADERS.get(q.type, "Why")
         lines.append(f"> **{header}:** {q.rationale}")
     return lines
 

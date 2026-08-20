@@ -23,7 +23,8 @@ Public surface:
   than a question, and is never silently skipped.
 - :func:`keyboard_mode_enabled` — the user's terse/keyboard opt-out
   (D17), persisted per project in ``attune.config.json`` with
-  ``ATTUNE_KEYBOARD_MODE`` as a session override.
+  ``ATTUNE_FORMS_KEYBOARD_MODE`` (legacy fallback:
+  ``ATTUNE_KEYBOARD_MODE``) as a session override.
 - :func:`set_keyboard_mode` — persist that preference (what
   ``attune config set keyboard_mode`` calls).
 - :func:`needs_widget` — low-level *controls* check: True iff a form

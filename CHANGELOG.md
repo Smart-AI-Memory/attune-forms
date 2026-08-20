@@ -6,6 +6,31 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- 0.6.x cleanup batch (architecture review findings F4/F5/F7,
+  2026-08-20) — single-sourcing and schema hygiene, output
+  byte-identical (pinned by the characterization suite):
+  - The last policy duplications moved into `models`:
+    `BOOLEAN_OPTIONS` (was defined independently in bridge and
+    widget), `recommended_first()` (was implemented three times —
+    widget, markdown surface, and inline in `to_ask_user_format`),
+    `RATIONALE_HEADERS` and `PROGRESS_STATUS_ICONS` (each surface
+    carried its own copy with a "matches the widget" comment nothing
+    enforced). New `tests/test_single_sourcing.py` pins the
+    single-sourcing per surface
+  - `bridge._CONFIRM_DEFAULT_OPTIONS` deleted — the bridge now
+    consumes `models.CONFIRM_DEFAULT_OPTIONS`, making the 0.5.0
+    changelog's single-sourcing claim true
+  - The MCP `_field_schema` types its object-array extras
+    (`progress_items`, `triage_items`, `consequences`, `assumptions`)
+    and gains a drift test: every `QuestionType` value must appear in
+    the schema's type enum and every `FormQuestion` field in its
+    properties (the prose description stays hand-written on purpose)
+  - Stale docstrings corrected: `keyboard_mode_enabled` and the
+    package overview now document `ATTUNE_FORMS_KEYBOARD_MODE` as the
+    preferred override with `ATTUNE_KEYBOARD_MODE` as the legacy
+    fallback, matching what the code reads
+
 ### Fixed
 - **Directly-built D2 gate with a `default` can no longer pass
   unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically

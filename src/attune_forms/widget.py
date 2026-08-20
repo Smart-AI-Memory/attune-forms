@@ -28,11 +28,15 @@ from html import escape
 from attune_forms.bridge import is_fully_inferred
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
+    BOOLEAN_OPTIONS,
+    PROGRESS_STATUS_ICONS,
+    RATIONALE_HEADERS,
     FormQuestion,
     FormSchema,
     QuestionType,
     expansion_items,
     ranking_slot_count,
+    recommended_first,
     suggested_pick,
 )
 from attune_forms.theme import CSS_BASE as _CSS_BASE
@@ -42,10 +46,6 @@ from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
 #: form postback among ordinary chat messages and route it to
 #: ``collect_form_response``. Kept in sync with the ``elicit`` skill.
 WIDGET_RESPONSE_MARKER = "__elicitation_response__"
-
-#: The Yes/No values a BOOLEAN control posts (``collect_form_response``
-#: validates a boolean answer against exactly these).
-_BOOLEAN_OPTIONS = ("Yes", "No")
 
 
 def _esc(value: object) -> str:
@@ -85,22 +85,11 @@ def _list_html(q: FormQuestion, *, multi: bool) -> str:
     return f'<{tag} class="ae-list"{role}>{items}</{tag}>'
 
 
-def _ordered_options_recommended_first(q: FormQuestion) -> list[str]:
-    """Return ``q.options`` with ``q.recommended`` moved to the front,
-    when it names one of them. Shared by the three card-based renders
-    (DECISION, PUSHBACK, PROGRESS report style).
-    """
-    ordered = list(q.options)
-    if q.recommended and q.recommended in ordered:
-        ordered = [q.recommended] + [o for o in ordered if o != q.recommended]
-    return ordered
-
-
 def _control_decision_html(q: FormQuestion) -> str:
     """Render a DECISION control: recommended-first cards with notes."""
     notes = q.option_notes or {}
     cards = ""
-    for opt in _ordered_options_recommended_first(q):
+    for opt in recommended_first(q):
         is_rec = opt == q.recommended
         badge = '<span class="ae-rec-badge">Recommended</span>' if is_rec else ""
         note = f'<span class="ae-card-note">{_esc(notes[opt])}</span>' if opt in notes else ""
@@ -125,7 +114,7 @@ def _control_pushback_html(q: FormQuestion) -> str:
     """
     notes = q.option_notes or {}
     cards = ""
-    for opt in _ordered_options_recommended_first(q):
+    for opt in recommended_first(q):
         is_rec = opt == q.recommended
         is_user = opt == q.user_position
         badge = '<span class="ae-rec-badge">I&#x27;d suggest instead</span>' if is_rec else ""
@@ -167,7 +156,7 @@ def _control_progress_report_html(q: FormQuestion) -> str:
             f"{detail}</div>"
         )
     cards = ""
-    for opt in _ordered_options_recommended_first(q):
+    for opt in recommended_first(q):
         it = by_label.get(opt, {})
         is_rec = opt == q.recommended
         badge = '<span class="ae-rec-badge">suggested next</span>' if is_rec else ""
@@ -208,7 +197,11 @@ def _control_progress_html(q: FormQuestion) -> str:
         if st in by_status:
             by_status[st].append(it)
     rows = ""
-    for status_key, icon, sr in (("done", "✓", "done"), ("in_flight", "◐", "in progress")):
+    status_rows = (
+        ("done", PROGRESS_STATUS_ICONS["done"], "done"),
+        ("in_flight", PROGRESS_STATUS_ICONS["in_flight"], "in progress"),
+    )
+    for status_key, icon, sr in status_rows:
         for it in by_status[status_key]:
             detail = (
                 f'<span class="ae-prog-detail">{_esc(it["detail"])}</span>'
@@ -223,7 +216,7 @@ def _control_progress_html(q: FormQuestion) -> str:
             )
     detail_by_label = {it.get("label"): it.get("detail") for it in by_status["blocked"]}
     cards = ""
-    for opt in _ordered_options_recommended_first(q):
+    for opt in recommended_first(q):
         is_rec = opt == q.recommended
         badge = '<span class="ae-rec-badge">suggested next</span>' if is_rec else ""
         note_text = notes.get(opt) or detail_by_label.get(opt)
@@ -234,7 +227,8 @@ def _control_progress_html(q: FormQuestion) -> str:
             f'<label class="{cls}">'
             f'<input type="radio" name="{_esc(q.id)}" data-control '
             f'value="{_esc(opt)}"{checked}>'
-            f'<span class="ae-prog-icon ae-prog-blocked" aria-hidden="true">✕</span>'
+            f'<span class="ae-prog-icon ae-prog-blocked" aria-hidden="true">'
+            f"{PROGRESS_STATUS_ICONS['blocked']}</span>"
             f'{badge}<span class="ae-card-title">{_esc(opt)}</span>{note}</label>'
         )
     picker = (
@@ -259,7 +253,7 @@ def _control_deliberation_html(q: FormQuestion) -> str:
     notes = q.option_notes or {}
     endorse = q.endorsements or {}
     cards = ""
-    for opt in _ordered_options_recommended_first(q):
+    for opt in recommended_first(q):
         is_rec = opt == q.recommended
         badge = '<span class="ae-rec-badge">Synthesis pick</span>' if is_rec else ""
         chips = "".join(
@@ -485,7 +479,7 @@ def _control_single_select_html(q: FormQuestion) -> str:
 def _control_boolean_html(q: FormQuestion) -> str:
     """Render BOOLEAN as a Yes/No <select>."""
     opts = '<option value="">—</option>' + "".join(
-        f'<option value="{_esc(o)}"{_selected(q, o)}>{_esc(o)}</option>' for o in _BOOLEAN_OPTIONS
+        f'<option value="{_esc(o)}"{_selected(q, o)}>{_esc(o)}</option>' for o in BOOLEAN_OPTIONS
     )
     return f'<select data-control class="ae-input">{opts}</select>'
 
@@ -625,12 +619,7 @@ def _field_html(q: FormQuestion) -> str:
     """
     req = '<span class="ae-req" title="required">*</span>' if q.required else ""
     help_html = f'<div class="ae-help">{_esc(q.help_text)}</div>' if q.help_text else ""
-    rationale_headers = {
-        QuestionType.PUSHBACK: "Why I&#x27;d push back",
-        QuestionType.PROGRESS: "Summary",
-        QuestionType.DELIBERATION: "Synthesis",
-    }
-    rationale_h = rationale_headers.get(q.type, "Why")
+    rationale_h = _esc(RATIONALE_HEADERS.get(q.type, "Why"))
     rationale_html = (
         f'<div class="ae-rationale"><span class="ae-rationale-h">{rationale_h}</span>'
         f"{_esc(q.rationale)}</div>"
