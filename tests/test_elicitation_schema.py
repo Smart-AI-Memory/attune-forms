@@ -124,3 +124,53 @@ class TestConfirmationPass2:
     def test_boolean_default_conforms_to_its_own_type(self):
         p = _prop({"id": "b", "type": "boolean", "text": "Ship?", "default": "Yes"})
         assert p["default"] in p["enum"]
+
+    def test_directly_built_confirm_with_default_emits_no_schema_default(self):
+        # `form_from_dict` rejects a `default` on confirm, but a
+        # FormQuestion built DIRECTLY (dataclass constructor) bypasses
+        # that check. The generic default projection must not emit it —
+        # a schema `default` pre-selects approval in the client dialog,
+        # defeating the two-way gate (checkpoint-2 promoted item).
+        from attune_forms.models import FormQuestion, FormSchema, QuestionType
+
+        form = FormSchema(
+            title="T",
+            description="",
+            questions=[
+                FormQuestion(
+                    id="gate",
+                    type=QuestionType.CONFIRM,
+                    text="Approve?",
+                    options=["Approve", "Abort"],
+                    consequences=[{"label": "irreversible"}],
+                    default="Approve",
+                )
+            ],
+        )
+        prop = form_to_elicitation_schema(form)["properties"]["gate"]
+        assert "default" not in prop
+
+    def test_directly_built_ranking_default_does_not_clobber_suggested(self):
+        # A directly-built ranking's stray `default` must not become the
+        # schema default (nor overwrite the legitimate `suggested`-derived
+        # one). Defense in depth for the schema surface.
+        from attune_forms.models import FormQuestion, FormSchema, QuestionType
+
+        form = FormSchema(
+            title="T",
+            description="",
+            questions=[
+                FormQuestion(
+                    id="rk",
+                    type=QuestionType.RANKING,
+                    text="Order",
+                    options=["A", "B", "C"],
+                    suggested=["C", "B", "A"],
+                    default=["A", "B", "C"],
+                )
+            ],
+        )
+        prop = form_to_elicitation_schema(form)["properties"]["rk"]
+        # The visible proposal (suggested) survives; the illegal `default`
+        # never reaches the schema.
+        assert prop["default"] == ["C", "B", "A"]

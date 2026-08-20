@@ -24,6 +24,8 @@ from attune_forms.form_events import log_surface_decision
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     ASSUMPTION_TEXT_SUFFIX,
+    BOOLEAN_OPTIONS,
+    CONFIRM_DEFAULT_OPTIONS,
     FormQuestion,
     FormResponse,
     FormSchema,
@@ -33,10 +35,6 @@ from attune_forms.models import (
     ranking_slot_count,
     triage_item_key,
 )
-
-#: The answer values accepted for a BOOLEAN question (its
-#: ``to_ask_user_format`` renders as a Yes/No single-select).
-_BOOLEAN_OPTIONS = ("Yes", "No")
 
 #: ISO-8601 calendar-date format used by DATE questions.
 _DATE_FORMAT = "%Y-%m-%d"
@@ -492,9 +490,23 @@ def _parse_suggested(
     return suggested, []
 
 
-#: The options a CONFIRM carries when the author names none. Exactly
-#: two, always — the gate is two-way by ruling (confirm-construct D1).
-_CONFIRM_DEFAULT_OPTIONS = ["Approve", "Abort"]
+#: The D2 constructs forbid a ``default`` outright — a pre-selected
+#: approval, a pre-filled order, or a pre-marked ruling defeats the
+#: two-way gate; approving/ordering/ruling must be an explicit act.
+#: Each entry is the rationale clause appended to the rejection message
+#: so one word ("default") keeps one meaning across constructs. The
+#: prohibition is enforced BOTH definition-side (the ``_parse_*_extras``
+#: helpers, via :func:`form_from_dict`) AND on the collect/inject path
+#: (:func:`collect_form_response`) — a :class:`FormQuestion` built
+#: directly by the dataclass constructor bypasses ``form_from_dict``,
+#: and without the collect-path guard an unanswered gate would silently
+#: inject its default as the answer (checkpoint-2 promoted item,
+#: 2026-08-20).
+_NO_DEFAULT_REASON: dict[QuestionType, str] = {
+    QuestionType.CONFIRM: "D2: no pre-selected approval",
+    QuestionType.RANKING: "D2-c: a proposed order is 'suggested'",
+    QuestionType.ASSUMPTION_REVIEW: "a pre-marked ruling is 'suggested'",
+}
 
 
 def _parse_confirm_extras(
@@ -503,9 +515,9 @@ def _parse_confirm_extras(
     """Parse the v7 CONFIRM extras and enforce its gate rules.
 
     Returns ``(consequences, options, problems)`` — options come back
-    defaulted to :data:`_CONFIRM_DEFAULT_OPTIONS` when the author named
-    none, and any count other than two is a definition error (D1:
-    the gate is two-way, always).
+    defaulted to :data:`~attune_forms.models.CONFIRM_DEFAULT_OPTIONS`
+    when the author named none, and any count other than two is a
+    definition error (D1: the gate is two-way, always).
 
     ``consequences`` is required for CONFIRM (a confirm with nothing to
     preview is a bare boolean and should be one) and invalid elsewhere:
@@ -528,13 +540,14 @@ def _parse_confirm_extras(
     problems: list[str] = []
 
     if not options:
-        options = list(_CONFIRM_DEFAULT_OPTIONS)
+        options = list(CONFIRM_DEFAULT_OPTIONS)
     elif len(options) != 2:
         problems.append(f"{where} type confirm requires exactly 2 options (got {len(options)})")
 
     if raw.get("default") is not None:
         problems.append(
-            f"{where} 'default' is not permitted on confirm (D2: no pre-selected approval)"
+            f"{where} 'default' is not permitted on confirm "
+            f"({_NO_DEFAULT_REASON[QuestionType.CONFIRM]})"
         )
     if raw.get("recommended") is not None:
         problems.append(
@@ -603,7 +616,8 @@ def _parse_ranking_extras(
 
     if raw.get("default") is not None:
         problems.append(
-            f"{where} 'default' is not permitted on ranking (D2-c: a proposed order is 'suggested')"
+            f"{where} 'default' is not permitted on ranking "
+            f"({_NO_DEFAULT_REASON[QuestionType.RANKING]})"
         )
 
     suggested = raw.get("suggested")
@@ -669,7 +683,7 @@ def _parse_assumption_extras(
     if raw.get("default") is not None:
         problems.append(
             f"{where} 'default' is not permitted on assumption_review "
-            "(a pre-marked ruling is 'suggested')"
+            f"({_NO_DEFAULT_REASON[QuestionType.ASSUMPTION_REVIEW]})"
         )
 
     if assumptions is None:
@@ -1237,10 +1251,12 @@ def keyboard_mode_enabled(project_root: Path | None = None) -> bool:
     lives under ``keyboard_mode`` in the project-local
     ``attune.config.json``.
 
-    ``ATTUNE_KEYBOARD_MODE`` remains a session-scoped override in both
-    directions: set it truthy to force terse mode for one shell, or
-    falsey to force rich forms even where the project opted out. Unset
-    (or unrecognised) defers to the project file.
+    ``ATTUNE_FORMS_KEYBOARD_MODE`` (legacy fallback:
+    ``ATTUNE_KEYBOARD_MODE``, consulted only when the preferred name is
+    unset) remains a session-scoped override in both directions: set it
+    truthy to force terse mode for one shell, or falsey to force rich
+    forms even where the project opted out. Unset (or unrecognised)
+    defers to the project file.
 
     Args:
         project_root: Directory holding ``attune.config.json``. Defaults
@@ -1489,8 +1505,8 @@ def _validate_assumption_review(question: FormQuestion, value: Any) -> str | Non
 
 
 def _validate_boolean(question: FormQuestion, value: Any) -> str | None:
-    """BOOLEAN: value must be exactly one of ``_BOOLEAN_OPTIONS``."""
-    if value not in _BOOLEAN_OPTIONS:
+    """BOOLEAN: value must be exactly one of ``BOOLEAN_OPTIONS``."""
+    if value not in BOOLEAN_OPTIONS:
         return f"{question.id!r} boolean value {value!r} must be 'Yes' or 'No'"
     return None
 
@@ -1738,6 +1754,20 @@ def collect_form_response(
             problems.append(f"unknown answer key {key!r}")
 
     for question in form.questions:
+        # The D2 constructs forbid a `default` outright. `form_from_dict`
+        # rejects it definition-side, but a `FormQuestion` built directly
+        # (dataclass constructor) bypasses that check — so re-enforce here
+        # on the inject path. Without this, an UNANSWERED confirm gate
+        # (or ranking / assumption_review) carrying a default would be
+        # collected as approved/ordered/ruled with no user act, defeating
+        # the two-way gate (checkpoint-2 promoted item, 2026-08-20).
+        if question.default is not None and question.type in _NO_DEFAULT_REASON:
+            problems.append(
+                f"'default' is not permitted on {question.type.value} "
+                f"for {question.id!r} ({_NO_DEFAULT_REASON[question.type]})"
+            )
+            continue
+
         provided = question.id in raw_answers
         value = raw_answers.get(question.id)
 

@@ -19,8 +19,50 @@ follow [SemVer](https://semver.org/).
   renderer emits. Tests only — no behavior change; the previously
   untested drift class (gate lets an invalid answer post, or blocks a
   valid one, after the widget is dead) now fails red in CI
+### Changed
+- 0.6.x cleanup batch (architecture review findings F4/F5/F7,
+  2026-08-20) — single-sourcing and schema hygiene, output
+  byte-identical (pinned by the characterization suite):
+  - The last policy duplications moved into `models`:
+    `BOOLEAN_OPTIONS` (was defined independently in bridge and
+    widget), `recommended_first()` (was implemented three times —
+    widget, markdown surface, and inline in `to_ask_user_format`),
+    `RATIONALE_HEADERS` and `PROGRESS_STATUS_ICONS` (each surface
+    carried its own copy with a "matches the widget" comment nothing
+    enforced). New `tests/test_single_sourcing.py` pins the
+    single-sourcing per surface
+  - `bridge._CONFIRM_DEFAULT_OPTIONS` deleted — the bridge now
+    consumes `models.CONFIRM_DEFAULT_OPTIONS`, making the 0.5.0
+    changelog's single-sourcing claim true
+  - The MCP `_field_schema` types its object-array extras
+    (`progress_items`, `triage_items`, `consequences`, `assumptions`)
+    and gains a drift test: every `QuestionType` value must appear in
+    the schema's type enum and every `FormQuestion` field in its
+    properties (the prose description stays hand-written on purpose)
+  - Stale docstrings corrected: `keyboard_mode_enabled` and the
+    package overview now document `ATTUNE_FORMS_KEYBOARD_MODE` as the
+    preferred override with `ATTUNE_KEYBOARD_MODE` as the legacy
+    fallback, matching what the code reads
 
 ### Fixed
+- **Directly-built D2 gate with a `default` can no longer pass
+  unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
+  confirmed). The no-`default` rule for the two-way constructs (confirm,
+  ranking, assumption_review) was enforced ONLY definition-side in
+  `form_from_dict`. A `FormQuestion` built directly (dataclass
+  constructor, bypassing `form_from_dict`) with `default="Approve"`
+  slipped past it, and then `collect_form_response({})` auto-injected
+  the default — so an UNANSWERED confirm gate collected as *approved*
+  with no user act, defeating the gate CONFIRM exists to enforce. The
+  prohibition now also lives on the collect/inject path
+  (`collect_form_response`), where it can't be bypassed: a directly-built
+  confirm / ranking / assumption_review carrying a `default` is rejected
+  (`FormValidationError`, wording consistent with the definition-time
+  message) instead of injected. Defense in depth: the elicitation schema
+  no longer emits a `default` for those construct types either, so a
+  bypassing question can't pre-select approval in the client dialog
+  (this also stops a stray `default` from clobbering a ranking's
+  legitimate `suggested`-derived schema default).
 - Confirmation-pass-1 needs-a-look items (library review, 2026-08-20):
   - `submission_count()` and `inference_rate()` accept the same
     optional `home` argument as sibling `surface_mix()` — a
@@ -66,6 +108,16 @@ follow [SemVer](https://semver.org/).
     (`{"keep": true}`) beside a typed text lane is no longer silently
     laundered into a valid `{"edit": …}` that this surface alone
     accepted while the collect path names it
+- `form_from_template` now validates the `slots` argument type *before*
+  the `values = slots or {}` coalesce (confirmation-pass-2 needs-a-look,
+  2026-08-20). The pass-1 `isinstance(values, dict)` guard ran after the
+  coalesce, so a falsy non-mapping (`[]`, `MappingProxyType({})`) folded
+  to `{}` and slipped past the named `slot values must be a mapping`
+  message — harmless today (it still failed via missing-slot problems)
+  but a silent accept on a future zero-slot template. A non-`None`,
+  non-`dict` `slots` is now named directly; `None` still coalesces to
+  an empty mapping. `dict` stays strict so the "mapping" wording matches
+  what is accepted — a `Mapping` that is not a `dict` is rejected too
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a

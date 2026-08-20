@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -222,9 +223,27 @@ class TestConfirmationPass1:
     """Regression pinned from the 2026-08-20 confirmation-pass-1 review:
     a non-mapping ``slots`` argument crashed with a raw AttributeError
     in the problems pass instead of failing through the module's one
-    error seam."""
+    error seam.
 
-    @pytest.mark.parametrize("bad", ["project", ["project"], 42, ("a",)])
+    Extended by confirmation-pass-2 (2026-08-20): the type guard ran
+    AFTER ``values = slots or {}``, so a *falsy* non-mapping (``[]``,
+    ``MappingProxyType({})``) coalesced to ``{}`` and slipped past the
+    named message — silently accepted on a future zero-slot template.
+    The falsy cases below pin that the guard now runs before the
+    coalesce."""
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "project",
+            ["project"],
+            42,
+            ("a",),
+            [],  # pass-2: falsy non-mapping — coalesced to {} before the fix
+            MappingProxyType({}),  # pass-2: falsy Mapping, not a dict
+            MappingProxyType({"who": "Patrick"}),  # truthy Mapping, not a dict
+        ],
+    )
     def test_non_mapping_slots_arg_is_named(self, bad: Any) -> None:
         with pytest.raises(FormValidationError) as exc:
             form_from_template("session-contract", bad)
