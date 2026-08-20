@@ -24,6 +24,8 @@ from attune_forms.form_events import log_surface_decision
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     ASSUMPTION_TEXT_SUFFIX,
+    BOOLEAN_OPTIONS,
+    CONFIRM_DEFAULT_OPTIONS,
     FormQuestion,
     FormResponse,
     FormSchema,
@@ -33,10 +35,6 @@ from attune_forms.models import (
     ranking_slot_count,
     triage_item_key,
 )
-
-#: The answer values accepted for a BOOLEAN question (its
-#: ``to_ask_user_format`` renders as a Yes/No single-select).
-_BOOLEAN_OPTIONS = ("Yes", "No")
 
 #: ISO-8601 calendar-date format used by DATE questions.
 _DATE_FORMAT = "%Y-%m-%d"
@@ -499,11 +497,6 @@ def _parse_suggested(
     return suggested, []
 
 
-#: The options a CONFIRM carries when the author names none. Exactly
-#: two, always — the gate is two-way by ruling (confirm-construct D1).
-_CONFIRM_DEFAULT_OPTIONS = ["Approve", "Abort"]
-
-
 #: The D2 constructs forbid a ``default`` outright — a pre-selected
 #: approval, a pre-filled order, or a pre-marked ruling defeats the
 #: two-way gate; approving/ordering/ruling must be an explicit act.
@@ -529,9 +522,9 @@ def _parse_confirm_extras(
     """Parse the v7 CONFIRM extras and enforce its gate rules.
 
     Returns ``(consequences, options, problems)`` — options come back
-    defaulted to :data:`_CONFIRM_DEFAULT_OPTIONS` when the author named
-    none, and any count other than two is a definition error (D1:
-    the gate is two-way, always).
+    defaulted to :data:`~attune_forms.models.CONFIRM_DEFAULT_OPTIONS`
+    when the author named none, and any count other than two is a
+    definition error (D1: the gate is two-way, always).
 
     ``consequences`` is required for CONFIRM (a confirm with nothing to
     preview is a bare boolean and should be one) and invalid elsewhere:
@@ -554,7 +547,7 @@ def _parse_confirm_extras(
     problems: list[str] = []
 
     if not options:
-        options = list(_CONFIRM_DEFAULT_OPTIONS)
+        options = list(CONFIRM_DEFAULT_OPTIONS)
     elif len(options) != 2:
         problems.append(f"{where} type confirm requires exactly 2 options (got {len(options)})")
 
@@ -984,6 +977,23 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     f"{owner.id!r}'s dotted answer namespace ('{owner.id}.<key>')"
                 )
 
+    # The widget's "::" radio-group namespace needs the SAME by-definition
+    # guard: a TRIAGE / ASSUMPTION_REVIEW board with id "a" renders one
+    # radio group per item named "a::<idx>", so a sibling field whose id is
+    # literally "a::1" emits a group sharing that name — the browser fuses
+    # them into one mutually-exclusive group and one field becomes
+    # unanswerable (confirmation-pass-2 finding, 2026-08-20). Reject at
+    # definition, symmetric with the dotted guard above.
+    for owner in questions:
+        if owner.type not in _WIDGET_RADIO_GROUP_TYPES:
+            continue
+        for question in questions:
+            if question.id != owner.id and question.id.startswith(f"{owner.id}::"):
+                problems.append(
+                    f"field id {question.id!r} collides with {owner.type.value} "
+                    f"{owner.id!r}'s widget radio-group namespace ('{owner.id}::<idx>')"
+                )
+
     if problems:
         raise FormValidationError(problems)
 
@@ -1028,6 +1038,18 @@ _WIDGET_ONLY_TYPES = frozenset(
 _EXPANDING_TYPES = frozenset(
     {QuestionType.TRIAGE, QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW}
 )
+
+#: Types whose widget renders one radio *group per item*, named
+#: ``"<field id>::<item index>"`` (see ``_control_triage_html`` /
+#: ``_control_assumption_review_html``). That ``::`` group namespace is a
+#: second reserved namespace — a sibling field whose literal id is
+#: ``"<board id>::<N>"`` would emit a radio group sharing the board row's
+#: ``name``, and the browser would treat them as ONE mutually-exclusive
+#: group, making one field unanswerable (confirmation-pass-2 finding,
+#: 2026-08-20). RANKING is in :data:`_EXPANDING_TYPES` but NOT here: its
+#: widget groups by ``data-opt``, never by a ``::`` radio name, so it owns
+#: no such namespace.
+_WIDGET_RADIO_GROUP_TYPES = frozenset({QuestionType.TRIAGE, QuestionType.ASSUMPTION_REVIEW})
 
 #: The strict subset with NO portable ``AskUserQuestion`` control at
 #: all. A form using any of these cannot be asked on ``AskUserQuestion``
@@ -1150,6 +1172,18 @@ def select_form_surface(
     input — the axis is how much of the option space the user can see
     at once, not how many tool calls it costs.
 
+    .. note::
+       Authority (architecture review F9, 2026-08-20): in the shipped
+       plugin this router is **advisory** — the agent's choice of MCP
+       tool is the effective surface decision, made from the skill's
+       prose ladder, and the MCP handlers call this only *after the
+       fact* (passing ``chosen``) so telemetry records agreement vs
+       disagreement. Its return value is binding only for library
+       consumers who route their own render calls through it. The
+       markdown surface is outside its range entirely (it can return
+       only ``"widget"`` / ``"ask"``) — revisit when the markdown
+       surface gains an MCP tool.
+
     Precedence, highest first:
 
     1. **Capability floor** — a client that cannot render widgets gets
@@ -1265,10 +1299,12 @@ def keyboard_mode_enabled(project_root: Path | None = None) -> bool:
     lives under ``keyboard_mode`` in the project-local
     ``attune.config.json``.
 
-    ``ATTUNE_KEYBOARD_MODE`` remains a session-scoped override in both
-    directions: set it truthy to force terse mode for one shell, or
-    falsey to force rich forms even where the project opted out. Unset
-    (or unrecognised) defers to the project file.
+    ``ATTUNE_FORMS_KEYBOARD_MODE`` (legacy fallback:
+    ``ATTUNE_KEYBOARD_MODE``, consulted only when the preferred name is
+    unset) remains a session-scoped override in both directions: set it
+    truthy to force terse mode for one shell, or falsey to force rich
+    forms even where the project opted out. Unset (or unrecognised)
+    defers to the project file.
 
     Args:
         project_root: Directory holding ``attune.config.json``. Defaults
@@ -1517,8 +1553,8 @@ def _validate_assumption_review(question: FormQuestion, value: Any) -> str | Non
 
 
 def _validate_boolean(question: FormQuestion, value: Any) -> str | None:
-    """BOOLEAN: value must be exactly one of ``_BOOLEAN_OPTIONS``."""
-    if value not in _BOOLEAN_OPTIONS:
+    """BOOLEAN: value must be exactly one of ``BOOLEAN_OPTIONS``."""
+    if value not in BOOLEAN_OPTIONS:
         return f"{question.id!r} boolean value {value!r} must be 'Yes' or 'No'"
     return None
 

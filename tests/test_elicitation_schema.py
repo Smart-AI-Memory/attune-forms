@@ -174,3 +174,58 @@ class TestConfirmationPass2:
         # The visible proposal (suggested) survives; the illegal `default`
         # never reaches the schema.
         assert prop["default"] == ["C", "B", "A"]
+
+    def test_display_only_progress_is_skipped(self):
+        # A display-only PROGRESS (no blocked options) projected to
+        # `{"type": "string", "enum": []}` — an unanswerable property a
+        # strict client could reject the whole schema over. It carries no
+        # answer, so it must not appear in properties/required at all
+        # (confirmation pass 2, 2026-08-20).
+        form = form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "p",
+                        "text": "Progress",
+                        "type": "progress",
+                        "required": False,
+                        "progress_items": [
+                            {"label": "A", "status": "done"},
+                            {"label": "B", "status": "in_flight"},
+                        ],
+                    }
+                ],
+            }
+        )
+        schema = form_to_elicitation_schema(form)
+        assert "p" not in schema["properties"]
+        assert "p" not in schema["required"]
+
+    def test_progress_with_blocked_options_still_projects(self):
+        # A PROGRESS that carries blocked options is a real single-pick and
+        # must keep projecting as a string enum.
+        form = form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "p",
+                        "text": "Progress",
+                        "type": "progress",
+                        "options": ["B"],
+                        "progress_items": [
+                            {"label": "A", "status": "done"},
+                            {"label": "B", "status": "blocked"},
+                        ],
+                    }
+                ],
+            }
+        )
+        schema = form_to_elicitation_schema(form)
+        assert schema["properties"]["p"] == {
+            "title": "Progress",
+            "type": "string",
+            "enum": ["B"],
+        }
+        assert schema["required"] == ["p"]

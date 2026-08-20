@@ -117,7 +117,11 @@ def _field_schema() -> dict[str, Any]:
             "recommended": {"type": "string"},
             "option_notes": {"type": "object"},
             "user_position": {"type": "string"},
-            "progress_items": {"type": "array"},
+            "progress_items": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "progress: [{label, status, detail?}, ...]",
+            },
             "progress_style": {"type": "string", "enum": ["report"]},
             "endorsements": {
                 "type": "object",
@@ -125,6 +129,7 @@ def _field_schema() -> dict[str, Any]:
             },
             "triage_items": {
                 "type": "array",
+                "items": {"type": "object"},
                 "description": "triage: [{label, id?, detail?, tag?}, ...]",
             },
             "dispositions": {
@@ -143,6 +148,7 @@ def _field_schema() -> dict[str, Any]:
             },
             "assumptions": {
                 "type": "array",
+                "items": {"type": "object"},
                 "description": (
                     "assumption_review: [{label, id?, detail?, source?}, ...] — "
                     "the inferred assumptions; source = where it was inferred from"
@@ -154,6 +160,7 @@ def _field_schema() -> dict[str, Any]:
             },
             "consequences": {
                 "type": "array",
+                "items": {"type": "object"},
                 "description": "confirm: [{label, severity?, detail?}, ...]",
             },
             "list_style": {"type": "string", "enum": ["ordered", "unordered"]},

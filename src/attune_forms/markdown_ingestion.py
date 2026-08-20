@@ -31,7 +31,12 @@ import math
 import re
 from typing import Any
 
-from attune_forms.markdown_surface import _field_lines, reply_skeleton
+from attune_forms.markdown_surface import (
+    _defuse_fences,
+    _field_lines,
+    _skeleton_block,
+    reply_skeleton,
+)
 from attune_forms.models import (
     ASSUMPTION_TEXT_SUFFIX,
     FormQuestion,
@@ -475,15 +480,16 @@ def problems_to_markdown(form: FormSchema, problems: list[str]) -> str:
         field = _field_lines(q)
         field[0] = f"{idx}. {field[0]}"
         lines += ["", *field]
+    # Defuse first: a re-asked field's text OR a quoted problem string may
+    # carry a fence, and either would desync the skeleton emitted below
+    # (same last-block-wins invariant form_to_markdown relies on).
+    lines = [_defuse_fences(line) for line in lines]
     if offenders:
-        skeleton = reply_skeleton(form, offenders)
         lines += [
             "",
             "Reply for just these fields — shorthand works (`field_id: value` "
             "or `N: value`), or fill the `answers` skeleton below:",
             "",
-            "```json",
-            json.dumps(skeleton, indent=2, ensure_ascii=False),
-            "```",
+            *_skeleton_block(reply_skeleton(form, offenders)),
         ]
     return "\n".join(lines)
