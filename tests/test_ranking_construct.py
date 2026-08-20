@@ -395,3 +395,38 @@ class TestReviewFindings:
         assert "Rank every slot or none: " in script
         assert ".ae-field:not([data-required])" in script
         assert "data-rank-n" in script
+
+
+class TestPilotReviewFindings:
+    """Regressions pinned from the 2026-08-19 pilot review of bridge.py
+    (roundtable q-forms-module-review-plan-001; report in
+    ~/.attune/reports/roundtable/)."""
+
+    def test_leading_zero_slot_collision_rejected(self) -> None:
+        """Confirmed: decimal_key_number("01") == decimal_key_number("1"),
+        so two dotted keys folded onto one slot with an arbitrary winner
+        and the dropped rank validated clean — the exact silent-drop
+        class the fold docstring promises never happens. A second key
+        claiming an occupied slot is now a named problem."""
+        form = form_from_dict(_ranking())
+        with pytest.raises(FormValidationError, match="rank slot 1 is supplied more than once"):
+            collect_form_response(
+                form,
+                {"prio.01": "auth", "prio.1": "billing", "prio.2": "search", "prio.3": "docs"},
+            )
+
+    def test_canonical_dotted_slots_still_fold(self) -> None:
+        form = form_from_dict(_ranking())
+        response = collect_form_response(
+            form,
+            {"prio.1": "auth", "prio.2": "billing", "prio.3": "search", "prio.4": "docs"},
+        )
+        assert response.responses["prio"] == ["auth", "billing", "search", "docs"]
+
+    def test_non_decimal_suffix_still_ignored(self) -> None:
+        """A non-decimal suffix is not a slot key; it lives inside the
+        question's declared dotted namespace, so the unknown-key check
+        exempts it (the markdown surface names it at parse time)."""
+        form = form_from_dict(_ranking(required=False))
+        response = collect_form_response(form, {"prio.²": "auth"})
+        assert "prio" not in response.responses

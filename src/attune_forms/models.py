@@ -384,7 +384,7 @@ class FormQuestion:
         """
         if self.type is QuestionType.TRIAGE:
             raise ValueError(
-                "a triage question expands to one payload per item — " "use to_ask_user_formats()"
+                "a triage question expands to one payload per item — use to_ask_user_formats()"
             )
         if self.type is QuestionType.RANKING:
             raise ValueError(

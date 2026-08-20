@@ -846,6 +846,21 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         )
         problems.extend(progress_problems)
 
+        # A PROGRESS with no options is a pure status display: there is
+        # nothing to answer, so an omitted `required` defaults to False
+        # instead of the usual True — otherwise the definition passes but
+        # collect fails both ways (no answer → required, any answer → not
+        # in options). An EXPLICIT required=True is the author asserting
+        # an answerable picker, so it is named as a definition problem
+        # rather than silently overridden.
+        required = bool(raw.get("required", True))
+        if qtype is QuestionType.PROGRESS and not options:
+            if raw.get("required"):
+                problems.append(
+                    f"{where} PROGRESS with no options is display-only and cannot be required"
+                )
+            required = False
+
         endorsements, endorsement_problems = _parse_endorsements(where, raw, qtype, options)
         problems.extend(endorsement_problems)
 
@@ -882,35 +897,46 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
         problems.extend(inferred_problems)
 
         if fid and text and isinstance(fid, str) and isinstance(text, str):
-            questions.append(
-                FormQuestion(
-                    id=fid,
-                    text=text,
-                    type=qtype,
-                    options=options,
-                    default=raw.get("default"),
-                    help_text=raw.get("help_text"),
-                    required=bool(raw.get("required", True)),
-                    minimum=minimum,
-                    maximum=maximum,
-                    max_length=max_length,
-                    rationale=rationale,
-                    option_notes=option_notes,
-                    recommended=recommended,
-                    user_position=user_position,
-                    progress_items=progress_items,
-                    progress_style=progress_style,
-                    endorsements=endorsements,
-                    triage_items=triage_items,
-                    dispositions=dispositions,
-                    suggested=suggested,
-                    consequences=consequences,
-                    list_style=list_style,
-                    inferred_from=inferred_from,
-                    top_n=top_n,
-                    assumptions=assumptions,
-                )
+            question = FormQuestion(
+                id=fid,
+                text=text,
+                type=qtype,
+                options=options,
+                default=raw.get("default"),
+                help_text=raw.get("help_text"),
+                required=required,
+                minimum=minimum,
+                maximum=maximum,
+                max_length=max_length,
+                rationale=rationale,
+                option_notes=option_notes,
+                recommended=recommended,
+                user_position=user_position,
+                progress_items=progress_items,
+                progress_style=progress_style,
+                endorsements=endorsements,
+                triage_items=triage_items,
+                dispositions=dispositions,
+                suggested=suggested,
+                consequences=consequences,
+                list_style=list_style,
+                inferred_from=inferred_from,
+                top_n=top_n,
+                assumptions=assumptions,
             )
+            # R4 applies to the definition too: a `default` is a
+            # pre-supplied answer, so it passes the same per-type
+            # validator an agent's answer would — otherwise collect
+            # injects it unvalidated and an out-of-vocabulary or
+            # wrongly-typed default lands in a "validated" FormResponse
+            # (pilot review finding, 2026-08-19). The D2 constructs
+            # (CONFIRM / RANKING / ASSUMPTION_REVIEW) already rejected
+            # `default` outright before this point.
+            if question.default is not None:
+                default_problem = _validate_answer(question, question.default)
+                if default_problem:
+                    problems.append(f"{where} invalid 'default': {default_problem}")
+            questions.append(question)
 
     # The dotted answer namespace must be collision-free BY DEFINITION:
     # every flat surface (AskUserQuestion expansion, elicitation schema,
@@ -1573,7 +1599,9 @@ def _fold_assumption_answers(folded: dict[str, Any], prefix: str) -> dict[str, A
     return out
 
 
-def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dict[str, Any]:
+def _fold_expanded_answers(
+    form: FormSchema, raw_answers: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
     """Fold dotted per-item / per-slot answers back into their canonical shape.
 
     The flat surfaces carry a TRIAGE answer as one key per item
@@ -1593,13 +1621,21 @@ def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dic
     (review finding, 2026-08-16). Gaps are simply absent, so the
     validator names the wrong length there too. A NON-decimal suffix
     (``"prio.²"``) is not a slot key at all: it stays in place and is
-    ignored here like any other key the form does not declare — the
-    markdown surface, which is where a human types one, names it as an
-    unknown rank slot at parse time.
+    ignored — it lives inside the question's declared dotted namespace,
+    so the unknown-key check exempts it; the markdown surface, which is
+    where a human types one, names it as an unknown rank slot at parse
+    time.
+
+    Returns ``(folded, problems)``. The only fold-time problem is two
+    keys claiming the same rank slot (``"r.01"`` and ``"r.1"`` both fold
+    to slot 1): the same silent-drop class as the over-long ranking
+    above, so it is named instead of letting an arbitrary winner
+    validate clean (pilot review finding, 2026-08-19).
     """
     expanding = [q for q in form.questions if q.type in _EXPANDING_TYPES]
     if not expanding:
-        return raw_answers
+        return raw_answers, []
+    problems: list[str] = []
     folded = dict(raw_answers)
     for question in expanding:
         if question.id in folded:
@@ -1620,15 +1656,25 @@ def _fold_expanded_answers(form: FormSchema, raw_answers: dict[str, Any]) -> dic
                 folded[question.id] = folded_rulings
             continue
         slots: dict[int, Any] = {}
+        slot_sources: dict[int, str] = {}
         for key in list(folded):
             if not key.startswith(prefix):
                 continue
             slot = decimal_key_number(key[len(prefix) :])
-            if slot is not None:
-                slots[slot] = folded.pop(key)
+            if slot is None:
+                continue
+            if slot in slots:
+                problems.append(
+                    f"{question.id!r} rank slot {slot} is supplied more than "
+                    f"once ({slot_sources[slot]!r} and {key!r})"
+                )
+                folded.pop(key)
+                continue
+            slot_sources[slot] = key
+            slots[slot] = folded.pop(key)
         if slots:
             folded[question.id] = [slots[k] for k in sorted(slots)]
-    return folded
+    return folded, problems
 
 
 def collect_form_response(
@@ -1642,7 +1688,14 @@ def collect_form_response(
     required field with no default, or a value outside a select's
     options, raises :class:`FormValidationError` naming every problem so
     the caller can re-ask just those fields. Missing optional fields fall
-    back to the question's ``default`` (omitted if none).
+    back to the question's ``default`` (omitted if none); an injected
+    default passes the same per-type validator an answer would, so a
+    directly-built form (bypassing ``form_from_dict``'s definition-time
+    check) still cannot launder an invalid default into a validated
+    response. An answer key that matches no question id and no expanding
+    question's dotted namespace (``"<id>.<key>"``) is named as unknown —
+    a typo'd key against an optional-with-default field would otherwise
+    silently collect the default (pilot review finding, 2026-08-19).
 
     Args:
         form: The form the answers are for.
@@ -1655,9 +1708,16 @@ def collect_form_response(
     Raises:
         FormValidationError: If any answer is missing-required or invalid.
     """
-    problems: list[str] = []
     responses: dict[str, Any] = {}
-    raw_answers = _fold_expanded_answers(form, raw_answers)
+    raw_answers, problems = _fold_expanded_answers(form, raw_answers)
+
+    known_ids = {question.id for question in form.questions}
+    dotted_prefixes = tuple(
+        f"{question.id}." for question in form.questions if question.type in _EXPANDING_TYPES
+    )
+    for key in raw_answers:
+        if key not in known_ids and not key.startswith(dotted_prefixes):
+            problems.append(f"unknown answer key {key!r}")
 
     for question in form.questions:
         provided = question.id in raw_answers
@@ -1667,7 +1727,11 @@ def collect_form_response(
             if question.required and question.default is None:
                 problems.append(f"{question.id!r} is required")
             elif question.default is not None:
-                responses[question.id] = question.default
+                default_problem = _validate_answer(question, question.default)
+                if default_problem:
+                    problems.append(f"invalid 'default' for {question.id!r}: {default_problem}")
+                else:
+                    responses[question.id] = question.default
             continue
 
         problem = _validate_answer(question, value)

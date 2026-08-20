@@ -431,6 +431,6 @@ def problems_to_markdown(form: FormSchema, problems: list[str]) -> str:
     if offender_ids:
         lines += [
             "",
-            "Reply for just these fields — shorthand works " "(`field_id: value` or `N: value`).",
+            "Reply for just these fields — shorthand works (`field_id: value` or `N: value`).",
         ]
     return "\n".join(lines)

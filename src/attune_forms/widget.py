@@ -498,7 +498,7 @@ def _control_number_html(q: FormQuestion) -> str:
     if q.maximum is not None:
         bounds += f' max="{_esc(q.maximum)}"'
     default = f' value="{_esc(q.default)}"' if q.default is not None else ""
-    return f'<input type="number" step="any" data-control class="ae-input"' f"{bounds}{default}>"
+    return f'<input type="number" step="any" data-control class="ae-input"{bounds}{default}>'
 
 
 def _control_date_html(q: FormQuestion) -> str:
@@ -512,8 +512,7 @@ def _control_textarea_html(q: FormQuestion) -> str:
     maxlen = f' maxlength="{_esc(q.max_length)}"' if q.max_length else ""
     default = _esc(q.default) if q.default is not None else ""
     return (
-        f'<textarea data-control class="ae-input ae-textarea" rows="3"'
-        f"{maxlen}>{default}</textarea>"
+        f'<textarea data-control class="ae-input ae-textarea" rows="3"{maxlen}>{default}</textarea>'
     )
 
 
@@ -601,7 +600,13 @@ def _collect_mode(q: FormQuestion) -> str:
 
 
 def _checked(q: FormQuestion, opt: str) -> str:
-    """Return ``checked`` if ``opt`` is the question's default selection."""
+    """Return ``checked`` if ``opt`` is (or is in) the question's default.
+
+    A MULTI_SELECT default is a list — the same shape as its answer — so
+    membership pre-checks any number of boxes.
+    """
+    if isinstance(q.default, list):
+        return " checked" if opt in q.default else ""
     return " checked" if q.default is not None and opt == q.default else ""
 
 

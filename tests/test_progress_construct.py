@@ -214,3 +214,30 @@ class TestProgressElicitationSchema:
         prop = schema["properties"]["exec"]
         assert prop["type"] == "string"
         assert prop["enum"] == ["T6 consumer wiring", "T5 surfaces"]
+
+
+class TestDisplayOnlyRequiredRule:
+    """Pinned from the 2026-08-19 pilot review of bridge.py: a PROGRESS
+    with no options is display-only — before, a definition could pass
+    with required left to default True, then fail collect BOTH ways (no
+    answer → required; any answer → not in options)."""
+
+    def test_omitted_required_defaults_to_false(self) -> None:
+        data = _display_only()
+        del data["fields"][0]["required"]
+        form = form_from_dict(data)
+        assert form.questions[0].required is False
+        response = collect_form_response(form, {})
+        assert response.responses == {}
+
+    def test_explicit_required_true_is_a_definition_problem(self) -> None:
+        with pytest.raises(FormValidationError, match="display-only and cannot be required"):
+            form_from_dict(_display_only(required=True))
+
+    def test_explicit_required_false_still_valid(self) -> None:
+        form = form_from_dict(_display_only())
+        assert form.questions[0].required is False
+
+    def test_answerable_progress_keeps_required_default_true(self) -> None:
+        form = form_from_dict(_progress())
+        assert form.questions[0].required is True
