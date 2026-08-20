@@ -87,11 +87,14 @@ def form_from_template(name: str, slots: dict[str, Any] | None = None) -> FormSc
         raise FormValidationError([f"template {name!r} must be a JSON object"])
 
     declared = data.pop("slots", [])
+    # Validate the type BEFORE the ``or {}`` coalesce: a falsy non-mapping
+    # (``[]``, ``MappingProxyType({})``) would otherwise coalesce to ``{}``
+    # and slip past the named message — silently accepted on a zero-slot
+    # template. Strict ``dict`` keeps the message ("mapping") honest with
+    # what we actually accept; a Mapping that is not a dict is rejected too.
+    if slots is not None and not isinstance(slots, dict):
+        raise FormValidationError([f"slot values must be a mapping, got {type(slots).__name__}"])
     values = slots or {}
-    # A non-mapping slots argument must fail through the module's one
-    # error seam, not a raw AttributeError in the problems pass.
-    if not isinstance(values, dict):
-        raise FormValidationError([f"slot values must be a mapping, got {type(values).__name__}"])
     problems = _slot_problems(name, declared, values, data)
     if problems:
         raise FormValidationError(problems)

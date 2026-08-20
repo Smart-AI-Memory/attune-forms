@@ -33,6 +33,16 @@ follow [SemVer](https://semver.org/).
     (`{"keep": true}`) beside a typed text lane is no longer silently
     laundered into a valid `{"edit": …}` that this surface alone
     accepted while the collect path names it
+- `form_from_template` now validates the `slots` argument type *before*
+  the `values = slots or {}` coalesce (confirmation-pass-2 needs-a-look,
+  2026-08-20). The pass-1 `isinstance(values, dict)` guard ran after the
+  coalesce, so a falsy non-mapping (`[]`, `MappingProxyType({})`) folded
+  to `{}` and slipped past the named `slot values must be a mapping`
+  message — harmless today (it still failed via missing-slot problems)
+  but a silent accept on a future zero-slot template. A non-`None`,
+  non-`dict` `slots` is now named directly; `None` still coalesces to
+  an empty mapping. `dict` stays strict so the "mapping" wording matches
+  what is accepted — a `Mapping` that is not a `dict` is rejected too
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a
