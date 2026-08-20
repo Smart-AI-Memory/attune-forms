@@ -10,13 +10,16 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
 mcp = pytest.importorskip("mcp")
 
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
-from mcp.client.stdio import stdio_client  # noqa: E402
+from mcp.client.stdio import get_default_environment, stdio_client  # noqa: E402
+
+_SRC = str(Path(__file__).resolve().parents[1] / "src")
 
 _FORM = {
     "title": "Audit scope",
@@ -32,8 +35,17 @@ _FORM = {
 }
 
 
-def _server_params() -> StdioServerParameters:
-    return StdioServerParameters(command=sys.executable, args=["-m", "attune_forms.mcp_server"])
+def _server_params(home: Path) -> StdioServerParameters:
+    """Spawn params with an explicit env: stdio_client's default env strips
+    ATTUNE_HOME (keeping the real HOME), so without this the server
+    subprocess writes telemetry into the developer's live ~/.attune —
+    and PYTHONPATH pins the server to THIS checkout's src (same hazard
+    conftest.py documents for in-process imports)."""
+    return StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "attune_forms.mcp_server"],
+        env={**get_default_environment(), "ATTUNE_HOME": str(home), "PYTHONPATH": _SRC},
+    )
 
 
 def _payload(result) -> dict:
@@ -45,9 +57,9 @@ def _payload(result) -> dict:
     return json.loads(text)
 
 
-async def _round_trip() -> dict[str, dict]:
+async def _round_trip(home: Path) -> dict[str, dict]:
     out: dict[str, dict] = {}
-    async with stdio_client(_server_params()) as (read, write):
+    async with stdio_client(_server_params(home)) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -78,8 +90,8 @@ async def _round_trip() -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def round_trip():
-    return asyncio.run(_round_trip())
+def round_trip(tmp_path_factory):
+    return asyncio.run(_round_trip(tmp_path_factory.mktemp("attune-home")))
 
 
 def test_all_four_tools_listed(round_trip):
