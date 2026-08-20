@@ -278,7 +278,9 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
     Returns ``(answers, problems)``: raw answers ready for
     :func:`attune_forms.collect_form_response`, plus a named problem
     for every unknown key on either path — nothing is guessed or
-    silently dropped.
+    silently dropped. Two same-precedence keys claiming one rank slot
+    (``"prio.01"`` and ``"prio.1"`` both fold to slot 1) are a named
+    problem too, matching the collect-time fold.
     """
     json_answers, problems = _json_block_answers(form, reply)
     has_block = json_answers is not None
@@ -371,14 +373,30 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
             # answer, not a stranded slot. Quoted slots only overlay a
             # quoted list — never a TYPED one, which would invert this
             # function's precedence rule and discard the line the user
-            # actually wrote (review finding, 2026-08-16).
+            # actually wrote (review finding, 2026-08-16). Two keys of
+            # the SAME precedence folding to one slot ("prio.01" and
+            # "prio.1" both fold to slot 1) is a named problem, not an
+            # arbitrary winner — same rule as the collect-time fold
+            # (pilot review finding, 2026-08-19); typed-over-quoted on
+            # one slot stays the precedence rule, not a collision.
             typed: dict[int, Any] = {}
             quoted: dict[int, Any] = {}
+            slot_sources: dict[tuple[bool, int], str] = {}
             for key in [k for k in answers if k.startswith(prefix)]:
                 slot = decimal_key_number(key[len(prefix) :])
                 if slot is None:
                     continue
-                (typed if key in typed_keys else quoted)[slot] = answers.pop(key)
+                is_typed = key in typed_keys
+                value = answers.pop(key)
+                bucket = typed if is_typed else quoted
+                if slot in bucket:
+                    problems.append(
+                        f"{q.id!r} rank slot {slot} is supplied more than "
+                        f"once ({slot_sources[(is_typed, slot)]!r} and {key!r})"
+                    )
+                    continue
+                slot_sources[(is_typed, slot)] = key
+                bucket[slot] = value
             if not typed and not quoted:
                 continue
             base = answers.get(q.id)
