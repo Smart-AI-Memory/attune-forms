@@ -216,3 +216,16 @@ class TestMalformedTemplateParity:
         assert form.title == "Hello Patrick"
         assert form.questions[0].text == "Proceed for Patrick?"
         assert list_templates() == ["minimal"]
+
+
+class TestConfirmationPass1:
+    """Regression pinned from the 2026-08-20 confirmation-pass-1 review:
+    a non-mapping ``slots`` argument crashed with a raw AttributeError
+    in the problems pass instead of failing through the module's one
+    error seam."""
+
+    @pytest.mark.parametrize("bad", ["project", ["project"], 42, ("a",)])
+    def test_non_mapping_slots_arg_is_named(self, bad: Any) -> None:
+        with pytest.raises(FormValidationError) as exc:
+            form_from_template("session-contract", bad)
+        assert any("slot values must be a mapping" in p for p in exc.value.problems)

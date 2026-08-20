@@ -128,7 +128,11 @@ def log_surface_decision(surface: str, **fields: object) -> None:
             "event": "form_surface",
             "surface": str(surface)[:32],
         }
-        record.update(fields)
+        # Reserved keys always win: a caller kwarg named v/ts/event/
+        # surface would forge records every reader keys on (e.g. a fake
+        # "form_submitted" advancing the keyboard-hint counter) —
+        # confirmation pass 1, 2026-08-20.
+        record.update({k: v for k, v in fields.items() if k not in record})
 
         path = _events_path()
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -136,8 +140,13 @@ def log_surface_decision(surface: str, **fields: object) -> None:
         with path.open("a", encoding="utf-8") as fh:
             json.dump(record, fh, separators=(",", ":"), default=str)
             fh.write("\n")
-    except OSError:
-        pass  # telemetry is best-effort; never break the caller
+    except Exception:
+        # Telemetry is best-effort and this runs on the live routing
+        # path: "never raises" must hold for MORE than OSError —
+        # json.dump raises ValueError on a circular context and
+        # ``default=str`` re-raises whatever a value's __str__ raises
+        # (confirmation pass 1, 2026-08-20).
+        pass
 
 
 #: Form submissions before the one-time keyboard-mode hint fires. D17
@@ -170,8 +179,8 @@ def log_submission() -> None:
         with path.open("a", encoding="utf-8") as fh:
             json.dump(record, fh, separators=(",", ":"))
             fh.write("\n")
-    except OSError:
-        pass
+    except Exception:
+        pass  # same never-raises contract as log_surface_decision
 
 
 def _hint_marker() -> Path:
@@ -255,6 +264,14 @@ def inference_rate() -> dict[str, float | int]:
                     line_fields = int(record.get("question_count") or 0)
                     line_inferred = int(record.get("inferred_fields") or 0)
                 except (TypeError, ValueError):
+                    continue
+                if line_fields < 0 or line_inferred < 0 or line_inferred > line_fields:
+                    # Malformed-record class: a negative count, or more
+                    # inferred fields than total fields, is skipped whole
+                    # so one corrupt record never pushes inferred_share
+                    # outside [0, 1] (confirmation passes 1 and 2,
+                    # 2026-08-20 — inferred_fields > question_count drove
+                    # the share to 10.4).
                     continue
                 forms += 1
                 fields += line_fields

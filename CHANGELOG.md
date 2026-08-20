@@ -7,6 +7,56 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Confirmation-pass-2 batch (library review, 2026-08-20 — all five
+  findings empirically confirmed before fixing):
+  - **Silent answer injection closed**: the markdown re-ask
+    (`problems_to_markdown`) now ends in a trailing `answers` skeleton
+    for the re-asked fields, restoring the last-block-wins invariant
+    `form_to_markdown` relies on. A fenced `answers` block quoted
+    inside an offending field's author-supplied text was the only JSON
+    candidate, so a user quoting the re-ask back ingested answers they
+    never typed with no problem named
+  - A BOOLEAN field's elicitation schema is a `["Yes", "No"]` string
+    enum, not `{"type": "boolean"}` — the validator accepts only
+    Yes/No, so the boolean projection was unanswerable in both
+    directions (a conformant client's `true`/`false` bounced at
+    collect; the only collectable answers violated the schema)
+  - Intake prefill: the "was the prefill applied?" check is by
+    identity, not equality — a self-unequal prior answer (`nan != nan`)
+    slipped past the `!=` guard and reopened the whole-build crash the
+    prefill fold otherwise closes
+  - `inference_rate` skips a record with more inferred fields than
+    total fields, the same malformed-record class as negative counts —
+    one such line had pushed `inferred_share` to 10.4
+  - The markdown assumption merge applies the collect fold's
+    `set(current) == {"edit"}` guard: a quoted non-edit dict ruling
+    (`{"keep": true}`) beside a typed text lane is no longer silently
+    laundered into a valid `{"edit": …}` that this surface alone
+    accepted while the collect path names it
+- Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
+  findings empirically confirmed before fixing):
+  - An assumption-review text lane whose item has NO ruling (a
+    nonexistent item, or a real one the answer never ruled) is a named
+    problem from the collect-time fold and the markdown merge — typed
+    replacement text no longer vanishes from a response that validates
+    clean (text beside a non-edit ruling stays a documented drop)
+  - `form_from_template` names a non-mapping `slots` argument through
+    its normal problems seam instead of crashing with `AttributeError`
+  - Telemetry: reserved record keys (`v`/`ts`/`event`/`surface`) can no
+    longer be clobbered by caller kwargs (a forged `form_submitted`
+    advanced the keyboard-hint counter); the "never raises" contract
+    now covers more than `OSError` (a circular context raised
+    `ValueError` through live surface routing); `inference_rate` skips
+    NEGATIVE counts like any other malformed record instead of letting
+    one corrupt line push `inferred_share` outside 0–1
+  - Intake prefill fold: a prior answer is kept iff it validates for
+    the built field — an invalid string (e.g. the `other` free-text
+    lane's prior answer) no longer crashes the whole intake build, and
+    faithful list/number prefills on multi-select/number slots are no
+    longer blanket-dropped
+  - MCP `inputSchema` types `default` to include `"object"` — a legal
+    triage default (`{item id: disposition}`) no longer rejected by
+    the SDK's schema gate before the tool's problems contract can run
 - `inference_rate()` skips a telemetry line with non-numeric counts
   instead of raising `ValueError` — matching the skip-don't-raise
   contract of its sibling readers (discovery-sweep, 2026-08-20)
