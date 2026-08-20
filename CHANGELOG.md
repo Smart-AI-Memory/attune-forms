@@ -7,6 +7,18 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Widget gate parity pin (architecture review finding F2, 2026-08-20):
+  the submit script's client-side required-field gate (incomplete
+  rulings boards, unfilled ranking slots, blank `edit` text, the
+  optional partial-ranking block) is now ported rule-for-rule into the
+  round-trip simulator and asserted equivalent to the server
+  validators — for every construct × fill state, the gate blocks the
+  post exactly when `collect_form_response` would reject the payload.
+  A structural anchor check also pins the DOM attributes the gate
+  queries (`data-required`, `[data-item]`, `data-rank-n`) to what the
+  renderer emits. Tests only — no behavior change; the previously
+  untested drift class (gate lets an invalid answer post, or blocks a
+  valid one, after the widget is dead) now fails red in CI
 - Drift guards batch (architecture review findings F1/F6/F9,
   2026-08-20):
   - `tests/test_grammar_completeness.py` — the F1 pin: every
