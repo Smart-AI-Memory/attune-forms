@@ -7,6 +7,30 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- A field `default` is now validated like the answer it pre-supplies
+  (pilot review of bridge.py, 2026-08-19): `form_from_dict` rejects an
+  out-of-vocabulary or wrongly-typed default at definition time, and
+  `collect_form_response` refuses to inject one from a directly-built
+  form — before, `default: "zzz"` on a select collected an
+  out-of-option answer into a "validated" `FormResponse`. A
+  MULTI_SELECT default is now a LIST (the answer's shape); the widget
+  pre-checks by membership, so several boxes can be pre-checked — the
+  old scalar form, which could only ever pre-check one and collected a
+  non-list, is a definition problem
+- A ranking answer supplying the same rank slot twice via dotted keys
+  (`"r.01"` and `"r.1"` both fold to slot 1) is a named validation
+  problem instead of an arbitrary winner validating clean
+- A PROGRESS with no options (display-only) auto-defaults to
+  `required=False` when `required` is omitted, and an explicit
+  `required: true` is a definition problem — before, the definition
+  passed and collect failed both ways (no answer → required; any
+  answer → not in options)
+
+### Changed
+- `collect_form_response` rejects unknown top-level answer keys,
+  naming them — a typo'd key against an optional-with-default field
+  used to silently collect the default. Keys inside an expanding
+  question's dotted namespace (`"<id>.<key>"`) remain exempt
 - A directly-built CONFIRM (constructed in Python rather than through
   `form_from_dict`) now defaults its options to the two-way gate
   (`Approve` / `Abort`) like every other construction path — before,

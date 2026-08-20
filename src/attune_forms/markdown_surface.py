@@ -60,7 +60,8 @@ def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -
         line = f"{marker} {opt}"
         if opt in badges:
             line += f" **({badges[opt]})**"
-        if q.default == opt:
+        is_default = opt in q.default if isinstance(q.default, list) else q.default == opt
+        if is_default:
             line += " *(default)*"
         if opt in notes:
             line += f" — {notes[opt]}"
@@ -232,6 +233,10 @@ def _skeleton_value(q: FormQuestion) -> Any:
         # projected to S4); the construct also has no default to offer.
         return None
     if q.type == QuestionType.MULTI_SELECT:
+        # The default is a list (the answer's shape); a scalar from a
+        # directly-built form still renders as a one-item prefill.
+        if isinstance(q.default, list):
+            return list(q.default)
         return [q.default] if q.default else []
     if q.type == QuestionType.RANKING:
         # The proposed order prefills (a visible proposal — the reply

@@ -270,3 +270,99 @@ def test_validation_error_carries_problems():
     err = FormValidationError(["a", "b"])
     assert err.problems == ["a", "b"]
     assert "a" in str(err) and "b" in str(err)
+
+
+class TestDefaultValidation:
+    """Pinned from the 2026-08-19 pilot review of bridge.py (act-now
+    finding): a `default` is a pre-supplied answer, so it passes the
+    same per-type validator an answer would — before, form_from_dict
+    passed it through unchecked and collect injected it unvalidated,
+    so an out-of-vocabulary or wrongly-typed default landed in a
+    "validated" FormResponse."""
+
+    def _select(self, **overrides):
+        field = {
+            "id": "a",
+            "text": "Pick",
+            "type": "single_select",
+            "options": ["x", "y"],
+            "required": False,
+        }
+        field.update(overrides)
+        return {"title": "T", "fields": [field]}
+
+    def test_out_of_option_default_rejected_at_definition(self):
+        with pytest.raises(FormValidationError, match="invalid 'default'"):
+            form_from_dict(self._select(default="zzz"))
+
+    def test_wrongly_typed_text_default_rejected_at_definition(self):
+        field = {"id": "t", "text": "T", "type": "text_input", "default": 12345}
+        with pytest.raises(FormValidationError, match="invalid 'default'"):
+            form_from_dict({"title": "T", "fields": [field]})
+
+    def test_valid_default_still_collects_when_unanswered(self):
+        form = form_from_dict(self._select(default="y"))
+        response = collect_form_response(form, {})
+        assert response.responses == {"a": "y"}
+
+    def test_directly_built_invalid_default_rejected_at_collect(self):
+        # A form built in Python bypasses form_from_dict's definition
+        # check; the collect-time guard still refuses to launder the
+        # default into a validated response.
+        from attune_forms.models import FormQuestion, FormSchema
+
+        question = FormQuestion(
+            id="a",
+            text="Pick",
+            type=QuestionType.SINGLE_SELECT,
+            options=["x", "y"],
+            required=False,
+            default="zzz",
+        )
+        form = FormSchema(title="T", description="", questions=[question])
+        with pytest.raises(FormValidationError, match="invalid 'default'"):
+            collect_form_response(form, {})
+
+
+class TestUnknownAnswerKeys:
+    """Pinned from the 2026-08-19 pilot review of bridge.py: an answer
+    key matching no question id was silently ignored — a typo'd key
+    against an optional-with-default field invisibly collected the
+    default. Unknown keys are now named; keys inside an expanding
+    question's dotted namespace stay exempt (the fold owns them)."""
+
+    def test_typoed_key_is_named(self):
+        field = {
+            "id": "approach",
+            "text": "Approach",
+            "type": "single_select",
+            "options": ["spec", "yolo"],
+            "required": False,
+            "default": "spec",
+        }
+        form = form_from_dict({"title": "T", "fields": [field]})
+        with pytest.raises(FormValidationError, match="unknown answer key 'aproach'"):
+            collect_form_response(form, {"aproach": "yolo"})
+
+    def test_dotted_keys_under_present_mapping_stay_exempt(self):
+        # Mapping-wins-over-dotted leaves the dotted keys unfolded; they
+        # are declared namespace, not typos.
+        form = form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "board",
+                        "text": "Rule items",
+                        "type": "triage",
+                        "triage_items": [{"label": "One"}, {"label": "Two"}],
+                        "dispositions": ["keep", "drop"],
+                    }
+                ],
+            }
+        )
+        response = collect_form_response(
+            form,
+            {"board": {"One": "keep", "Two": "drop"}, "board.One": "drop"},
+        )
+        assert response.responses["board"] == {"One": "keep", "Two": "drop"}

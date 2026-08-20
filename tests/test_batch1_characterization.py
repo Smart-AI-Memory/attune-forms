@@ -179,8 +179,7 @@ class TestFormFromDictListStyleMessages:
                 )
             )
         assert exc.value.problems == [
-            "field[0] 'list_style' is only valid on single_select / "
-            "multi_select (got text_input)"
+            "field[0] 'list_style' is only valid on single_select / multi_select (got text_input)"
         ]
 
 
@@ -276,28 +275,45 @@ class TestControlHtmlDefaultRendering:
         assert 'value="Yes" selected' in html
 
 
-class TestControlHtmlMultiSelectDefaultQuirk:
-    """``FormQuestion.default`` is a single scalar (str), never a list —
-    there is no plural "defaults" field. For MULTI_SELECT, ``_checked``
-    still runs per-option, so at most ONE checkbox can ever be
-    pre-checked via ``default``, no matter how many options exist. This
-    is a real quirk (an author reaching for "pre-check several boxes"
-    cannot do it via ``default``) worth pinning explicitly."""
+class TestControlHtmlMultiSelectDefaultList:
+    """A MULTI_SELECT ``default`` is a LIST — the same shape as its
+    answer — validated at definition time like any answer would be
+    (pilot review, 2026-08-19). ``_checked`` pre-checks by membership,
+    so any number of boxes can be pre-checked; the old scalar form is a
+    definition problem (it collected a non-list into a validated
+    response)."""
 
-    def test_exactly_one_checkbox_prechecked(self):
+    def test_list_default_prechecks_by_membership(self):
         html = _render(
             {
                 "id": "m",
                 "text": "M",
                 "type": "multi_select",
                 "options": ["x", "y", "z"],
-                "default": "y",
+                "default": ["y", "z"],
             }
         )
         assert 'value="x">' in html  # unchecked
-        assert 'value="y" checked>' in html  # the one match
-        assert 'value="z">' in html  # unchecked
-        assert html.count(" checked>") == 1
+        assert 'value="y" checked>' in html
+        assert 'value="z" checked>' in html
+        assert html.count(" checked>") == 2
+
+    def test_scalar_default_is_a_definition_problem(self):
+        with pytest.raises(FormValidationError, match="invalid 'default'"):
+            form_from_dict(
+                {
+                    "title": "T",
+                    "fields": [
+                        {
+                            "id": "m",
+                            "text": "M",
+                            "type": "multi_select",
+                            "options": ["x", "y"],
+                            "default": "y",
+                        }
+                    ],
+                }
+            )
 
 
 class TestControlHtmlListStyleDefaultChecked:
@@ -327,7 +343,7 @@ class TestControlHtmlListStyleDefaultChecked:
                 "type": "multi_select",
                 "options": ["x", "y"],
                 "list_style": "unordered",
-                "default": "x",
+                "default": ["x"],
             }
         )
         assert 'value="x" checked>' in html
