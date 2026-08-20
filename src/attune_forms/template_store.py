@@ -88,6 +88,10 @@ def form_from_template(name: str, slots: dict[str, Any] | None = None) -> FormSc
 
     declared = data.pop("slots", [])
     values = slots or {}
+    # A non-mapping slots argument must fail through the module's one
+    # error seam, not a raw AttributeError in the problems pass.
+    if not isinstance(values, dict):
+        raise FormValidationError([f"slot values must be a mapping, got {type(values).__name__}"])
     problems = _slot_problems(name, declared, values, data)
     if problems:
         raise FormValidationError(problems)

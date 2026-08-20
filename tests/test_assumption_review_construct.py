@@ -475,3 +475,64 @@ class TestReviewFindings:
         typed_bare = typed.replace("edit: inline", "edit")
         answers, _ = markdown_to_answers(form, md[md.index("```json") :] + "\n" + typed_bare)
         assert collect_form_response(form, answers).responses["assume"]["host"] == {"edit": "lane"}
+
+
+class TestConfirmationPass1:
+    """Regression pinned from the 2026-08-20 confirmation-pass-1 review:
+    a text lane whose item has NO ruling at all was popped by the fold
+    and silently discarded — the response validated clean while the
+    equivalent orphan RULING key was named. Typed input never vanishes
+    silently."""
+
+    def _form(self, required: bool = False):
+        return form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "a",
+                        "type": "assumption_review",
+                        "text": "Review.",
+                        "assumptions": [{"label": "x"}],
+                        "required": required,
+                    }
+                ],
+            }
+        )
+
+    def test_orphan_text_for_nonexistent_item_is_named(self) -> None:
+        with pytest.raises(FormValidationError, match="replacement text.*no.*ruling"):
+            collect_form_response(self._form(), {"a.x": "accept", "a.ghost.text": "IMPORTANT"})
+
+    def test_orphan_text_for_unruled_real_item_is_named(self) -> None:
+        with pytest.raises(FormValidationError, match="replacement text.*no.*ruling"):
+            collect_form_response(self._form(), {"a.x.text": "replacement"})
+
+    def test_text_beside_non_edit_ruling_still_documented_drop(self) -> None:
+        # Unchanged deliberate behavior: text is only read on edit.
+        response = collect_form_response(self._form(), {"a.x": "accept", "a.x.text": "t"})
+        assert response.responses["a"] == {"x": "accept"}
+
+    def test_markdown_merge_names_orphan_text_too(self) -> None:
+        # Companion drop: with a quoted mapping present, the markdown
+        # merge consumed a typed text lane for a REAL but unruled item
+        # silently. (A nonexistent item's text line is already handled
+        # at parse time — prose beside a block, named without one.)
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "a",
+                        "type": "assumption_review",
+                        "text": "Review.",
+                        "assumptions": [{"label": "x"}, {"label": "y"}],
+                        "required": False,
+                    }
+                ],
+            }
+        )
+        reply = 'a.y.text: replacement\n\n```json\n{"answers": {"a": {"x": "accept"}}}\n```'
+        answers, problems = markdown_to_answers(form, reply)
+        assert any("replacement text" in p and "no" in p for p in problems)
+        assert answers["a"] == {"x": "accept"}

@@ -359,6 +359,16 @@ def markdown_to_answers(form: FormSchema, reply: str) -> tuple[dict[str, Any], l
                 if not item.endswith(ASSUMPTION_TEXT_SUFFIX):
                     continue
                 target = item[: -len(ASSUMPTION_TEXT_SUFFIX)]
+                if target not in mapping:
+                    # Typed text with no ruling anywhere: named, not
+                    # dropped — same rule as the collect-time fold
+                    # (confirmation pass 1, 2026-08-20).
+                    problems.append(
+                        f"{q.id!r} has replacement text for item(s) with no "
+                        f"ruling: ['{target}'] — text is only read with an "
+                        f"'edit' ruling"
+                    )
+                    continue
                 current = mapping.get(target)
                 # Same precedence as the collect-time fold: a text lane
                 # fills an EMPTY edit; inline `edit: <text>` wins otherwise.

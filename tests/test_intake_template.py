@@ -162,3 +162,67 @@ def test_non_string_prefill_never_repr_coerced() -> None:
     no_default = FormTemplate("T", "d", [FieldSlot(key="scope", text="s?")])
     form2 = build_form(no_default, ctx)
     assert form2.questions[0].default is None
+
+
+class TestConfirmationPass1:
+    """Regressions pinned from the 2026-08-20 confirmation-pass-1 review:
+    the prefill fold now keeps a prior answer iff it validates for the
+    BUILT field — an invalid string no longer crashes the build, and
+    faithful list/number prefills are no longer blanket-dropped."""
+
+    def test_invalid_string_prefill_degrades_instead_of_crashing(self) -> None:
+        # The `other` free-text lane's prior answer is by construction
+        # not among the candidates; #37's default validation made it
+        # kill the whole intake.
+        PROVIDERS["_pass1_prov"] = lambda ctx: ["alpha", "beta"]
+        try:
+            t = FormTemplate(
+                "T",
+                "d",
+                [FieldSlot(key="scope", text="s?", provider="_pass1_prov", other="Other…")],
+            )
+            ctx = ProviderContext(
+                repo_root=Path("/nonexistent"), answered={"scope": "my/custom/path"}
+            )
+            form = build_form(t, ctx)
+            assert form.questions[0].default is None  # rendered, prefill dropped
+            still_valid = ProviderContext(
+                repo_root=Path("/nonexistent"), answered={"scope": "alpha"}
+            )
+            assert build_form(t, still_valid).questions[0].default == "alpha"
+        finally:
+            del PROVIDERS["_pass1_prov"]
+
+    def test_valid_list_and_number_prefills_are_kept(self) -> None:
+        PROVIDERS["_pass1_dirs"] = lambda ctx: ["src", "tests"]
+        try:
+            t = FormTemplate(
+                "T",
+                "d",
+                [FieldSlot(key="dirs", text="d?", provider="_pass1_dirs", control="multi_select")],
+            )
+            ctx = ProviderContext(repo_root=Path("/nonexistent"), answered={"dirs": ["src"]})
+            assert build_form(t, ctx).questions[0].default == ["src"]
+        finally:
+            del PROVIDERS["_pass1_dirs"]
+
+        t2 = FormTemplate("T", "d", [FieldSlot(key="count", text="n?", control="number")])
+        ctx2 = ProviderContext(repo_root=Path("/nonexistent"), answered={"count": 5})
+        assert build_form(t2, ctx2).questions[0].default == 5
+
+    def test_invalid_authored_default_still_fails_loudly(self) -> None:
+        # Only the PREFILL overlay degrades; a bad authored default is
+        # still a definition error (#37 behavior preserved).
+        from attune_forms import FormValidationError
+
+        PROVIDERS["_pass1_bad"] = lambda ctx: ["alpha", "beta"]
+        try:
+            t = FormTemplate(
+                "T",
+                "d",
+                [FieldSlot(key="scope", text="s?", provider="_pass1_bad", default="zzz")],
+            )
+            with pytest.raises(FormValidationError, match="invalid 'default'"):
+                build_form(t, _CTX)
+        finally:
+            del PROVIDERS["_pass1_bad"]
