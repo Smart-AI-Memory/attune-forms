@@ -325,6 +325,7 @@ class TestConfirmationPass1:
         assert stats["fields"] == 4
         assert stats["fields_inferred"] == 3
 
+
 class TestConfirmationPass2:
     """inferred > fields (2026-08-20): fix 6 skipped negatives but a
     record with more inferred fields than total fields still poisoned
