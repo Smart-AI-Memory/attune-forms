@@ -29,6 +29,8 @@ from attune_forms.models import (
     FormQuestion,
     FormSchema,
     QuestionType,
+    confirm_consequences,
+    endorsement_map,
     expansion_items,
     ranking_slot_count,
     recommended_first,
@@ -105,7 +107,7 @@ def _option_lines(q: FormQuestion, *, badge_for: dict[str, str] | None = None) -
 
 def _endorsement_suffix(q: FormQuestion, opt: str) -> str:
     """ " — endorsed by: a, b" for a deliberation option, or ""."""
-    names = (q.endorsements or {}).get(opt)
+    names = endorsement_map(q).get(opt)
     return f" — endorsed by: {', '.join(names)}" if names else ""
 
 
@@ -221,7 +223,7 @@ def _control_lines(q: FormQuestion) -> list[str]:
         return _assumption_lines(q)
     if q.type == QuestionType.CONFIRM:
         lines = ["If approved:"]
-        for item in q.consequences or []:
+        for item in confirm_consequences(q):
             tag = f" `{item['severity']}`" if item.get("severity") else ""
             detail = f" — {item['detail']}" if item.get("detail") else ""
             lines.append(f"- {item.get('label', '')}{tag}{detail}")

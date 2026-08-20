@@ -142,18 +142,26 @@ def _consequences_summary(consequences: list[dict[str, str]] | None) -> str | No
     The flat-surface projection of the preview: label, severity in
     parentheses, detail after a dash — compact enough for help_text or
     an elicitation description without dumping a paragraph per item.
+
+    A direct-built question carrying non-dict entries degrades to
+    skipping them (to ``None`` when nothing renderable remains) instead
+    of crashing the surface — the same norm as :func:`suggested_pick`;
+    the parse path (``form_from_dict``) rejects the shape with a named
+    problem before it ever reaches here.
     """
     if not consequences:
         return None
     bits = []
     for item in consequences:
+        if not isinstance(item, dict):
+            continue
         bit = item.get("label", "")
         if item.get("severity"):
             bit += f" ({item['severity']})"
         if item.get("detail"):
             bit += f" — {item['detail']}"
         bits.append(bit)
-    return "Will: " + "; ".join(bits)
+    return "Will: " + "; ".join(bits) if bits else None
 
 
 def triage_item_key(item: dict[str, str]) -> str:
@@ -223,6 +231,11 @@ def expansion_items(question: "FormQuestion") -> list[tuple[str, dict[str, str]]
     validators) iterates through this one function, so the item set and
     its keys can never differ between surfaces (0.5.0 cleanup batch:
     triage-expansion unification).
+
+    A direct-built question carrying non-dict rows degrades to skipping
+    them instead of crashing whichever surface iterates first — the same
+    norm as :func:`suggested_pick`; the parse path rejects the shape
+    with a named problem before it ever reaches here.
     """
     if question.type is QuestionType.TRIAGE:
         items = question.triage_items
@@ -230,7 +243,7 @@ def expansion_items(question: "FormQuestion") -> list[tuple[str, dict[str, str]]
         items = question.assumptions
     else:
         items = None
-    return [(triage_item_key(item), item) for item in items or []]
+    return [(triage_item_key(item), item) for item in items or [] if isinstance(item, dict)]
 
 
 def suggested_pick(question: "FormQuestion", key: str) -> str | None:
@@ -245,6 +258,31 @@ def suggested_pick(question: "FormQuestion", key: str) -> str | None:
     if isinstance(question.suggested, dict):
         return question.suggested.get(key)
     return None
+
+
+def endorsement_map(question: "FormQuestion") -> dict[str, list[str]]:
+    """A DELIBERATION's ``endorsements`` mapping, or ``{}``.
+
+    The shape guard belongs in exactly one place, like
+    :func:`suggested_pick`: a direct-built question carrying a
+    list-typed ``endorsements`` degrades to "no endorsements" on every
+    surface (help-text fold, widget chips, markdown suffix) instead of
+    crashing whichever one read the mapping first; the parse path
+    rejects the shape with a named problem.
+    """
+    return question.endorsements if isinstance(question.endorsements, dict) else {}
+
+
+def confirm_consequences(question: "FormQuestion") -> list[dict[str, str]]:
+    """A CONFIRM's renderable ``consequences`` rows.
+
+    Same one-place shape guard as :func:`endorsement_map`: a direct-built
+    question carrying non-dict entries degrades to skipping them on every
+    surface (widget rows, markdown rows, the flat-surface summary)
+    instead of crashing; the parse path rejects the shape with a named
+    problem.
+    """
+    return [c for c in question.consequences or [] if isinstance(c, dict)]
 
 
 def item_context(question: "FormQuestion", item: dict[str, str]) -> str | None:
@@ -453,10 +491,9 @@ class FormQuestion:
             # per-option endorsements fold into help_text — otherwise the
             # 2-1 split (the construct's whole payload) would be invisible.
             help_text = self._fallback_help()
-            if self.type is QuestionType.DELIBERATION and self.endorsements:
-                who = "; ".join(
-                    f"{opt}: {', '.join(names)}" for opt, names in self.endorsements.items()
-                )
+            endorsements = endorsement_map(self)
+            if self.type is QuestionType.DELIBERATION and endorsements:
+                who = "; ".join(f"{opt}: {', '.join(names)}" for opt, names in endorsements.items())
                 note = f"Endorsements — {who}"
                 help_text = f"{help_text} · {note}" if help_text else note
             return {
@@ -605,12 +642,24 @@ class FormSchema:
         """Batch questions for asking (AskUserQuestion supports max 4 at once).
 
         Args:
-            batch_size: Maximum questions per batch (default: 4)
+            batch_size: Maximum questions per batch (default: 4); must be
+                at least 1
 
         Returns:
             List of question batches
 
+        Raises:
+            ValueError: For a non-positive ``batch_size`` — before the
+                guard, ``-1`` silently returned ``[]`` (every question
+                dropped) and ``0`` raised a raw ``range()`` error
+                (confirmation-pass-1 finding, 2026-08-20). Rejecting
+                beats clamping: the size is code-authored, not user
+                data, so a loud error at the misuse site is catchable
+                where a silent clamp-to-1 would just reshape the bug.
+
         """
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be at least 1, got {batch_size}")
         batches = []
         for i in range(0, len(self.questions), batch_size):
             batches.append(self.questions[i : i + batch_size])
