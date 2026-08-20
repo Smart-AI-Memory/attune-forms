@@ -229,3 +229,51 @@ class TestConfirmationPass1:
         with pytest.raises(FormValidationError) as exc:
             form_from_template("session-contract", bad)
         assert any("slot values must be a mapping" in p for p in exc.value.problems)
+
+    @pytest.fixture
+    def store(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        monkeypatch.setattr(template_store, "_TEMPLATE_DIR", tmp_path)
+        return tmp_path
+
+    @pytest.mark.parametrize("bad_name", ["Who", "café", "1st", "_x"])
+    def test_ungrammatical_slot_name_is_named(self, store: Path, bad_name: str) -> None:
+        # slots: ["Who"] with the literal '{Who}' present in the title
+        # used to fail as "declares unused slot 'Who'" — factually false
+        # from the author's viewpoint, since that exact text IS in a
+        # field. The real problem is the name sits outside the
+        # placeholder grammar, so _placeholders can never collect it.
+        _write_store(
+            store,
+            "cased",
+            {
+                "slots": [bad_name],
+                "title": f"Hello {{{bad_name}}}",
+                "fields": [{"id": "a", "type": "boolean", "text": "Q"}],
+            },
+        )
+        with pytest.raises(FormValidationError) as exc:
+            form_from_template("cased", {bad_name: "Patrick"})
+        joined = "\n".join(exc.value.problems)
+        assert (
+            f"slot name '{bad_name}' is not a valid placeholder name"
+            " (lowercase [a-z][a-z0-9_]*)" in joined
+        )
+        assert "unused slot" not in joined
+
+    def test_ungrammatical_and_unused_listed_together(self, store: Path) -> None:
+        """The grammar problem never masks a genuinely unused slot."""
+        _write_store(
+            store,
+            "both",
+            {
+                "slots": ["Who", "ghost"],
+                "title": "Hello {Who}",
+                "fields": [{"id": "a", "type": "boolean", "text": "Q"}],
+            },
+        )
+        with pytest.raises(FormValidationError) as exc:
+            form_from_template("both", {"Who": "x", "ghost": "y"})
+        joined = "\n".join(exc.value.problems)
+        assert "slot name 'Who' is not a valid placeholder name" in joined
+        assert "declares unused slot 'ghost' — no field uses '{ghost}'" in joined
+        assert "unused slot 'Who'" not in joined

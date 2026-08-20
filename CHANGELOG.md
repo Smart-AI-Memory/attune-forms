@@ -7,6 +7,11 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- A declared slot name outside the placeholder grammar (e.g. `Who`,
+  `café`) is named as the real problem — "not a valid placeholder name
+  (lowercase [a-z][a-z0-9_]*)" — instead of the factually-false
+  "declares unused slot" it produced even when the literal `{Who}` text
+  was present in a field (confirmation-pass-1 needs-a-look, 2026-08-20)
 - Confirmation-pass-1 batch (library review, 2026-08-20 — all eight
   findings empirically confirmed before fixing):
   - An assumption-review text lane whose item has NO ruling (a
