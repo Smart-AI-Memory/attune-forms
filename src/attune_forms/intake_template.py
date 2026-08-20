@@ -226,9 +226,15 @@ def _settle_prefill(field: dict[str, Any], slot: FieldSlot, ctx: ProviderContext
     dying on it. An invalid AUTHORED default still fails the final
     ``form_from_dict`` exactly as before: only the prefill overlay
     degrades.
+
+    The "was the prefill applied?" check is by IDENTITY, not equality:
+    ``_slot_field`` assigns the prefill object straight into
+    ``default``, and a self-unequal prefill (``nan != nan``) slipped
+    past a ``!=`` guard, skipping the probe and reopening the whole-
+    build crash this function closes (confirmation pass 2, 2026-08-20).
     """
     prefilled = ctx.answered.get(slot.key)
-    if prefilled is None or field.get("default") != prefilled:
+    if prefilled is None or field.get("default") is not prefilled:
         return field
     try:
         form_from_dict({"title": "prefill probe", "fields": [dict(field)]})

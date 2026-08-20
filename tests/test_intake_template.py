@@ -226,3 +226,21 @@ class TestConfirmationPass1:
                 build_form(t, _CTX)
         finally:
             del PROVIDERS["_pass1_bad"]
+
+
+class TestConfirmationPass2:
+    """NaN-prefill regression (2026-08-20): `_settle_prefill`'s `!=`
+    guard was false for self-unequal values (nan != nan), so the probe
+    was skipped and the invalid prefill crashed the whole build — the
+    exact class fix 7 claimed to close. The guard is now by identity."""
+
+    def test_nan_prefill_degrades_instead_of_crashing(self) -> None:
+        t = FormTemplate("T", "d", [FieldSlot(key="k", text="q?", default="fallback")])
+        ctx = ProviderContext(repo_root=Path("/nonexistent"), answered={"k": float("nan")})
+        form = build_form(t, ctx)
+        assert form.questions[0].default == "fallback"  # authored default restored
+
+    def test_nan_prefill_no_default_drops_cleanly(self) -> None:
+        t = FormTemplate("T", "d", [FieldSlot(key="k", text="q?")])
+        ctx = ProviderContext(repo_root=Path("/nonexistent"), answered={"k": float("nan")})
+        assert build_form(t, ctx).questions[0].default is None
