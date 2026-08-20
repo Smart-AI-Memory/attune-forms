@@ -970,6 +970,23 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
                     f"{owner.id!r}'s dotted answer namespace ('{owner.id}.<key>')"
                 )
 
+    # The widget's "::" radio-group namespace needs the SAME by-definition
+    # guard: a TRIAGE / ASSUMPTION_REVIEW board with id "a" renders one
+    # radio group per item named "a::<idx>", so a sibling field whose id is
+    # literally "a::1" emits a group sharing that name — the browser fuses
+    # them into one mutually-exclusive group and one field becomes
+    # unanswerable (confirmation-pass-2 finding, 2026-08-20). Reject at
+    # definition, symmetric with the dotted guard above.
+    for owner in questions:
+        if owner.type not in _WIDGET_RADIO_GROUP_TYPES:
+            continue
+        for question in questions:
+            if question.id != owner.id and question.id.startswith(f"{owner.id}::"):
+                problems.append(
+                    f"field id {question.id!r} collides with {owner.type.value} "
+                    f"{owner.id!r}'s widget radio-group namespace ('{owner.id}::<idx>')"
+                )
+
     if problems:
         raise FormValidationError(problems)
 
@@ -1014,6 +1031,18 @@ _WIDGET_ONLY_TYPES = frozenset(
 _EXPANDING_TYPES = frozenset(
     {QuestionType.TRIAGE, QuestionType.RANKING, QuestionType.ASSUMPTION_REVIEW}
 )
+
+#: Types whose widget renders one radio *group per item*, named
+#: ``"<field id>::<item index>"`` (see ``_control_triage_html`` /
+#: ``_control_assumption_review_html``). That ``::`` group namespace is a
+#: second reserved namespace — a sibling field whose literal id is
+#: ``"<board id>::<N>"`` would emit a radio group sharing the board row's
+#: ``name``, and the browser would treat them as ONE mutually-exclusive
+#: group, making one field unanswerable (confirmation-pass-2 finding,
+#: 2026-08-20). RANKING is in :data:`_EXPANDING_TYPES` but NOT here: its
+#: widget groups by ``data-opt``, never by a ``::`` radio name, so it owns
+#: no such namespace.
+_WIDGET_RADIO_GROUP_TYPES = frozenset({QuestionType.TRIAGE, QuestionType.ASSUMPTION_REVIEW})
 
 #: The strict subset with NO portable ``AskUserQuestion`` control at
 #: all. A form using any of these cannot be asked on ``AskUserQuestion``
