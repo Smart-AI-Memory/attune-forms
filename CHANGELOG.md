@@ -7,6 +7,20 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- `inference_rate()` skips a telemetry line with non-numeric counts
+  instead of raising `ValueError` — matching the skip-don't-raise
+  contract of its sibling readers (discovery-sweep, 2026-08-20)
+- An intake-template prefill that isn't a string (e.g. a prior
+  multi-select answer) is no longer repr-coerced into the slot's
+  default (`"['src/', 'tests/']"` presented as a settled value); the
+  slot's own default survives instead
+- `FormResponse.response_id` carries a uuid suffix — two responses in
+  the same second no longer collide
+- The MCP `inputSchema` types `default` as answer-shaped
+  (string/number/boolean/array) instead of string-only, and declares
+  `inferred_from` — the advertised schema no longer steers an agent
+  into a definition-time validation failure on list/numeric defaults
+- `plugin.json` description names all nine constructs shipped in 0.6.0
 - A field `default` is now validated like the answer it pre-supplies
   (pilot review of bridge.py, 2026-08-19): `form_from_dict` rejects an
   out-of-vocabulary or wrongly-typed default at definition time, and

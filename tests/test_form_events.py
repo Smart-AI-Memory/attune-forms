@@ -226,3 +226,21 @@ class TestInferenceRate:
         assert rate["fields_inferred"] == 4
         assert rate["fully_inferred"] == 1
         assert rate["inferred_share"] == round(4 / 6, 3)
+
+
+class TestInferenceRateMalformedCounts:
+    """Discovery-sweep finding (2026-08-20): a corrupt log line with a
+    non-numeric question_count raised ValueError out of inference_rate
+    while the sibling readers (surface_mix, submission_count) skip
+    malformed lines by contract. The whole line is now skipped."""
+
+    def test_non_numeric_count_line_skipped(self, _isolated_home: Path) -> None:
+        path = _events_file(_isolated_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        good = {"event": "form_surface", "question_count": 2, "inferred_fields": 1}
+        corrupt = {"event": "form_surface", "question_count": "three"}
+        path.write_text(json.dumps(good) + "\n" + json.dumps(corrupt) + "\n", encoding="utf-8")
+        stats = inference_rate()
+        assert stats["forms"] == 1
+        assert stats["fields"] == 2
+        assert stats["fields_inferred"] == 1

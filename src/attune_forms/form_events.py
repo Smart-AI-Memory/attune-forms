@@ -247,9 +247,18 @@ def inference_rate() -> dict[str, float | int]:
                     continue
                 if not isinstance(record, dict) or record.get("event") != "form_surface":
                     continue
+                # Same skip-don't-raise contract as surface_mix: a line
+                # with non-numeric counts is malformed and skipped whole,
+                # so one corrupt record never breaks the read
+                # (discovery-sweep finding, 2026-08-20).
+                try:
+                    line_fields = int(record.get("question_count") or 0)
+                    line_inferred = int(record.get("inferred_fields") or 0)
+                except (TypeError, ValueError):
+                    continue
                 forms += 1
-                fields += int(record.get("question_count") or 0)
-                inferred += int(record.get("inferred_fields") or 0)
+                fields += line_fields
+                inferred += line_inferred
                 fully += 1 if record.get("fully_inferred") else 0
     except OSError:
         return {

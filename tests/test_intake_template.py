@@ -142,3 +142,23 @@ def test_bound_template_without_resolver_rejects() -> None:
     t = FormTemplate("T", "d", [FieldSlot(key="goal", text="g?")], workflow="fake")
     with pytest.raises(TemplateError, match="no workflow schema resolver"):
         validate_template(t)
+
+
+def test_non_string_prefill_never_repr_coerced() -> None:
+    """Discovery-sweep finding (2026-08-20): a non-string prior answer
+    (e.g. a multi-select's list) was str()-coerced into the slot's
+    default, presenting junk like "['src/', 'tests/']" as a settled
+    value. Non-string prefill is now skipped; the slot's own default
+    survives."""
+    t = FormTemplate(
+        "T",
+        "d",
+        [FieldSlot(key="scope", text="s?", default="everything")],
+    )
+    ctx = ProviderContext(repo_root=Path("/nonexistent"), answered={"scope": ["src/", "tests/"]})
+    form = build_form(t, ctx)
+    assert form.questions[0].default == "everything"
+
+    no_default = FormTemplate("T", "d", [FieldSlot(key="scope", text="s?")])
+    form2 = build_form(no_default, ctx)
+    assert form2.questions[0].default is None

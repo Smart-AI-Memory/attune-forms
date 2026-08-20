@@ -178,8 +178,14 @@ def _slot_field(
         base["required"] = slot.required
     if slot.default is not None:
         base["default"] = slot.default
-    if prefilled is not None:
-        base["default"] = str(prefilled)
+    if isinstance(prefilled, str):
+        base["default"] = prefilled
+    elif prefilled is not None:
+        # A non-string prior answer (e.g. a multi-select's list) has no
+        # faithful scalar rendering — repr-coercing it presented junk
+        # like "['src/', 'tests/']" as a settled value. Skip the prefill
+        # and keep the slot's own default (discovery-sweep, 2026-08-20).
+        prefilled = None
 
     if slot.provider is not None:
         if overrides is not None and slot.key in overrides:

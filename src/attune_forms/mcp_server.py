@@ -91,7 +91,22 @@ def _field_schema() -> dict[str, Any]:
                 ),
             },
             "options": {"type": "array", "items": {"type": "string"}},
-            "default": {"type": "string"},
+            "default": {
+                "type": ["string", "number", "boolean", "array"],
+                "description": (
+                    "Pre-supplied answer; must be answer-shaped for the "
+                    "field type (multi_select: LIST of options; number: "
+                    "numeric; boolean: 'Yes'/'No') — it is validated like "
+                    "an answer at definition time"
+                ),
+            },
+            "inferred_from": {
+                "type": "string",
+                "description": (
+                    "Provenance note for a guessed default (requires "
+                    "'default'); renders as a '(guessed)' badge"
+                ),
+            },
             "help_text": {"type": "string"},
             "required": {"type": "boolean", "description": "Defaults to true"},
             "minimum": {"type": "number"},

@@ -122,3 +122,15 @@ def test_ask_degrades_without_elicitation_capability(round_trip):
     p = round_trip["ask"]
     assert p["success"] is False
     assert p["action"] in ("unsupported", "error", "cancel", "decline")
+
+
+def test_field_schema_default_is_answer_shaped_and_inferred_from_declared():
+    """Verify-pass finding (2026-08-20): the advertised inputSchema typed
+    `default` as string — wrong since defaults validate like answers
+    (multi_select: list; number: numeric; boolean: Yes/No) — and omitted
+    inferred_from entirely."""
+    from attune_forms.mcp_server import _field_schema
+
+    props = _field_schema()["properties"]
+    assert set(props["default"]["type"]) == {"string", "number", "boolean", "array"}
+    assert "inferred_from" in props

@@ -10,6 +10,7 @@ Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0
 """
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -596,7 +597,13 @@ class FormResponse:
     responses: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     response_id: str = field(
-        default_factory=lambda: f"resp-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        # The uuid suffix keeps the id unique when two responses land in
+        # the same second — the timestamp alone collided (discovery-sweep
+        # finding, 2026-08-20). Nothing parses the format; it is only
+        # displayed and joined on.
+        default_factory=lambda: (
+            f"resp-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        ),
     )
 
     def get(self, question_id: str, default: Any = None) -> Any:
