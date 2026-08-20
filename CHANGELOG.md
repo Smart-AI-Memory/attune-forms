@@ -7,6 +7,17 @@ follow [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Unknown DEFINITION keys are now named problems instead of silently
+  ignored (confirmation-pass-1 chair ruling, 2026-08-20): a typo'd
+  field key (`"maximun": 10`) built a bound-less field that validated
+  any answer clean. `form_from_dict` rejects every unrecognized
+  top-level and field-level key (`unknown definition key '...'`,
+  mirroring #37's answer-side wording; the `label`/`questions` aliases
+  stay accepted), and the MCP `inputSchema` declares
+  `additionalProperties: false` on both the form and field objects so
+  the SDK gate agrees with the parser. The schema is D3-mirrored to
+  attune-ai — the mirror must pick up `additionalProperties` at the
+  next release-gated re-sync
 - **Directly-built D2 gate with a `default` can no longer pass
   unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
   confirmed). The no-`default` rule for the two-way constructs (confirm,

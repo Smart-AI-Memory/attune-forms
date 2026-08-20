@@ -190,3 +190,25 @@ def test_schema_accepts_legal_triage_object_default():
     form_from_dict(form)  # legal by the library's own validator
     tools = {t.name: t for t in tool_definitions()}
     jsonschema.validate({"form": form}, tools["elicitation_render_form"].inputSchema)
+
+
+def test_schemas_close_unknown_keys():
+    """Confirmation-pass-1 chair ruling (2026-08-20): unknown definition
+    keys are strictly rejected at BOTH layers — the advertised schema
+    must not wave through what form_from_dict names as a problem."""
+    from attune_forms.mcp_server import _field_schema, _form_schema
+
+    assert _field_schema()["additionalProperties"] is False
+    assert _form_schema()["additionalProperties"] is False
+
+
+def test_field_schema_matches_parser_key_set():
+    """Ratchet: the mirrored _field_schema and form_from_dict's strict
+    key set may not drift apart. 'label' is the parser-side alias for
+    'text' — never advertised (the schema requires 'text', so the alias
+    was never usable over stdio)."""
+    from attune_forms.bridge import _DEFINITION_FIELD_KEYS
+    from attune_forms.mcp_server import _field_schema
+
+    advertised = set(_field_schema()["properties"])
+    assert advertised | {"label"} == set(_DEFINITION_FIELD_KEYS)

@@ -159,6 +159,11 @@ def _field_schema() -> dict[str, Any]:
             "list_style": {"type": "string", "enum": ["ordered", "unordered"]},
         },
         "required": ["id", "text", "type"],
+        # Mirrors form_from_dict's strict definition contract: an
+        # unknown field key is a typo ("maximun") that would silently
+        # drop the constraint it meant to declare, so the SDK gate
+        # rejects it rather than waving it through to a lax parse.
+        "additionalProperties": False,
     }
 
 
@@ -172,6 +177,7 @@ def _form_schema() -> dict[str, Any]:
             "fields": {"type": "array", "items": _field_schema()},
         },
         "required": ["title", "fields"],
+        "additionalProperties": False,
     }
 
 
