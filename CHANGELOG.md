@@ -39,6 +39,12 @@ follow [SemVer](https://semver.org/).
   are a named problem from `markdown_to_answers` instead of a silent
   overwrite — the quoted (JSON-block) lane was already collision-proof,
   admitting only canonical slot keys
+- A template slot declared in `"slots"` but used by no `{placeholder}`
+  is a named definition problem from `form_from_template`
+  (checkpoint-1 finding, 2026-08-20) — before, the loader demanded a
+  caller value for it and then silently discarded it. Declaration and
+  use now must match in both directions, mirroring the existing
+  undeclared-placeholder check
 - A PROGRESS with no options (display-only) auto-defaults to
   `required=False` when `required` is omitted, and an explicit
   `required: true` is a definition problem — before, the definition
