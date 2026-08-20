@@ -150,6 +150,43 @@ class TestMalformedTemplateParity:
             form_from_template("sneaky")
         assert any("undeclared placeholder '{undeclared}'" in p for p in exc.value.problems)
 
+    def test_declared_but_unused_slot_rejected(self) -> None:
+        # A slot no placeholder uses demanded a caller value only to
+        # silently discard it (checkpoint-1 finding, task_961f471e):
+        # declaration/use mismatch is now named in BOTH directions.
+        _write_store(
+            self.store,
+            "hollow",
+            {
+                "slots": ["ghost"],
+                "title": "T",
+                "fields": [{"id": "a", "type": "boolean", "text": "Q"}],
+            },
+        )
+        with pytest.raises(FormValidationError) as exc:
+            form_from_template("hollow", {"ghost": "value"})
+        assert any(
+            "declares unused slot 'ghost' — no field uses '{ghost}'" in p
+            for p in exc.value.problems
+        )
+
+    def test_unused_and_undeclared_listed_together(self) -> None:
+        """Both mismatch directions in one raise, not fail-on-first."""
+        _write_store(
+            self.store,
+            "mixed",
+            {
+                "slots": ["ghost"],
+                "title": "Uses {undeclared}",
+                "fields": [{"id": "a", "type": "boolean", "text": "Q"}],
+            },
+        )
+        with pytest.raises(FormValidationError) as exc:
+            form_from_template("mixed", {"ghost": "value"})
+        joined = "\n".join(exc.value.problems)
+        assert "declares unused slot 'ghost'" in joined
+        assert "undeclared placeholder '{undeclared}'" in joined
+
     def test_bad_slots_declaration_rejected(self) -> None:
         _write_store(
             self.store,

@@ -109,7 +109,16 @@ def _slot_problems(
     for slot, value in sorted(values.items()):
         if slot in declared and not isinstance(value, str):
             problems.append(f"slot '{slot}' value must be a string, got {type(value).__name__}")
-    for placeholder in sorted(_placeholders(data) - set(declared)):
+    # Declaration and use must match in BOTH directions: an undeclared
+    # placeholder would survive substitution as literal text, and a
+    # declared-but-unused slot demands a caller value only to silently
+    # discard it (checkpoint-1 finding, 2026-08-20).
+    used = _placeholders(data)
+    for unused in sorted(set(declared) - used):
+        problems.append(
+            f"template {name!r} declares unused slot '{unused}' — no field uses '{{{unused}}}'"
+        )
+    for placeholder in sorted(used - set(declared)):
         problems.append(f"template {name!r} uses undeclared placeholder '{{{placeholder}}}'")
     return problems
 
