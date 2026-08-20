@@ -112,7 +112,11 @@ if select_form_surface(form) == "widget":
   `problems_to_markdown` re-asks exactly the fields that failed.
 - **Surface routing** — `select_form_surface` picks widget vs fallback;
   a keyboard-mode opt-out is persisted per project. The form degrades —
-  it never breaks.
+  it never breaks. Authority note: in the shipped plugin the router is
+  *advisory* — the agent's choice of MCP tool IS the surface decision,
+  guided by the skill's prose ladder, and the router runs after the
+  fact so telemetry can record agreement. Library consumers routing
+  their own calls (as above) are the path where its answer is binding.
 - **Validation** — `form_from_dict` refuses malformed definitions;
   `collect_form_response` refuses malformed answers (required fields,
   option membership) with field-level problems.

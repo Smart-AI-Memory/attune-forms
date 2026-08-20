@@ -1136,6 +1136,18 @@ def select_form_surface(
     input — the axis is how much of the option space the user can see
     at once, not how many tool calls it costs.
 
+    .. note::
+       Authority (architecture review F9, 2026-08-20): in the shipped
+       plugin this router is **advisory** — the agent's choice of MCP
+       tool is the effective surface decision, made from the skill's
+       prose ladder, and the MCP handlers call this only *after the
+       fact* (passing ``chosen``) so telemetry records agreement vs
+       disagreement. Its return value is binding only for library
+       consumers who route their own render calls through it. The
+       markdown surface is outside its range entirely (it can return
+       only ``"widget"`` / ``"ask"``) — revisit when the markdown
+       surface gains an MCP tool.
+
     Precedence, highest first:
 
     1. **Capability floor** — a client that cannot render widgets gets
