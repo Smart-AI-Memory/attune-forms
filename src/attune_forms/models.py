@@ -174,6 +174,44 @@ def triage_item_key(item: dict[str, str]) -> str:
 #: :class:`FormQuestion` default identically (0.5.0 cleanup batch).
 CONFIRM_DEFAULT_OPTIONS = ("Approve", "Abort")
 
+#: The Yes/No vocabulary of a BOOLEAN question — the values every
+#: surface renders its control with and the only answers the validator
+#: accepts. Single-sourced here so the widget's select, the flat-surface
+#: options, and ``collect_form_response`` can never disagree (0.6.x
+#: cleanup batch: it was defined independently in bridge and widget).
+BOOLEAN_OPTIONS = ("Yes", "No")
+
+#: Status icon per PROGRESS status — the widget rows and the markdown
+#: surface render the same three glyphs (0.6.x cleanup batch: each
+#: surface carried its own copy with a "matches the widget" comment
+#: nothing enforced).
+PROGRESS_STATUS_ICONS = {"done": "✓", "in_flight": "◐", "blocked": "✕"}
+
+#: Rationale callout header per construct — the widget and markdown
+#: surfaces show the same words above ``rationale`` (0.6.x cleanup
+#: batch: previously duplicated per surface). Types absent here head
+#: the callout "Why".
+RATIONALE_HEADERS: dict["QuestionType", str] = {
+    QuestionType.PUSHBACK: "Why I'd push back",
+    QuestionType.PROGRESS: "Summary",
+    QuestionType.DELIBERATION: "Synthesis",
+}
+
+
+def recommended_first(question: "FormQuestion") -> list[str]:
+    """``question.options`` with ``question.recommended`` moved to the
+    front, when it names one of them.
+
+    The recommended-first ordering is construct policy (the proposal
+    leads on every surface), so the widget's cards, the markdown option
+    lines, and the AskUserQuestion fallback all order through this one
+    function (0.6.x cleanup batch: it was implemented three times).
+    """
+    ordered = list(question.options)
+    if question.recommended and question.recommended in ordered:
+        ordered = [question.recommended] + [o for o in ordered if o != question.recommended]
+    return ordered
+
 
 def expansion_items(question: "FormQuestion") -> list[tuple[str, dict[str, str]]]:
     """The reviewed rows of an item-keyed construct as ``(key, item)``
@@ -410,9 +448,7 @@ class FormQuestion:
             QuestionType.PROGRESS,
             QuestionType.DELIBERATION,
         ):
-            opts = list(self.options)
-            if self.recommended and self.recommended in opts:
-                opts = [self.recommended] + [o for o in opts if o != self.recommended]
+            opts = recommended_first(self)
             # DELIBERATION: the fallback surface has no chip row, so the
             # per-option endorsements fold into help_text — otherwise the
             # 2-1 split (the construct's whole payload) would be invisible.
