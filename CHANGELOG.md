@@ -70,6 +70,22 @@ follow [SemVer](https://semver.org/).
     fallback, matching what the code reads
 
 ### Fixed
+- Author-supplied field text can no longer desync the markdown reply
+  skeleton (confirmation-pass-2 needs-a-look, 2026-08-20 — the LOUD
+  sibling of the pass-2 silent-injection fix). A literal triple-backtick
+  fence inside a label, help text, or OPTION used to open a stray code
+  fence in the rendered form, so the trailing `answers` skeleton was no
+  longer cleanly delimited and paste-back failed loudly ("fenced code
+  block is not valid JSON"). Every author/host line rendered by
+  `form_to_markdown` and the `problems_to_markdown` re-ask is now defused
+  — runs of three+ backticks get a woven zero-width break so no ```
+  substring survives, while inline `` `code` `` (runs under three)
+  renders untouched. A fence-bearing value that reaches the JSON skeleton
+  itself (a default/recommended/suggested option carrying a fence) has
+  each backtick emitted as the JSON unicode escape `\u0060`, which
+  `json.loads` restores on ingestion, so the skeleton's own fence stays
+  intact and exact option matching is unchanged. The widget surface
+  HTML-escapes and was already immune
 - **Directly-built D2 gate with a `default` can no longer pass
   unanswered** (checkpoint-2 promoted item, 2026-08-20 — empirically
   confirmed). The no-`default` rule for the two-way constructs (confirm,
