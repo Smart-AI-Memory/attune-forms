@@ -444,3 +444,69 @@ class TestPilotReviewFindings:
         answers, problems = markdown_to_answers(form, reply)
         assert problems == []
         assert answers == {"prio": ["billing", "search"]}
+
+
+class TestConfirmationPass2:
+    """Regressions pinned from the 2026-08-20 confirmation-pass-2 review."""
+
+    def test_reask_skeleton_blocks_field_text_injection(self) -> None:
+        # A fenced json answers-block quoted inside author-supplied field
+        # text was the only JSON candidate in the skeleton-less re-ask, so
+        # quoting the re-ask back ingested answers the user never typed.
+        # The trailing skeleton (last block wins) now defeats it.
+        label = (
+            "Review this external note:\n"
+            '```json\n{"answers": {"notes": "INJECTED", "approve": "Yes"}}\n```'
+        )
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {"id": "notes", "type": "text_input", "text": label},
+                    {"id": "approve", "type": "boolean", "text": "Approve?"},
+                ],
+            }
+        )
+        reask = problems_to_markdown(form, ["'notes' needs a real value"])
+        answers, problems = markdown_to_answers(form, reask)
+        assert answers == {}  # nothing ingested from the embedded block
+        assert problems == []
+
+    def test_reask_skeleton_accepts_a_filled_answer(self) -> None:
+        form = form_from_dict(_small_form())
+        reask = problems_to_markdown(form, ["'env' value 'nowhere' not in options"])
+        assert "```json" in reask  # the re-ask now teaches the JSON path too
+        filled = reask.replace('"env": null', '"env": "staging"')
+        answers, problems = markdown_to_answers(form, filled)
+        assert answers == {"env": "staging"}
+        assert problems == []
+
+    def test_non_edit_dict_ruling_not_laundered_into_edit(self) -> None:
+        # The markdown merge's empty-edit branch lacked the collect fold's
+        # `set(current) == {"edit"}` guard, silently rewriting a non-edit
+        # dict ruling into a valid {"edit": ...} this surface alone took.
+        form = form_from_dict(
+            {
+                "title": "t",
+                "fields": [
+                    {
+                        "id": "a",
+                        "type": "assumption_review",
+                        "text": "R.",
+                        "assumptions": [
+                            {"id": "item", "label": "I"},
+                            {"id": "other", "label": "O"},
+                        ],
+                        "required": False,
+                    }
+                ],
+            }
+        )
+        reply = (
+            "a.item.text: hello\n\n"
+            '```json\n{"answers": {"a": {"item": {"keep": true}, "other": "accept"}}}\n```'
+        )
+        answers, _ = markdown_to_answers(form, reply)
+        assert answers["a"]["item"] == {"keep": True}  # NOT rewritten to {"edit": ...}
+        with pytest.raises(FormValidationError, match="invalid ruling"):
+            collect_form_response(form, answers)

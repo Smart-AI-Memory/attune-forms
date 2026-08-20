@@ -32,6 +32,11 @@ from attune_forms.models import (
     suggested_pick,
 )
 
+#: The BOOLEAN answer vocabulary — mirrors ``bridge._BOOLEAN_OPTIONS``
+#: and ``widget._BOOLEAN_OPTIONS`` (the surfaces keep local copies of
+#: this two-value constant rather than sharing one).
+_BOOLEAN_OPTIONS = ("Yes", "No")
+
 
 def _property_for(question: FormQuestion) -> dict[str, Any]:
     """Build the elicitation schema property for one question.
@@ -76,7 +81,13 @@ def _property_for(question: FormQuestion) -> dict[str, Any]:
         if isinstance(question.suggested, list):
             prop["default"] = list(question.suggested)
     elif question.type == QuestionType.BOOLEAN:
-        prop["type"] = "boolean"
+        # A two-value string enum, NOT a JSON boolean: the validator
+        # accepts only "Yes"/"No" (bridge._BOOLEAN_OPTIONS) and every
+        # other surface renders those, so a `{"type": "boolean"}`
+        # projection was unanswerable both ways — a conformant client's
+        # true/false bounced at collect, and the only collectable answers
+        # violated the schema (confirmation pass 2, 2026-08-20).
+        prop.update(type="string", enum=list(_BOOLEAN_OPTIONS))
     elif question.type == QuestionType.NUMBER:
         prop["type"] = "number"
         if question.minimum is not None:

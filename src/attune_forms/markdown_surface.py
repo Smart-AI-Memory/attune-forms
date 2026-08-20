@@ -251,6 +251,24 @@ def _skeleton_value(q: FormQuestion) -> Any:
     return q.recommended if q.recommended else None
 
 
+def reply_skeleton(form: FormSchema, questions: list[FormQuestion] | None = None) -> dict[str, Any]:
+    """The sentinel-marked reply skeleton for a form (or a subset of it).
+
+    ``questions`` restricts the ``answers`` map to those fields — the
+    re-ask path emits a skeleton for only the offending fields. The
+    skeleton is always emitted as the LAST fenced block so it wins under
+    ``_json_block_answers``' last-block rule: that is what keeps a fenced
+    ``answers`` block quoted inside author-supplied field text from being
+    ingested as a reply (confirmation pass 2, 2026-08-20).
+    """
+    chosen = questions if questions is not None else form.questions
+    return {
+        WIDGET_RESPONSE_MARKER: True,
+        "title": form.title,
+        "answers": {q.id: _skeleton_value(q) for q in chosen},
+    }
+
+
 def form_to_markdown(form: FormSchema, message: str = "") -> str:
     """Render a declarative form as portable markdown (S4).
 
@@ -278,11 +296,7 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         field = _field_lines(q)
         field[0] = f"{idx}. {field[0]}"
         lines += ["", *field]
-    skeleton = {
-        WIDGET_RESPONSE_MARKER: True,
-        "title": form.title,
-        "answers": {q.id: _skeleton_value(q) for q in form.questions},
-    }
+    skeleton = reply_skeleton(form)
     lines += [
         "",
         "---",
