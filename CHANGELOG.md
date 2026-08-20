@@ -6,6 +6,32 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Drift guards batch (architecture review findings F1/F6/F9,
+  2026-08-20):
+  - `tests/test_grammar_completeness.py` — the F1 pin: every
+    `QuestionType` member must carry a row in the completeness tables
+    (widget collect mode + a wrong-shaped answer), and each of the
+    four surfaces must emit construct-specific output for it — a
+    construct wired into only three surfaces, or a new type added
+    without updating the tables, fails red instead of silently falling
+    through a default branch
+  - `tests/test_docs_drift.py` — the grammar's hand-maintained docs
+    tracked mechanically: README's spelled-out construct count and
+    per-construct coverage, SKILL.md's coverage of every question
+    type, and every MCP tool / `x_to_y` library function the skill
+    names must actually exist (the count had already rotted by hand
+    once, commit 543a7a0)
+  - `docs/adding-a-construct.md` — the ~19-touchpoint checklist for a
+    new construct, with the review's accept-and-pin ruling and the
+    rejected registry/base-class alternatives recorded
+  - Surface-decision authority stated where it was only implicit
+    (F9): `select_form_surface` docstring and README now say the
+    router is advisory in the shipped plugin — the agent's MCP tool
+    choice is the effective decision and the router runs after the
+    fact for telemetry agreement; binding only for library consumers
+    routing their own calls
+
 ### Changed
 - 0.6.x cleanup batch (architecture review findings F4/F5/F7,
   2026-08-20) — single-sourcing and schema hygiene, output
