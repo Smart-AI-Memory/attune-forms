@@ -603,3 +603,96 @@ class TestStageLatency:
         self._write(other, [{"event": "form_build", "form_id": "a", "source": "dict"}])
         assert stage_latency()["builds"] == 0
         assert stage_latency(home=other)["builds"] == 1
+
+    def test_repeated_form_yields_one_pair_per_cycle(self, _isolated_home: Path) -> None:
+        """Codex finding 1 (2026-08-24): form_id is content-derived, so a
+        template cast every session shares one id — lifetime-first joining
+        measured only the first cycle ever. Sequential pairing yields one
+        wait sample per render→submit cycle."""
+        self._write(
+            _isolated_home,
+            [
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "2026-08-23T10:00:00.000000Z",
+                    "duration_ms": 1.0,
+                },
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-23T10:00:05.000000Z",
+                },
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "2026-08-24T09:00:00.000000Z",
+                    "duration_ms": 1.0,
+                },
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-24T09:00:15.000000Z",
+                },
+            ],
+        )
+        stats = stage_latency()
+        assert stats["joined"] == 2
+        assert stats["submit_seconds"] == {"p50": 5.0, "p95": 15.0, "n": 2}
+
+    def test_stale_submission_does_not_block_later_valid_pair(self, _isolated_home: Path) -> None:
+        """Codex finding 2 (2026-08-24): a submission predating every render
+        (same content hash from an earlier run) must not consume or block the
+        join — the later render→submit cycle still pairs."""
+        self._write(
+            _isolated_home,
+            [
+                # Stale submission from before this run's render.
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-24T09:00:00.000000Z",
+                },
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "2026-08-24T10:00:00.000000Z",
+                    "duration_ms": 1.0,
+                },
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-24T10:00:20.000000Z",
+                },
+            ],
+        )
+        stats = stage_latency()
+        assert stats["joined"] == 1
+        assert stats["submit_seconds"] == {"p50": 20.0, "p95": 20.0, "n": 1}
+
+
+class TestDerivedFormIdNeverRaises:
+    def test_hostile_str_value_degrades_to_empty_id(self) -> None:
+        """Codex finding 3 (2026-08-24): json.dumps(default=str) re-raises
+        whatever a value's __str__ raises — the telemetry id must degrade to
+        empty, never make a valid definition fail to parse."""
+        from attune_forms.bridge import form_from_dict
+
+        class Hostile:
+            def __str__(self) -> str:
+                raise RuntimeError("boom")
+
+        form = form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "q",
+                        "text": "Q?",
+                        "type": "text_input",
+                        "help_text": Hostile(),
+                    }
+                ],
+            }
+        )
+        assert form.form_id == ""

@@ -822,7 +822,11 @@ def _derived_form_id(data: dict[str, Any]) -> str:
     """
     try:
         canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
-    except (TypeError, ValueError):
+    except Exception:  # noqa: BLE001
+        # ``default=str`` re-raises whatever a value's __str__ raises, so
+        # TypeError/ValueError alone is not enough — a telemetry id must
+        # never make a valid definition fail to parse (codex cross-review
+        # finding 3, 2026-08-24).
         return ""
     digest = hashlib.sha1(canonical.encode("utf-8", "replace"), usedforsecurity=False)
     return digest.hexdigest()[:12]

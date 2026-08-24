@@ -437,8 +437,14 @@ def _percentiles(values: list[float]) -> dict[str, float | int] | None:
 def stage_latency(home: Path | None = None) -> dict[str, object]:
     """Per-stage latency read-back once stage events accrue.
 
-    Joins ``form_rendered`` → ``form_submitted`` on ``form_id`` (first
-    render, first submission at-or-after it) — the user-facing wait.
+    Joins ``form_rendered`` → ``form_submitted`` on ``form_id``,
+    pairing sequentially in log order: each submission consumes the
+    latest not-yet-matched render at-or-before it, so a form rendered
+    and answered N times yields N wait samples — the user-facing wait
+    per cycle. (``form_id`` is content-derived, so repeated casts of
+    one definition share an id; pairing per cycle rather than taking
+    lifetime firsts is what keeps repeat forms — e.g. a template cast
+    every session — measurable. Codex cross-review finding, 2026-08-24.)
     Render cost comes straight from each ``form_rendered`` record's own
     ``duration_ms``, no join needed. Malformed lines, missing ids, and
     a submission with no matching render are skipped, never raised on —
@@ -458,8 +464,8 @@ def stage_latency(home: Path | None = None) -> dict[str, object]:
     builds = renders = submissions = 0
     sources: Counter[str] = Counter()
     render_ms: list[float] = []
-    first_render: dict[str, datetime] = {}
-    first_submit: dict[str, datetime] = {}
+    pending: dict[str, list[datetime]] = {}
+    waits: list[float] = []
     try:
         with _events_path(home).open(encoding="utf-8") as fh:
             for line in fh:
@@ -481,29 +487,23 @@ def stage_latency(home: Path | None = None) -> dict[str, object]:
                     raw = record.get("duration_ms")
                     if isinstance(raw, int | float) and not isinstance(raw, bool) and raw >= 0:
                         render_ms.append(float(raw))
-                    if (
-                        keyed
-                        and stamp
-                        and stamp
-                        < first_render.get(form_id, datetime.max.replace(tzinfo=timezone.utc))
-                    ):
-                        first_render[form_id] = stamp
+                    if keyed and stamp:
+                        pending.setdefault(form_id, []).append(stamp)
                 elif event == "form_submitted":
                     submissions += 1
-                    if (
-                        keyed
-                        and stamp
-                        and stamp
-                        < first_submit.get(form_id, datetime.max.replace(tzinfo=timezone.utc))
-                    ):
-                        first_submit[form_id] = stamp
+                    if keyed and stamp:
+                        # Consume the LATEST unmatched render at-or-before
+                        # this submission. A stale submission (before every
+                        # pending render) matches nothing and never blocks a
+                        # later valid pair (codex finding 2, 2026-08-24).
+                        stack = pending.get(form_id, [])
+                        candidates = [ts for ts in stack if ts <= stamp]
+                        if candidates:
+                            matched = max(candidates)
+                            stack.remove(matched)
+                            waits.append((stamp - matched).total_seconds())
     except OSError:
         pass  # empty read below — zeros, not an error
-    waits = [
-        (first_submit[form_id] - rendered).total_seconds()
-        for form_id, rendered in first_render.items()
-        if form_id in first_submit and first_submit[form_id] >= rendered
-    ]
     return {
         "builds": builds,
         "renders": renders,
