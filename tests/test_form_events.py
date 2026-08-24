@@ -21,9 +21,12 @@ from attune_forms.form_events import (
     _MAX_BYTES,
     _rotate_if_huge,
     inference_rate,
+    log_form_build,
+    log_form_rendered,
     log_submission,
     log_surface_decision,
     maybe_keyboard_hint,
+    stage_latency,
     submission_count,
     surface_mix,
 )
@@ -343,3 +346,262 @@ class TestConfirmationPass2:
         assert stats["fields"] == 4
         assert stats["fields_inferred"] == 2
         assert 0.0 <= stats["inferred_share"] <= 1.0
+
+
+class TestStageLoggers:
+    """The three lifecycle loggers write joinable, well-formed records."""
+
+    def test_log_form_build_record(self, _isolated_home: Path) -> None:
+        log_form_build("abc123", source="template:session-contract", question_count=4)
+        (line,) = _events_file(_isolated_home).read_text(encoding="utf-8").splitlines()
+        record = json.loads(line)
+        assert record["event"] == "form_build"
+        assert record["form_id"] == "abc123"
+        assert record["source"] == "template:session-contract"
+        assert record["question_count"] == 4
+        assert record["v"] == "1.0" and "ts" in record
+
+    def test_log_form_rendered_record(self, _isolated_home: Path) -> None:
+        log_form_rendered("abc123", duration_ms=1.23456, html_bytes=2048)
+        record = json.loads(_events_file(_isolated_home).read_text(encoding="utf-8"))
+        assert record["event"] == "form_rendered"
+        assert record["form_id"] == "abc123"
+        assert record["duration_ms"] == 1.235
+        assert record["html_bytes"] == 2048
+
+    def test_log_submission_carries_form_id(self, _isolated_home: Path) -> None:
+        log_submission(form_id="abc123")
+        record = json.loads(_events_file(_isolated_home).read_text(encoding="utf-8"))
+        assert record["event"] == "form_submitted"
+        assert record["form_id"] == "abc123"
+
+    def test_log_submission_zero_arg_still_works(self, _isolated_home: Path) -> None:
+        """Pre-0.8 call sites (attune-ai <= 14.1.0) pass no form_id."""
+        log_submission()
+        record = json.loads(_events_file(_isolated_home).read_text(encoding="utf-8"))
+        assert record["event"] == "form_submitted"
+        assert "form_id" not in record
+        assert submission_count() == 1
+
+    def test_stage_loggers_honor_consent(
+        self, _isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ATTUNE_FORMS_TELEMETRY", "0")
+        log_form_build("x", source="dict", question_count=1)
+        log_form_rendered("x", duration_ms=1.0, html_bytes=1)
+        log_submission(form_id="x")
+        assert not _events_file(_isolated_home).exists()
+
+    def test_form_id_truncated_to_64(self, _isolated_home: Path) -> None:
+        log_submission(form_id="z" * 200)
+        record = json.loads(_events_file(_isolated_home).read_text(encoding="utf-8"))
+        assert record["form_id"] == "z" * 64
+
+
+class TestFormIdLifecycle:
+    """form_id joins the pipeline stages without the agent threading it."""
+
+    FORM = {
+        "title": "Scope",
+        "fields": [
+            {"id": "goal", "text": "Goal?", "type": "text_input"},
+        ],
+    }
+
+    def test_same_dict_same_id_different_dict_different_id(self) -> None:
+        from attune_forms.bridge import form_from_dict
+
+        first = form_from_dict(dict(self.FORM))
+        second = form_from_dict(dict(self.FORM))
+        other = form_from_dict({**self.FORM, "title": "Other"})
+        assert first.form_id and first.form_id == second.form_id
+        assert other.form_id != first.form_id
+
+    def test_explicit_form_id_wins(self) -> None:
+        from attune_forms.bridge import form_from_dict
+
+        form = form_from_dict({**self.FORM, "form_id": "my-form.v1"})
+        assert form.form_id == "my-form.v1"
+
+    def test_invalid_form_id_is_a_definition_problem(self) -> None:
+        from attune_forms.bridge import FormValidationError, form_from_dict
+
+        with pytest.raises(FormValidationError) as exc:
+            form_from_dict({**self.FORM, "form_id": "../escape"})
+        assert any("form_id" in p for p in exc.value.problems)
+
+    def test_build_event_logged_with_source_dict(self, _isolated_home: Path) -> None:
+        from attune_forms.bridge import form_from_dict
+
+        form = form_from_dict(dict(self.FORM))
+        records = [
+            json.loads(line)
+            for line in _events_file(_isolated_home).read_text(encoding="utf-8").splitlines()
+        ]
+        builds = [r for r in records if r["event"] == "form_build"]
+        assert builds and builds[0]["form_id"] == form.form_id
+        assert builds[0]["source"] == "dict"
+        assert builds[0]["question_count"] == 1
+
+    def test_template_cast_logs_template_source(self, _isolated_home: Path) -> None:
+        from attune_forms.template_store import form_from_template
+
+        form = form_from_template("session-contract", {"project": "attune-ai"})
+        records = [
+            json.loads(line)
+            for line in _events_file(_isolated_home).read_text(encoding="utf-8").splitlines()
+        ]
+        builds = [r for r in records if r["event"] == "form_build"]
+        assert builds and builds[-1]["source"] == "template:session-contract"
+        assert builds[-1]["form_id"] == form.form_id
+
+    def test_surface_decision_carries_form_id(self, _isolated_home: Path) -> None:
+        from attune_forms.bridge import form_from_dict, select_form_surface
+
+        form = form_from_dict(dict(self.FORM))
+        select_form_surface(form, widget_capable=True, keyboard_mode=False)
+        records = [
+            json.loads(line)
+            for line in _events_file(_isolated_home).read_text(encoding="utf-8").splitlines()
+        ]
+        surfaces = [r for r in records if r["event"] == "form_surface"]
+        assert surfaces and surfaces[-1]["form_id"] == form.form_id
+
+    def test_render_and_collect_join_on_one_form_id(self, _isolated_home: Path) -> None:
+        """The pipeline receipt: dict → widget → collect, one form_id."""
+        import asyncio
+
+        from attune_forms.bridge import form_from_dict
+        from attune_forms.mcp_server import handle_collect_response
+        from attune_forms.widget import form_to_widget_html
+
+        form = form_from_dict(dict(self.FORM))
+        html = form_to_widget_html(form)
+        result = asyncio.run(
+            handle_collect_response({"form": dict(self.FORM), "answers": {"goal": "ship"}})
+        )
+        assert result["success"] is True
+
+        records = [
+            json.loads(line)
+            for line in _events_file(_isolated_home).read_text(encoding="utf-8").splitlines()
+        ]
+        rendered = [r for r in records if r["event"] == "form_rendered"]
+        submitted = [r for r in records if r["event"] == "form_submitted"]
+        assert rendered[-1]["form_id"] == form.form_id
+        assert rendered[-1]["html_bytes"] == len(html.encode("utf-8"))
+        assert rendered[-1]["duration_ms"] >= 0
+        assert submitted[-1]["form_id"] == form.form_id
+
+
+class TestStageLatency:
+    def _write(self, home: Path, records: list[dict]) -> None:
+        path = _events_file(home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8"
+        )
+
+    def test_empty_store_returns_zeros(self) -> None:
+        stats = stage_latency()
+        assert stats["builds"] == stats["renders"] == stats["submissions"] == 0
+        assert stats["joined"] == 0
+        assert stats["render_ms"] is None and stats["submit_seconds"] is None
+
+    def test_joins_and_percentiles(self, _isolated_home: Path) -> None:
+        self._write(
+            _isolated_home,
+            [
+                {"event": "form_build", "form_id": "a", "source": "dict"},
+                {"event": "form_build", "form_id": "b", "source": "template:x"},
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "2026-08-24T10:00:00.000000Z",
+                    "duration_ms": 2.0,
+                },
+                {
+                    "event": "form_rendered",
+                    "form_id": "b",
+                    "ts": "2026-08-24T10:01:00.000000Z",
+                    "duration_ms": 4.0,
+                },
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-24T10:00:10.000000Z",
+                },
+                {
+                    "event": "form_submitted",
+                    "form_id": "b",
+                    "ts": "2026-08-24T10:01:30.000000Z",
+                },
+                # No render for this one — counted, never joined.
+                {
+                    "event": "form_submitted",
+                    "form_id": "orphan",
+                    "ts": "2026-08-24T10:02:00.000000Z",
+                },
+            ],
+        )
+        stats = stage_latency()
+        assert stats["builds"] == 2
+        assert stats["build_sources"] == {"dict": 1, "template:x": 1}
+        assert stats["renders"] == 2 and stats["submissions"] == 3
+        assert stats["joined"] == 2
+        assert stats["render_ms"] == {"p50": 2.0, "p95": 4.0, "n": 2}
+        assert stats["submit_seconds"] == {"p50": 10.0, "p95": 30.0, "n": 2}
+
+    def test_submission_before_render_not_joined(self, _isolated_home: Path) -> None:
+        self._write(
+            _isolated_home,
+            [
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "2026-08-24T10:00:00.000000Z",
+                    "duration_ms": 1.0,
+                },
+                # Stale submission from an earlier run of the same
+                # content-addressed form — must not produce a negative wait.
+                {
+                    "event": "form_submitted",
+                    "form_id": "a",
+                    "ts": "2026-08-24T09:59:00.000000Z",
+                },
+            ],
+        )
+        stats = stage_latency()
+        assert stats["joined"] == 0
+        assert stats["submit_seconds"] is None
+
+    def test_malformed_lines_and_values_skipped(self, _isolated_home: Path) -> None:
+        path = _events_file(_isolated_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "not json\n"
+            + json.dumps(["not", "a", "dict"])
+            + "\n"
+            + json.dumps(
+                {
+                    "event": "form_rendered",
+                    "form_id": "a",
+                    "ts": "garbage",
+                    "duration_ms": "fast",
+                }
+            )
+            + "\n"
+            + json.dumps({"event": "form_rendered", "form_id": 42, "duration_ms": -1})
+            + "\n",
+            encoding="utf-8",
+        )
+        stats = stage_latency()
+        assert stats["renders"] == 2
+        assert stats["render_ms"] is None  # no valid duration among them
+        assert stats["joined"] == 0
+
+    def test_reads_configured_home(self, tmp_path: Path, _isolated_home: Path) -> None:
+        other = tmp_path / "dashboard-home"
+        self._write(other, [{"event": "form_build", "form_id": "a", "source": "dict"}])
+        assert stage_latency()["builds"] == 0
+        assert stage_latency(home=other)["builds"] == 1

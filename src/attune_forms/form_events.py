@@ -9,6 +9,23 @@ read answer "did the mix move?" instead of assuming it did.
 One event = one JSON line: ``v`` / ``ts`` / ``event`` / ``surface``
 plus optional routing context.
 
+**Stage events.** Beyond the routing decision, the pipeline emits one
+event per lifecycle stage, joinable on ``form_id`` (derived
+deterministically from the definition by
+:func:`~attune_forms.bridge.form_from_dict`, so the render call and the
+collect call — which each re-parse the same dict — land on the same id
+without the agent threading anything):
+
+- ``form_build`` — a definition was cast into a validated
+  ``FormSchema`` (``source`` says how: ``"dict"`` or
+  ``"template:<name>"``).
+- ``form_rendered`` — the widget HTML was produced (``duration_ms``,
+  ``html_bytes``).
+- ``form_submitted`` — answers validated; carries ``form_id`` when the
+  caller has one.
+
+:func:`stage_latency` reads them back as per-stage p50/p95.
+
 **What this can and cannot measure.** The live call site is the pair of
 MCP elicitation handlers, where the tool the agent invoked *is* its
 choice — so each record carries the router's recommendation (``surface``
@@ -35,6 +52,7 @@ Licensed under Apache 2.0
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections import Counter
 from datetime import datetime, timezone
@@ -112,6 +130,39 @@ def _rotate_if_huge(path: Path) -> None:
         pass  # rotation is a nicety; the append below still works
 
 
+def _append(record: dict[str, object]) -> None:
+    """Append one record to the live log. Best-effort, never raises.
+
+    The single write path every logger below shares: consent gate,
+    directory creation, size rotation, compact one-line JSON.
+    """
+    try:
+        if not _enabled():
+            return
+        path = _events_path()
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _rotate_if_huge(path)
+        with path.open("a", encoding="utf-8") as fh:
+            json.dump(record, fh, separators=(",", ":"), default=str)
+            fh.write("\n")
+    except Exception:
+        # Telemetry is best-effort and this runs on live pipeline
+        # paths: "never raises" must hold for MORE than OSError —
+        # json.dump raises ValueError on a circular context and
+        # ``default=str`` re-raises whatever a value's __str__ raises
+        # (confirmation pass 1, 2026-08-20).
+        pass
+
+
+def _base_record(event: str) -> dict[str, object]:
+    """Version + UTC timestamp + event kind — every record's spine."""
+    return {
+        "v": "1.0",
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "event": event,
+    }
+
+
 def log_surface_decision(surface: str, **fields: object) -> None:
     """Append one surface-routing decision. Best-effort, never raises.
 
@@ -120,33 +171,55 @@ def log_surface_decision(surface: str, **fields: object) -> None:
         **fields: Routing context (e.g. ``reason``, ``question_count``).
     """
     try:
-        if not _enabled():
-            return
-        record: dict[str, object] = {
-            "v": "1.0",
-            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            "event": "form_surface",
-            "surface": str(surface)[:32],
-        }
+        record = _base_record("form_surface")
+        record["surface"] = str(surface)[:32]
         # Reserved keys always win: a caller kwarg named v/ts/event/
         # surface would forge records every reader keys on (e.g. a fake
         # "form_submitted" advancing the keyboard-hint counter) —
         # confirmation pass 1, 2026-08-20.
         record.update({k: v for k, v in fields.items() if k not in record})
-
-        path = _events_path()
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        _rotate_if_huge(path)
-        with path.open("a", encoding="utf-8") as fh:
-            json.dump(record, fh, separators=(",", ":"), default=str)
-            fh.write("\n")
+        _append(record)
     except Exception:
-        # Telemetry is best-effort and this runs on the live routing
-        # path: "never raises" must hold for MORE than OSError —
-        # json.dump raises ValueError on a circular context and
-        # ``default=str`` re-raises whatever a value's __str__ raises
-        # (confirmation pass 1, 2026-08-20).
-        pass
+        pass  # str(surface) runs caller __str__; same contract as _append
+
+
+def log_form_build(form_id: str, *, source: str = "dict", question_count: int = 0) -> None:
+    """Record that a definition was cast into a validated form.
+
+    Args:
+        form_id: The lifecycle join key (see ``form_from_dict``).
+        source: How the cast happened — ``"dict"`` for a hand-built
+            definition, ``"template:<name>"`` for a template cast. The
+            V7 adoption signal: the mix of the two is the receipt that
+            the template library is (or is not) actually used.
+        question_count: Number of fields in the validated form.
+    """
+    try:
+        record = _base_record("form_build")
+        record["form_id"] = str(form_id)[:64]
+        record["source"] = str(source)[:64]
+        record["question_count"] = int(question_count)
+        _append(record)
+    except Exception:
+        pass  # never-raises contract; coercions run caller code
+
+
+def log_form_rendered(form_id: str, *, duration_ms: float, html_bytes: int) -> None:
+    """Record that widget HTML was produced for a form.
+
+    Args:
+        form_id: The lifecycle join key.
+        duration_ms: Wall-clock render time in milliseconds.
+        html_bytes: Size of the rendered HTML in bytes.
+    """
+    try:
+        record = _base_record("form_rendered")
+        record["form_id"] = str(form_id)[:64]
+        record["duration_ms"] = round(float(duration_ms), 3)
+        record["html_bytes"] = int(html_bytes)
+        _append(record)
+    except Exception:
+        pass  # never-raises contract; coercions run caller code
 
 
 #: Form submissions before the one-time keyboard-mode hint fires. D17
@@ -163,22 +236,20 @@ _KEYBOARD_HINT = (
 )
 
 
-def log_submission() -> None:
-    """Record that a user submitted a form. Best-effort, never raises."""
+def log_submission(form_id: str | None = None) -> None:
+    """Record that a user submitted a form. Best-effort, never raises.
+
+    Args:
+        form_id: The lifecycle join key, when the caller has one.
+            Optional so pre-0.8 call sites (zero-arg) keep working;
+            without it the submission still counts toward the keyboard
+            hint but cannot join its ``form_rendered`` event.
+    """
     try:
-        if not _enabled():
-            return
-        path = _events_path()
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        _rotate_if_huge(path)
-        record = {
-            "v": "1.0",
-            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            "event": "form_submitted",
-        }
-        with path.open("a", encoding="utf-8") as fh:
-            json.dump(record, fh, separators=(",", ":"))
-            fh.write("\n")
+        record = _base_record("form_submitted")
+        if form_id:
+            record["form_id"] = str(form_id)[:64]
+        _append(record)
     except Exception:
         pass  # same never-raises contract as log_surface_decision
 
@@ -341,3 +412,104 @@ def surface_mix(home: Path | None = None) -> dict[str, int]:
     except OSError:
         return {}
     return dict(counts)
+
+
+def _parse_ts(raw: object) -> datetime | None:
+    """Parse a record's ``ts`` back to an aware datetime, or ``None``."""
+    try:
+        return datetime.strptime(str(raw), "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _percentiles(values: list[float]) -> dict[str, float | int] | None:
+    """Nearest-rank p50/p95 (plus ``n``) of ``values``, or ``None`` if empty."""
+    if not values:
+        return None
+    ordered = sorted(values)
+
+    def rank(q: float) -> float:
+        return ordered[min(len(ordered) - 1, max(0, math.ceil(q * len(ordered)) - 1))]
+
+    return {"p50": round(rank(0.50), 3), "p95": round(rank(0.95), 3), "n": len(ordered)}
+
+
+def stage_latency(home: Path | None = None) -> dict[str, object]:
+    """Per-stage latency read-back once stage events accrue.
+
+    Joins ``form_rendered`` → ``form_submitted`` on ``form_id`` (first
+    render, first submission at-or-after it) — the user-facing wait.
+    Render cost comes straight from each ``form_rendered`` record's own
+    ``duration_ms``, no join needed. Malformed lines, missing ids, and
+    a submission with no matching render are skipped, never raised on —
+    same read contract as :func:`surface_mix`.
+
+    Args:
+        home: Optional attune-home base to read from; defaults to the
+            process's own (ATTUNE_HOME or ``~/.attune``).
+
+    Returns:
+        ``builds`` / ``renders`` / ``submissions`` (event counts),
+        ``build_sources`` (cast-source mix — the V7 template-adoption
+        signal), ``joined`` (render→submit pairs found), ``render_ms``
+        and ``submit_seconds`` (each ``{"p50", "p95", "n"}`` or ``None``
+        when no data).
+    """
+    builds = renders = submissions = 0
+    sources: Counter[str] = Counter()
+    render_ms: list[float] = []
+    first_render: dict[str, datetime] = {}
+    first_submit: dict[str, datetime] = {}
+    try:
+        with _events_path(home).open(encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                event = record.get("event")
+                form_id = record.get("form_id")
+                keyed = isinstance(form_id, str) and bool(form_id)
+                stamp = _parse_ts(record.get("ts"))
+                if event == "form_build":
+                    builds += 1
+                    sources[str(record.get("source", "(unknown)"))] += 1
+                elif event == "form_rendered":
+                    renders += 1
+                    raw = record.get("duration_ms")
+                    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw >= 0:
+                        render_ms.append(float(raw))
+                    if (
+                        keyed
+                        and stamp
+                        and stamp
+                        < first_render.get(form_id, datetime.max.replace(tzinfo=timezone.utc))
+                    ):
+                        first_render[form_id] = stamp
+                elif event == "form_submitted":
+                    submissions += 1
+                    if (
+                        keyed
+                        and stamp
+                        and stamp
+                        < first_submit.get(form_id, datetime.max.replace(tzinfo=timezone.utc))
+                    ):
+                        first_submit[form_id] = stamp
+    except OSError:
+        pass  # empty read below — zeros, not an error
+    waits = [
+        (first_submit[form_id] - rendered).total_seconds()
+        for form_id, rendered in first_render.items()
+        if form_id in first_submit and first_submit[form_id] >= rendered
+    ]
+    return {
+        "builds": builds,
+        "renders": renders,
+        "submissions": submissions,
+        "build_sources": dict(sources),
+        "joined": len(waits),
+        "render_ms": _percentiles(render_ms),
+        "submit_seconds": _percentiles(waits),
+    }

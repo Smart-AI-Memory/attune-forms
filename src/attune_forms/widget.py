@@ -21,11 +21,13 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Callable
 from html import escape
 
 from attune_forms.bridge import is_fully_inferred
+from attune_forms.form_events import log_form_rendered
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     BOOLEAN_OPTIONS,
@@ -727,6 +729,7 @@ def form_to_widget_html(
         An HTML string ready to pass straight to
         ``mcp__visualize__show_widget``.
     """
+    start = time.perf_counter()
     sfx = "".join(c for c in (instance_id or "") if c.isalnum()) or uuid.uuid4().hex[:8]
     form_id = f"attune-elicit-form-{sfx}"
     intro = f'<p class="ae-msg">{_esc(message)}</p>' if message else ""
@@ -748,7 +751,7 @@ def form_to_widget_html(
     )
     submit_label = "Confirm" if confirm else "Submit"
 
-    return f"""<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>
+    html = f"""<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>
 <form id="{form_id}" data-form-title="{_esc(form.title)}">
 <style>
 {css}</style>
@@ -927,3 +930,11 @@ def form_to_widget_html(
 }})();
 </script>
 </form>"""
+    # form.form_id, not the DOM id above: the DOM suffix is fresh per
+    # render, while the telemetry id must match what collect re-derives.
+    log_form_rendered(
+        form.form_id,
+        duration_ms=(time.perf_counter() - start) * 1000.0,
+        html_bytes=len(html.encode("utf-8")),
+    )
+    return html

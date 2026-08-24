@@ -6,6 +6,43 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-24
+
+Per-stage form telemetry: the lifecycle is now measurable end to end
+(chair-approved 2026-08-24, route "measure first" — the prior log had
+only `form_surface` and a bare `form_submitted`, so per-stage latency
+was not computable).
+
+### Added
+- **`FormSchema.form_id`** — a telemetry join key on every parsed
+  form. An explicit top-level `"form_id"` in the definition wins
+  (short `[A-Za-z0-9._-]` token, validated); otherwise
+  `form_from_dict` derives a deterministic content hash, so the
+  render call and the collect call — which each re-parse the same
+  dict — land on the same id without the agent threading anything.
+- **Stage events** in `~/.attune/telemetry/form_events.jsonl` (same
+  append-only JSONL, consent gates, and 5 MB rotation):
+  - `form_build` (`form_id`, `source`: `"dict"` or
+    `"template:<name>"` — the V7 template-adoption signal,
+    `question_count`) — emitted by `form_from_dict` /
+    `form_from_template` on every successful cast.
+  - `form_rendered` (`form_id`, `duration_ms`, `html_bytes`) —
+    emitted by `form_to_widget_html`.
+  - `form_submitted` now carries `form_id` (the MCP collect handler
+    passes it; the zero-arg form stays valid for older callers).
+  - `form_surface` records also carry `form_id`.
+- **`stage_latency()`** — reads the log back as per-stage p50/p95:
+  render cost from each `form_rendered`'s own `duration_ms`, and the
+  user-facing wait as first `form_rendered` → first `form_submitted`
+  per `form_id`; plus build/render/submission counts and the
+  cast-source mix.
+- `log_form_build` / `log_form_rendered` log helpers (same
+  never-raises contract), shared `_append` write path.
+
+### Changed
+- `form_from_dict` accepts a keyword-only `source` (default
+  `"dict"`); `form_from_template` passes `template:<name>`.
+
 ## [0.7.0] — 2026-08-20
 
 The output of a four-stage library review (checkpoint-1 sweep, a

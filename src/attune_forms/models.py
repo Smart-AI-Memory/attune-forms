@@ -631,12 +631,19 @@ class FormSchema:
         title: Form title
         description: Form description
         questions: List of questions to ask
+        form_id: Telemetry join key for the form's lifecycle events
+            (``form_build`` → ``form_rendered`` → ``form_submitted``).
+            ``form_from_dict`` fills it — an explicit top-level
+            ``"form_id"`` in the definition wins, otherwise a
+            deterministic content hash so every re-parse of the same
+            dict lands on the same id. Empty on hand-built schemas.
 
     """
 
     title: str
     description: str
     questions: list[FormQuestion] = field(default_factory=list)
+    form_id: str = ""
 
     def get_question_batches(self, batch_size: int = 4) -> list[list[FormQuestion]]:
         """Batch questions for asking (AskUserQuestion supports max 4 at once).
