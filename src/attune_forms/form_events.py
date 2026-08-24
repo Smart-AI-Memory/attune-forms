@@ -479,7 +479,7 @@ def stage_latency(home: Path | None = None) -> dict[str, object]:
                 elif event == "form_rendered":
                     renders += 1
                     raw = record.get("duration_ms")
-                    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw >= 0:
+                    if isinstance(raw, int | float) and not isinstance(raw, bool) and raw >= 0:
                         render_ms.append(float(raw))
                     if (
                         keyed

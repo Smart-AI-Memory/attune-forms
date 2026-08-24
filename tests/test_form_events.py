@@ -498,9 +498,7 @@ class TestStageLatency:
     def _write(self, home: Path, records: list[dict]) -> None:
         path = _events_file(home)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8"
-        )
+        path.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
 
     def test_empty_store_returns_zeros(self) -> None:
         stats = stage_latency()
