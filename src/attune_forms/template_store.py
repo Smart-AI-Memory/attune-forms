@@ -101,7 +101,7 @@ def form_from_template(name: str, slots: dict[str, Any] | None = None) -> FormSc
     problems = _slot_problems(name, declared, values, data)
     if problems:
         raise FormValidationError(problems)
-    return form_from_dict(_substitute(data, values))
+    return form_from_dict(_substitute(data, values), source=f"template:{name}")
 
 
 def _slot_problems(

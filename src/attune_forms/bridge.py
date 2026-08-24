@@ -12,15 +12,17 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
+import re
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from attune_forms.form_events import log_surface_decision
+from attune_forms.form_events import log_form_build, log_surface_decision
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     ASSUMPTION_TEXT_SUFFIX,
@@ -802,7 +804,34 @@ def _parse_list_style(
 # the bound is never built and collect(99999) validates clean). These
 # sets must track exactly what form_from_dict and its _parse_* helpers
 # read; the parity test against the MCP _field_schema ratchets that.
-_DEFINITION_TOP_KEYS = frozenset({"title", "description", "fields", "questions"})
+_DEFINITION_TOP_KEYS = frozenset({"title", "description", "fields", "questions", "form_id"})
+
+#: An explicit definition ``form_id``: short, filesystem/log-safe token.
+_FORM_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def _derived_form_id(data: dict[str, Any]) -> str:
+    """Deterministic id from the definition content.
+
+    The render call and the collect call each re-parse the same dict,
+    so hashing the canonical JSON gives both the SAME id — lifecycle
+    stages join in telemetry without the agent threading anything.
+    Content-addressed, not unique-per-cast: two casts of an identical
+    definition share an id, which is exactly what the stage-latency
+    join wants (first render → first submission).
+    """
+    try:
+        canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
+    except Exception:  # noqa: BLE001
+        # ``default=str`` re-raises whatever a value's __str__ raises, so
+        # TypeError/ValueError alone is not enough — a telemetry id must
+        # never make a valid definition fail to parse (codex cross-review
+        # finding 3, 2026-08-24).
+        return ""
+    digest = hashlib.sha1(canonical.encode("utf-8", "replace"), usedforsecurity=False)
+    return digest.hexdigest()[:12]
+
+
 _DEFINITION_FIELD_KEYS = frozenset(
     {
         "id",
@@ -835,7 +864,7 @@ _DEFINITION_FIELD_KEYS = frozenset(
 )
 
 
-def form_from_dict(data: dict[str, Any]) -> FormSchema:
+def form_from_dict(data: dict[str, Any], *, source: str = "dict") -> FormSchema:
     """Build a :class:`FormSchema` from plain serializable data (D3).
 
     The declarative artifact a skill / future designer / data source
@@ -851,6 +880,12 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
             "options"?: list[str], "default"?: str, "help_text"?: str,
             "required"?: bool}``. ``"label"`` is accepted as an alias for
             ``"text"``; ``"questions"`` as an alias for ``"fields"``.
+            An optional top-level ``"form_id"`` (short
+            ``[A-Za-z0-9._-]`` token) names the telemetry lifecycle id
+            explicitly; omitted, a deterministic content hash is used.
+        source: Where the definition came from, recorded on the
+            ``form_build`` telemetry event — ``"dict"`` (default) or
+            ``"template:<name>"`` (set by ``form_from_template``).
 
     Returns:
         A validated :class:`FormSchema`.
@@ -872,6 +907,17 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
     if not isinstance(raw_fields, list) or not raw_fields:
         problems.append("form must have a non-empty 'fields' list")
         raw_fields = []
+
+    form_id = ""
+    raw_form_id = data.get("form_id")
+    if raw_form_id is not None:
+        if isinstance(raw_form_id, str) and _FORM_ID_RE.match(raw_form_id):
+            form_id = raw_form_id
+        else:
+            problems.append(
+                "form 'form_id' must be a 1-64 char [A-Za-z0-9._-] string"
+                " starting with a letter or digit"
+            )
 
     for key in data:
         if key not in _DEFINITION_TOP_KEYS:
@@ -1048,11 +1094,14 @@ def form_from_dict(data: dict[str, Any]) -> FormSchema:
     if problems:
         raise FormValidationError(problems)
 
-    return FormSchema(
+    schema = FormSchema(
         title=title,
         description=data.get("description", "") or "",
         questions=questions,
+        form_id=form_id or _derived_form_id(data),
     )
+    log_form_build(schema.form_id, source=source, question_count=len(questions))
+    return schema
 
 
 #: Question types that lose fidelity on ``AskUserQuestion`` — either
@@ -1267,6 +1316,7 @@ def select_form_surface(
     log_surface_decision(
         surface,
         reason=reason,
+        form_id=form.form_id,
         question_count=len(form.questions),
         chosen=chosen,
         agreed=None if chosen is None else chosen == surface,

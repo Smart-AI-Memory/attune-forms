@@ -334,7 +334,7 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
         "response_id": response.response_id,
     }
     try:
-        log_submission()
+        log_submission(form_id=form.form_id)
         hint = maybe_keyboard_hint(keyboard_mode=keyboard_mode_enabled())
     except (OSError, ValueError) as exc:
         logger.debug("keyboard-mode hint skipped: %s", exc)
