@@ -6,6 +6,19 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `attune_forms.bridge.form_to_widget_html` — the widget renderer now
+  resolves from the bridge namespace too, so a caller reaching for
+  `form_to_askuserquestion` and then its sibling renderer finds both in
+  one place. Served through a module `__getattr__` rather than a
+  top-level import, deliberately: `attune_forms.widget` imports
+  `is_fully_inferred` from `bridge`, so hoisting the import would be a
+  circular import and would invert the layering (the renderer builds on
+  the bridge, not the reverse). A drift guard pins the accessor lazy.
+  Both renderers remain exported from the package root, which stays the
+  preferred import path.
+
 ## [0.8.0] — 2026-08-24
 
 Per-stage form telemetry: the lifecycle is now measurable end to end

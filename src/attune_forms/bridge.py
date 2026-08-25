@@ -1961,3 +1961,24 @@ def collect_form_response(
         raise FormValidationError(problems)
 
     return FormResponse(template_id=template_id, responses=responses)
+
+
+def __getattr__(name: str) -> Any:
+    """Serve the widget renderer from the bridge namespace.
+
+    :func:`~attune_forms.widget.form_to_widget_html` is the sibling of
+    :func:`form_to_askuserquestion` — one surface each — but it cannot be
+    imported at module scope here: :mod:`attune_forms.widget` imports
+    :func:`is_fully_inferred` from this module, so a top-level re-export
+    would be a circular import (and would invert the layering, since the
+    renderer builds on the bridge, not the other way round).
+
+    Resolving it lazily keeps that layering intact while letting callers
+    who reach for one renderer find the other in the same place. Both are
+    also exported from the package root, which is the preferred import.
+    """
+    if name == "form_to_widget_html":
+        from attune_forms.widget import form_to_widget_html
+
+        return form_to_widget_html
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

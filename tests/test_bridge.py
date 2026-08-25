@@ -458,3 +458,53 @@ class TestUnknownDefinitionKeys:
             }
         )
         assert form.questions[0].text == "Q"
+
+
+class TestWidgetRendererReachableFromBridge:
+    """The two surface renderers resolve from one namespace.
+
+    ``form_to_askuserquestion`` lives in ``bridge`` and
+    ``form_to_widget_html`` in ``widget``; a caller reaching for one and
+    then the other by submodule path used to get an ImportError, which
+    reads as "this renderer does not exist".
+    """
+
+    def test_widget_renderer_resolves_from_bridge(self):
+        from attune_forms import bridge, widget
+
+        assert bridge.form_to_widget_html is widget.form_to_widget_html
+
+    def test_both_renderers_resolve_from_package_root(self):
+        import attune_forms
+
+        assert hasattr(attune_forms, "form_to_askuserquestion")
+        assert hasattr(attune_forms, "form_to_widget_html")
+
+    def test_bridge_still_raises_on_unknown_attribute(self):
+        import pytest
+
+        from attune_forms import bridge
+
+        with pytest.raises(AttributeError):
+            _ = bridge.NoSuchRenderer
+
+    def test_bridge_has_no_module_level_widget_import(self):
+        """The accessor must stay lazy — a top-level import would be circular.
+
+        ``attune_forms.widget`` imports ``is_fully_inferred`` from this
+        module, so hoisting the import out of ``__getattr__`` (an easy
+        "simplification") reintroduces the cycle this indirection exists
+        to avoid.
+        """
+        import ast
+        import pathlib
+
+        import attune_forms.bridge as bridge_mod
+
+        tree = ast.parse(pathlib.Path(bridge_mod.__file__).read_text())
+        module_level_imports = [
+            node
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("attune_forms.widget")
+        ]
+        assert module_level_imports == []
