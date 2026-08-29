@@ -117,12 +117,15 @@ def _progress_lines(q: FormQuestion) -> list[str]:
     for item in q.progress_items or []:
         label = item.get("label", "")
         status = item.get("status", "")
-        detail = f" — {item['detail']}" if item.get("detail") else ""
         if q.progress_style == "report":
-            lines.append(f"- `{status}` {label}{detail}")
+            head = f"- `{status}` {label}"
         else:
             icon = PROGRESS_STATUS_ICONS.get(status, "•")
-            lines.append(f"- {icon} {label}{detail}")
+            head = f"- {icon} {label}"
+        # _item_row keeps a single-line detail inline (unchanged render)
+        # and moves a multi-line one below the bullet — the same fix the
+        # other item-bearing constructs got in the #61 batch.
+        lines.extend(_item_row(head, item.get("detail")))
     if q.options:
         head = (
             "Pick one to go deeper:"

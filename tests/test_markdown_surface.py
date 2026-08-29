@@ -288,3 +288,35 @@ def test_multiline_detail_keeps_the_skeleton_round_tripping() -> None:
     form = form_from_dict(_hunk_board())
     skeleton = _skeleton(form_to_markdown(form))
     assert skeleton["answers"] == {"hunks": {"src/bridge.py@a1b2c3d:88-96": None}}
+
+
+def test_progress_multiline_detail_stays_inside_its_row() -> None:
+    """PROGRESS rows route detail through _item_row like the other
+    item-bearing constructs (retro probe 2026-08-29: the #61 batch
+    missed this fourth site)."""
+    md = form_to_markdown(
+        form_from_dict(
+            {
+                "title": "T",
+                "fields": [
+                    {
+                        "id": "p",
+                        "type": "progress",
+                        "text": "Status?",
+                        "progress_items": [
+                            {
+                                "label": "migrate",
+                                "status": "done",
+                                "detail": "a\n-    old\n+    new",
+                            },
+                            {"label": "ship", "status": "blocked", "detail": "one-liner"},
+                        ],
+                        "options": ["ship"],
+                    }
+                ],
+            }
+        )
+    )
+    assert "      -    old" in md
+    assert not any(ln.startswith("-    old") for ln in md.splitlines())
+    assert "- ✕ ship — one-liner" in md
