@@ -28,7 +28,9 @@ in CSS_BASE, which lets a MULTI-LINE item detail — a diff hunk, a log
 excerpt — keep its newlines instead of collapsing inside a flex row,
 across triage / assumption_review / progress / confirm at once; a
 trim to fit under 10 KB was offered and declined) — no fonts, no icon
-fonts, no images, no @import.
+fonts, no images, no @import. Bar for the next raise (chair-ruled at
+the 2026-08-28 retro): raises buy FAMILIES, not rules — a single rule
+that fits after a trim does not clear it.
 
 Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0
