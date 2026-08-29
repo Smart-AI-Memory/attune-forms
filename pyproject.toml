@@ -45,7 +45,7 @@ Repository = "https://github.com/Smart-AI-Memory/attune-forms"
 where = ["src"]
 
 [tool.setuptools.package-data]
-attune_forms = ["templates/*.json"]
+attune_forms = ["templates/*.json", "semantic_tokens.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

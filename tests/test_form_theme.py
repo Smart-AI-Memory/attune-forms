@@ -51,6 +51,28 @@ def test_full_sheet_is_base_plus_all_families_in_order() -> None:
     assert theme.FORM_THEME_CSS == expected
 
 
+def test_semantic_state_matrix_is_present() -> None:
+    css = theme.FORM_THEME_CSS
+    for state in (
+        ":hover",
+        ":focus-visible",
+        ":disabled",
+        ":checked",
+        ".ae-field-missing",
+        "prefers-reduced-motion",
+    ):
+        assert state in css
+    for role in (
+        "--ae-action",
+        "--ae-success",
+        "--ae-warning",
+        "--ae-danger",
+        "--ae-recommendation",
+        "--ae-focus",
+    ):
+        assert role in css
+
+
 #: A selector's STYLED class: the last ``.class`` token before the rule
 #: body (pseudo-classes stripped). ``.ae-card .ae-prog-tag`` styles
 #: ``ae-prog-tag``; ``.ae-card:hover`` styles ``ae-card``.

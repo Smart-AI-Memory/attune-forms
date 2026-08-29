@@ -21,6 +21,7 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from collections.abc import Callable
@@ -695,6 +696,8 @@ def form_to_widget_html(
     form: FormSchema,
     message: str = "",
     instance_id: str | None = None,
+    submit_label: str | None = None,
+    submit_action: str | None = None,
 ) -> str:
     """Render a declarative form as an inline ``show_widget`` HTML form.
 
@@ -725,6 +728,10 @@ def form_to_widget_html(
             defaults to a fresh random one per call. Pass a fixed value
             only when a deterministic render is needed (tests, golden
             output).
+        submit_label: Optional action-specific button label. Existing
+            callers retain the inferred Confirm/Submit label.
+        submit_action: Optional stable host action id included beside
+            the validated answers in the postback.
 
     Returns:
         An HTML string ready to pass straight to
@@ -750,7 +757,8 @@ def form_to_widget_html(
         if confirm
         else ""
     )
-    submit_label = "Confirm" if confirm else "Submit"
+    button_label = submit_label or ("Confirm" if confirm else "Submit")
+    action_js = json.dumps(submit_action)
 
     html = f"""<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>
 <form id="{form_id}" data-form-title="{_esc(form.title)}">
@@ -759,7 +767,7 @@ def form_to_widget_html(
 <h3>{_esc(form.title)}</h3>
 {intro}{desc}{confirm_html}
 {fields}
-<button type="button" id="ae-submit-{sfx}" class="ae-submit">{submit_label}</button>
+<button type="button" id="ae-submit-{sfx}" class="ae-submit">{_esc(button_label)}</button>
 <div id="ae-error-{sfx}" class="ae-error" role="alert"></div>
 <script>
 (function() {{
@@ -919,6 +927,8 @@ def form_to_widget_html(
     err.textContent = '';
     var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,
       title: form.getAttribute('data-form-title'), answers: answers }};
+    var submitAction = {action_js};
+    if (submitAction !== null) payload.action = submitAction;
     if (typeof sendPrompt === 'function') {{
       sendPrompt('Elicitation form submitted — parse and validate this '
         + 'response:\\n```json\\n' + JSON.stringify(payload) + '\\n```');
