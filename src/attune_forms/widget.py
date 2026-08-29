@@ -151,9 +151,7 @@ def _control_progress_report_html(q: FormQuestion) -> str:
         if it.get("label") in q.options:
             continue
         tag = f'<span class="ae-prog-tag">{_esc(it.get("status", ""))}</span>'
-        detail = (
-            f'<span class="ae-prog-detail">{_esc(it["detail"])}</span>' if it.get("detail") else ""
-        )
+        detail = _detail_html(it["detail"], "ae-prog-detail") if it.get("detail") else ""
         rows += (
             f'<div class="ae-prog-row ae-prog-report">'
             f'{tag}<span class="ae-prog-label">{_esc(it.get("label", ""))}</span>'
@@ -207,11 +205,7 @@ def _control_progress_html(q: FormQuestion) -> str:
     )
     for status_key, icon, sr in status_rows:
         for it in by_status[status_key]:
-            detail = (
-                f'<span class="ae-prog-detail">{_esc(it["detail"])}</span>'
-                if it.get("detail")
-                else ""
-            )
+            detail = _detail_html(it["detail"], "ae-prog-detail") if it.get("detail") else ""
             rows += (
                 f'<div class="ae-prog-row ae-prog-{status_key}">'
                 f'<span class="ae-prog-icon" aria-hidden="true">{icon}</span>'
@@ -276,6 +270,25 @@ def _control_deliberation_html(q: FormQuestion) -> str:
     return f'<div class="ae-cards" role="radiogroup">{cards}</div>'
 
 
+def _detail_html(text: str, cls: str) -> str:
+    """An item ``detail`` as an inline span, or a BLOCK when multi-line.
+
+    A multi-line detail — a diff hunk, a log excerpt — rendered as an
+    inline span inside a flex row collapses: HTML folds its newlines and
+    leading indentation into single spaces, so a diff arrives as one
+    run-on line (found probing the triage encoding for hunk review,
+    round table q-forms-hunk-review-001). As an ``ae-detail-block`` it
+    takes its own full-width line with ``white-space:pre-wrap`` and
+    keeps the shape the author wrote.
+
+    Single-line details stay inline spans — the common case renders
+    exactly as before.
+    """
+    if "\n" in text:
+        return f'<div class="{cls} ae-detail-block">{_esc(text)}</div>'
+    return f'<span class="{cls}">{_esc(text)}</span>'
+
+
 def _control_triage_html(q: FormQuestion) -> str:
     """Render a TRIAGE control: one row per item, each row its own
     disposition radiogroup.
@@ -290,11 +303,7 @@ def _control_triage_html(q: FormQuestion) -> str:
     for idx, (key, item) in enumerate(expansion_items(q)):
         label = item.get("label", "")
         tag = f'<span class="ae-triage-tag">{_esc(item["tag"])}</span>' if item.get("tag") else ""
-        detail = (
-            f'<span class="ae-triage-detail">{_esc(item["detail"])}</span>'
-            if item.get("detail")
-            else ""
-        )
+        detail = _detail_html(item["detail"], "ae-triage-detail") if item.get("detail") else ""
         pick = suggested_pick(q, key)
         opts = ""
         for disposition in q.dispositions or []:
@@ -330,11 +339,7 @@ def _control_confirm_html(q: FormQuestion) -> str:
             if item.get("severity")
             else ""
         )
-        detail = (
-            f'<span class="ae-gate-detail">{_esc(item["detail"])}</span>'
-            if item.get("detail")
-            else ""
-        )
+        detail = _detail_html(item["detail"], "ae-gate-detail") if item.get("detail") else ""
         rows += (
             f'<div class="ae-gate-row">{tag}'
             f'<span class="ae-gate-label">{_esc(item.get("label", ""))}</span>'
@@ -430,11 +435,7 @@ def _control_assumption_review_html(q: FormQuestion) -> str:
             if item.get("source")
             else ""
         )
-        detail = (
-            f'<span class="ae-triage-detail">{_esc(item["detail"])}</span>'
-            if item.get("detail")
-            else ""
-        )
+        detail = _detail_html(item["detail"], "ae-triage-detail") if item.get("detail") else ""
         pick = suggested_pick(q, key)
         opts = ""
         for ruling in ASSUMPTION_RULINGS:

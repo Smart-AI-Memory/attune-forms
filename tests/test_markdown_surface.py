@@ -195,3 +195,96 @@ class TestReviewFindingRegressions:
             }
         )
         assert _skeleton(form_to_markdown(form))["answers"]["retries"] == 0
+
+
+# --- multi-line item detail (regression, 2026-08-28) -----------------
+#
+# A multi-line ``detail`` — a diff hunk, a log excerpt — used to be
+# interpolated straight into the bullet: the opening fence landed
+# mid-line so it never opened a code block, every removed line of a
+# diff parsed as a NEW bullet, and a "suggested" suffix was glued onto
+# the detail's closing fence. Found by probing the zero-change triage
+# encoding for hunk review (round table q-forms-hunk-review-001).
+
+_DIFF = "```diff\n@@ -88,7 +88,9 @@\n-    while True:\n+    for _ in range(3):\n```"
+
+
+def _hunk_board(**extra) -> dict:
+    item = {"id": "src/bridge.py@a1b2c3d:88-96", "label": "bound the retry loop", "detail": _DIFF}
+    return {
+        "title": "t",
+        "fields": [
+            {
+                "id": "hunks",
+                "type": "triage",
+                "text": "Rule each hunk.",
+                "triage_items": [item],
+                "dispositions": ["apply", "revise", "drop"],
+                **extra,
+            }
+        ],
+    }
+
+
+def test_multiline_detail_moves_below_the_bullet() -> None:
+    """The detail is an indented block, not part of the bullet line."""
+    md = form_to_markdown(form_from_dict(_hunk_board()))
+    bullet = next(ln for ln in md.splitlines() if ln.startswith("- **bound the retry loop**"))
+    assert "```" not in bullet, "fence must not open mid-bullet"
+    # Indented, not fenced: _defuse_fences would break any fence we
+    # emitted, so the block relies on indentation alone.
+    assert "      @@ -88,7 +88,9 @@" in md
+
+
+def test_multiline_detail_removed_lines_stay_inside_the_fence() -> None:
+    """A diff's ``-`` lines must not parse as new bullets."""
+    md = form_to_markdown(form_from_dict(_hunk_board()))
+    assert "      -    while True:" in md
+    assert not any(ln.startswith("-    while True:") for ln in md.splitlines()), (
+        "removed line escaped the fence and became a bullet"
+    )
+
+
+def test_multiline_detail_keeps_suggested_on_the_bullet() -> None:
+    """``suggested`` rides the bullet, never the detail's closing fence."""
+    board = _hunk_board(suggested={"src/bridge.py@a1b2c3d:88-96": "apply"})
+    md = form_to_markdown(form_from_dict(board))
+    bullet = next(ln for ln in md.splitlines() if ln.startswith("- **bound the retry loop**"))
+    assert bullet.endswith("→ suggested: `apply`")
+
+
+def test_single_line_detail_still_renders_inline() -> None:
+    """The common case is unchanged — no gratuitous block."""
+    board = _hunk_board()
+    board["fields"][0]["triage_items"][0]["detail"] = "worker.py:88"
+    md = form_to_markdown(form_from_dict(board))
+    assert "- **bound the retry loop** — worker.py:88" in md
+
+
+def test_unfenced_multiline_detail_is_still_indented() -> None:
+    """An author who did not fence the block still gets literal lines."""
+    board = _hunk_board()
+    board["fields"][0]["triage_items"][0]["detail"] = "line one\n- line two\nline three"
+    md = form_to_markdown(form_from_dict(board))
+    assert "      line one" in md
+    assert "      - line two" in md
+
+
+def test_author_fence_is_stripped_not_defused() -> None:
+    """A ```lang wrapper cannot survive this surface — drop it.
+
+    ``_defuse_fences`` breaks every three-backtick run so the reply
+    skeleton keeps its boundaries; a kept wrapper would therefore render
+    as visible backtick-plus-zero-width noise around the block.
+    """
+    md = form_to_markdown(form_from_dict(_hunk_board()))
+    detail = [ln for ln in md.splitlines() if ln.startswith("      ")]
+    assert detail, "detail block missing"
+    assert not any("`" in ln for ln in detail), "author fence survived into the block"
+
+
+def test_multiline_detail_keeps_the_skeleton_round_tripping() -> None:
+    """The block must not desync the trailing answers skeleton."""
+    form = form_from_dict(_hunk_board())
+    skeleton = _skeleton(form_to_markdown(form))
+    assert skeleton["answers"] == {"hunks": {"src/bridge.py@a1b2c3d:88-96": None}}

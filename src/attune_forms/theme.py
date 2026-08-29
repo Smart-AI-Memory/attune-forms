@@ -15,15 +15,20 @@ Every ``var()`` reference carries a literal fallback, so one
 stylesheet renders native on claude.ai (host tokens win,
 light/dark follows the host) and standalone (fallbacks win).
 
-Budget: ``FORM_THEME_CSS`` is capped at 10 KB raw by
+Budget: ``FORM_THEME_CSS`` is capped at 12 KB raw by
 ``test_form_theme_budget`` (4 KB → 6 KB by chair ruling 2026-07-31;
 6 KB → 8 KB ratified with the grammar-expansion merge 2026-08-14 —
 TRIAGE + CONFIRM families + deliberation seat chips, 8,158 B; 8 KB →
 10 KB ratified 2026-08-15 for the 0.6.0 constructs, ranking-construct
 spec D2-a — the RANK family did not fit under 8 KB; a CSS
 consolidation pass was offered and not chosen, so the cap is NOT a
-ratchet: growth past it is a design decision, not a drift) — no fonts,
-no icon fonts, no images, no @import.
+ratchet: growth past it is a design decision, not a drift; 10 KB →
+12 KB chair-ruled 2026-08-28 for the shared ``ae-detail-block`` rule
+in CSS_BASE, which lets a MULTI-LINE item detail — a diff hunk, a log
+excerpt — keep its newlines instead of collapsing inside a flex row,
+across triage / assumption_review / progress / confirm at once; a
+trim to fit under 10 KB was offered and declined) — no fonts, no icon
+fonts, no images, no @import.
 
 Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0
@@ -66,6 +71,9 @@ CSS_BASE = """#attune-elicit-form { display:block; width:100%; padding:1rem 0;
   color:var(--text-accent,#a1571c); }
 #attune-elicit-form .ae-field-missing { border-left:3px solid
   var(--text-accent,#a1571c); padding-left:.6rem; }
+#attune-elicit-form .ae-detail-block { flex-basis:100%; white-space:pre-wrap;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  overflow-x:auto; }
 """
 
 #: INPUT — text_input, textarea, number, date, boolean, non-list single_select.
@@ -123,7 +131,7 @@ CSS_CARDS = """#attune-elicit-form .ae-cards { display:flex; flex-direction:colu
 CSS_PROGRESS = """#attune-elicit-form .ae-progress { display:flex; flex-direction:column; gap:.5rem; }
 #attune-elicit-form .ae-prog-rows { display:flex; flex-direction:column; gap:.25rem; }
 #attune-elicit-form .ae-prog-row { display:flex; align-items:baseline; gap:.5rem;
-  font-size:14px; color:var(--text-secondary,#5f5e59); }
+  flex-wrap:wrap; font-size:14px; color:var(--text-secondary,#5f5e59); }
 #attune-elicit-form .ae-prog-icon { flex:none; font-weight:700; width:1.1em;
   text-align:center; }
 #attune-elicit-form .ae-prog-done .ae-prog-icon { color:var(--text-success,#3fb950); }
@@ -168,7 +176,7 @@ CSS_CONFIRM = """#attune-elicit-form .ae-gate { display:flex; flex-direction:col
 #attune-elicit-form .ae-gate-h { font-size:11px; font-weight:600;
   text-transform:uppercase; letter-spacing:.03em; color:var(--text-accent,#a1571c); }
 #attune-elicit-form .ae-gate-row { display:flex; align-items:baseline; gap:.5rem;
-  font-size:14px; color:var(--text-secondary,#5f5e59); }
+  flex-wrap:wrap; font-size:14px; color:var(--text-secondary,#5f5e59); }
 #attune-elicit-form .ae-gate-label { color:var(--text-primary,#2c2c2a); }
 #attune-elicit-form .ae-gate-detail { font-size:13px; color:var(--text-muted,#8a887f); }
 #attune-elicit-form .ae-gate-tag { flex:none; font-size:10px; font-weight:600;

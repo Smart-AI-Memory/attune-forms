@@ -136,18 +136,62 @@ def _progress_lines(q: FormQuestion) -> list[str]:
     return lines
 
 
+#: Indent that makes a block inside a ``- `` bullet an INDENTED code
+#: block: 2 columns of list continuation + the 4 CommonMark requires.
+_DETAIL_INDENT = " " * 6
+
+
+def _detail_block(detail: str) -> list[str]:
+    """A MULTI-LINE item ``detail`` as an indented code block under its bullet.
+
+    Interpolating a multi-line detail into the bullet itself breaks out
+    of the list item: every line the detail starts with ``-`` — every
+    removed line of a diff — parses as a NEW bullet, and a trailing
+    ``suggested`` suffix lands on the detail's last line.
+
+    The block is INDENTED rather than fenced because a fence cannot
+    survive this surface: :func:`_defuse_fences` breaks every run of
+    three backticks in author text so the trailing reply skeleton keeps
+    its boundaries. An indented block needs no backticks at all, so it
+    passes through untouched and its content stays literal.
+
+    For the same reason an author's own `````lang`` wrapper is
+    STRIPPED rather than kept: defused, it would render as visible
+    backtick-plus-zero-width noise around the block.
+    """
+    lines = detail.strip("\n").splitlines()
+    if lines and lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+    return [f"{_DETAIL_INDENT}{line}".rstrip() for line in lines]
+
+
+def _item_row(head: str, detail: str | None, suffix: str = "") -> list[str]:
+    """One bullet row plus, for a multi-line ``detail``, its indented block.
+
+    A single-line detail stays inline after an em dash (unchanged
+    rendering); a multi-line one moves below the bullet so ``suffix``
+    (e.g. "→ suggested: `apply`") stays on the bullet instead of being
+    glued onto the detail's closing fence.
+    """
+    multiline = bool(detail) and "\n" in (detail or "")
+    inline = f" — {detail}" if detail and not multiline else ""
+    rows = [f"{head}{inline}{suffix}"]
+    if multiline:
+        rows.extend(_detail_block(detail or ""))
+    return rows
+
+
 def _triage_lines(q: FormQuestion) -> list[str]:
     """Item rows + the shared ruling vocabulary for a TRIAGE question."""
     vocabulary = " / ".join(f"`{d}`" for d in q.dispositions or [])
     lines = [f"Rule each item as one of: {vocabulary}"]
     for key, item in expansion_items(q):
         tag = f" `{item['tag']}`" if item.get("tag") else ""
-        detail = f" — {item['detail']}" if item.get("detail") else ""
-        line = f"- **{item.get('label', '')}**{tag}{detail}"
         pick = suggested_pick(q, key)
-        if pick is not None:
-            line += f" → suggested: `{pick}`"
-        lines.append(line)
+        suffix = f" → suggested: `{pick}`" if pick is not None else ""
+        lines.extend(_item_row(f"- **{item.get('label', '')}**{tag}", item.get("detail"), suffix))
     return lines
 
 
@@ -167,13 +211,10 @@ def _assumption_lines(q: FormQuestion) -> list[str]:
     accept, edit, reject = ASSUMPTION_RULINGS
     lines = [f"Rule each assumption: `{accept}` / `{edit}: <replacement text>` / `{reject}`"]
     for key, item in expansion_items(q):
-        detail = f" — {item['detail']}" if item.get("detail") else ""
         source = f" *(from {item['source']})*" if item.get("source") else ""
-        line = f"- **{item.get('label', '')}**{detail}{source}"
         pick = suggested_pick(q, key)
-        if pick is not None:
-            line += f" → suggested: `{pick}`"
-        lines.append(line)
+        suffix = source + (f" → suggested: `{pick}`" if pick is not None else "")
+        lines.extend(_item_row(f"- **{item.get('label', '')}**", item.get("detail"), suffix))
     return lines
 
 
@@ -225,8 +266,7 @@ def _control_lines(q: FormQuestion) -> list[str]:
         lines = ["If approved:"]
         for item in confirm_consequences(q):
             tag = f" `{item['severity']}`" if item.get("severity") else ""
-            detail = f" — {item['detail']}" if item.get("detail") else ""
-            lines.append(f"- {item.get('label', '')}{tag}{detail}")
+            lines.extend(_item_row(f"- {item.get('label', '')}{tag}", item.get("detail")))
         lines.append("")
         lines.append("Answer one of: " + " / ".join(f"**{opt}**" for opt in q.options))
         return lines
