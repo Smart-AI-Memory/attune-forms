@@ -6,6 +6,38 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Multi-line item `detail` kept its shape on both rendering surfaces**
+  (round table `q-forms-hunk-review-001`, 2026-08-28). A `detail`
+  carrying more than one line — a diff hunk, a log excerpt — was
+  corrupted on the way out:
+  - **Widget**: it rendered as an inline `<span>` inside a flex row with
+    no `white-space` rule, so HTML folded its newlines and leading
+    indentation into single spaces and a diff arrived as one run-on
+    line. A multi-line detail now renders as an `ae-detail-block` —
+    full-width, `white-space:pre-wrap`, monospace. Fixed across
+    `triage`, `assumption_review`, `progress` and `confirm` through one
+    shared `widget._detail_html` helper and one `CSS_BASE` rule. A
+    single-line detail still renders as the same inline span it always
+    did (output byte-identical).
+  - **Markdown**: it was interpolated into the item's bullet line, so
+    every line the detail started with `-` — every removed line of a
+    diff — parsed as a NEW bullet, and a `suggested` suffix landed on
+    the detail's last line. A multi-line detail now renders as an
+    indented code block under the bullet, with the suffix left on the
+    bullet. The block is INDENTED rather than fenced because
+    `_defuse_fences` breaks every three-backtick run in author text to
+    keep the reply skeleton's boundaries; for the same reason an
+    author's own ` ```lang ` wrapper is stripped rather than rendered
+    as defused noise. Fixed for `triage`, `assumption_review` and
+    `confirm` consequences.
+
+### Changed
+- `FORM_THEME_CSS` budget raised 10 KB → 12 KB (chair-ruled
+  2026-08-28) for the shared `ae-detail-block` rule in `CSS_BASE`; a
+  trim to fit under 10 KB was offered and declined. Current size
+  10,263 B. The cap remains a design decision, not a ratchet.
+
 ## [0.8.0] — 2026-08-24
 
 Per-stage form telemetry: the lifecycle is now measurable end to end

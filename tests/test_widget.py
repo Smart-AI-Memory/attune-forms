@@ -272,3 +272,117 @@ class TestEscaping:
         html = _render([{"id": 'a"x', "text": "A?", "type": "text_input"}])
         assert 'data-fid="a"x"' not in html
         assert "&quot;" in html
+
+
+class TestMultilineItemDetail:
+    """A multi-line ``detail`` — a diff hunk, a log excerpt — must keep
+    its shape (regression, 2026-08-28).
+
+    It used to render as a ``<span>`` INSIDE ``.ae-triage-head``, a flex
+    row with no ``white-space`` rule: newlines and leading indentation
+    collapsed to single spaces, so a diff arrived as one run-on line.
+    Found by probing the zero-change triage encoding for hunk review
+    (round table q-forms-hunk-review-001).
+    """
+
+    DIFF = "@@ -88,7 +88,9 @@\n-    while True:\n+    for _ in range(3):"
+
+    def _triage(self) -> str:
+        return _render(
+            [
+                {
+                    "id": "hunks",
+                    "type": "triage",
+                    "text": "Rule each hunk.",
+                    "triage_items": [
+                        {
+                            "id": "h1",
+                            "label": "bound the retry loop",
+                            "tag": "high",
+                            "detail": self.DIFF,
+                        }
+                    ],
+                    "dispositions": ["apply", "revise", "drop"],
+                }
+            ]
+        )
+
+    def _assumption(self) -> str:
+        return _render(
+            [
+                {
+                    "id": "assumed",
+                    "type": "assumption_review",
+                    "text": "Rule each.",
+                    "assumptions": [
+                        {"id": "a1", "label": "3.10 is the floor", "detail": self.DIFF}
+                    ],
+                }
+            ]
+        )
+
+    def test_triage_detail_becomes_a_block(self):
+        assert '<div class="ae-triage-detail ae-detail-block">' in self._triage()
+
+    def test_assumption_detail_becomes_a_block(self):
+        assert '<div class="ae-triage-detail ae-detail-block">' in self._assumption()
+
+    def test_progress_detail_becomes_a_block(self):
+        html = _render(
+            [
+                {
+                    "id": "p",
+                    "type": "progress",
+                    "text": "Where are we?",
+                    # Blocked items become picker CARDS; the detail rows
+                    # this fix touches come from done / in_flight.
+                    "progress_items": [
+                        {"label": "migrate the schema", "status": "done", "detail": self.DIFF},
+                        {"label": "ship it", "status": "blocked"},
+                    ],
+                    "options": ["ship it"],
+                }
+            ]
+        )
+        assert '<div class="ae-prog-detail ae-detail-block">' in html
+
+    def test_confirm_detail_becomes_a_block(self):
+        html = _render(
+            [
+                {
+                    "id": "c",
+                    "type": "confirm",
+                    "text": "Go?",
+                    "consequences": [
+                        {"label": "flag flips", "severity": "high", "detail": self.DIFF}
+                    ],
+                }
+            ]
+        )
+        assert '<div class="ae-gate-detail ae-detail-block">' in html
+
+    def test_single_line_detail_stays_an_inline_span(self):
+        """The common case is byte-identical to before the fix."""
+        html = _render(
+            [
+                {
+                    "id": "hunks",
+                    "type": "triage",
+                    "text": "Rule each hunk.",
+                    "triage_items": [{"id": "h1", "label": "L", "detail": "worker.py:88"}],
+                    "dispositions": ["apply", "drop"],
+                }
+            ]
+        )
+        assert '<span class="ae-triage-detail">worker.py:88</span>' in html
+        assert 'ae-detail-block">' not in html, "no block markup for a single-line detail"
+
+    def test_newlines_and_indentation_survive(self):
+        assert "\n-    while True:" in self._triage()
+
+    def test_css_preserves_whitespace(self):
+        html = self._triage()
+        rule = html[html.index(".ae-detail-block {") :]
+        rule = rule[: rule.index("}")]
+        assert "white-space:pre-wrap" in rule
+        assert "monospace" in rule

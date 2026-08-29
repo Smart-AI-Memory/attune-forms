@@ -13,7 +13,7 @@ from attune_forms import widget as widget_mod
 #: merge, 8,158 B; 8 KB -> 10 KB ratified 2026-08-15, ranking-construct
 #: decisions.md D2-a — a consolidation pass was offered and NOT chosen,
 #: so the cap is not a ratchet: the next raise needs its own ruling).
-_BUDGET_BYTES = 10240
+_BUDGET_BYTES = 12288
 
 #: ``var(--name)`` with NO fallback value — the pattern the theme
 #: must never contain (host-token fallbacks are the design).
