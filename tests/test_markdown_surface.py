@@ -240,9 +240,9 @@ def test_multiline_detail_removed_lines_stay_inside_the_fence() -> None:
     """A diff's ``-`` lines must not parse as new bullets."""
     md = form_to_markdown(form_from_dict(_hunk_board()))
     assert "      -    while True:" in md
-    assert not any(ln.startswith("-    while True:") for ln in md.splitlines()), (
-        "removed line escaped the fence and became a bullet"
-    )
+    assert not any(
+        ln.startswith("-    while True:") for ln in md.splitlines()
+    ), "removed line escaped the fence and became a bullet"
 
 
 def test_multiline_detail_keeps_suggested_on_the_bullet() -> None:
