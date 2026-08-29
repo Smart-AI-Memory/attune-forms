@@ -6,7 +6,41 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-29
+
+### Added
+- **Fix-first command workspace grammar** — four portable state views
+  (`intake`, `preview`, `execution`, `receipt`) compose the existing
+  validated `FormSchema` with a closed display-block vocabulary and stable,
+  host-dispatched actions. Widget and Markdown renderers preserve the same
+  view/action return contract without accepting executable callbacks or
+  arbitrary HTML.
+- **Provider-neutral semantic token artifact** — versioned light/dark color
+  roles, typography, spacing, radius, motion, and control targets are loaded
+  from packaged JSON and exposed as a recursively immutable mapping. Shared
+  form CSS and separately-budgeted workspace CSS project from that source.
+- **Workspace showcase and hostile-boundary receipts** — all four views,
+  every form construct, and every display block are exercised. Tests parse
+  emitted action JavaScript with Node, reject script-context action values,
+  calculate WCAG AA dark-action contrast, pin explicit confirmation parity,
+  and enforce independent form/workspace CSS budgets.
+
+### Changed
+- Form widget and portable Markdown renderers accept optional stable action
+  and view context, action-specific labels, workspace-owned titles, and
+  explicit-action consequences while retaining their existing defaults for
+  standalone callers.
+
 ### Fixed
+- Display-action widgets now emit valid JavaScript, disable actions after
+  dispatch, announce success through a live region, and send the same fenced
+  sentinel grammar as form-backed views.
+- Dark workspace tokens retain host-variable fallbacks, embedded forms inherit
+  the workspace profile, and primary-action foregrounds meet WCAG AA.
+- Runtime enum guards, Markdown structural escaping, code-language validation,
+  evidence-table scopes, stable instance ids, and recursive token freezing
+  close the contract and accessibility gaps found by cross-review and the
+  three-seat release-readiness roundtable.
 - **Multi-line item `detail` kept its shape on both rendering surfaces**
   (round table `q-forms-hunk-review-001`, 2026-08-28). A `detail`
   carrying more than one line — a diff hunk, a log excerpt — was
