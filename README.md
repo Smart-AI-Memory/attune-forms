@@ -25,9 +25,10 @@ claude plugin install attune-forms@attune-forms
 ```
 
 The plugin teaches the session the forms discipline (the `forms` skill)
-and serves four MCP tools — `elicitation_render_form`,
+and serves six MCP tools — `elicitation_render_form`,
 `elicitation_render_widget`, `elicitation_collect_response`,
-`elicitation_ask` — from this package via `uvx`. Decision cards,
+`elicitation_ask`, `elicitation_render_workspace`, and
+`elicitation_collect_workspace_action` — from this package via `uvx`. Decision cards,
 pushback cards, progress forms, deliberation cards, triage boards,
 confirm gates, ranking lists, and assumption reviews work out of the
 box; rich HTML renders where the host
@@ -120,6 +121,13 @@ if select_form_surface(form) == "widget":
 - **Validation** — `form_from_dict` refuses malformed definitions;
   `collect_form_response` refuses malformed answers (required fields,
   option membership) with field-level problems.
+- **Command workspaces** — `workspace_from_dict` validates a closed,
+  non-executable document grammar for intake, preview, execution, and
+  receipt views. `workspace_to_widget_html` and
+  `workspace_to_markdown` render the same action contract;
+  `collect_workspace_action` rejects unknown, stale, or mismatched
+  action envelopes. Optional revision/hash/nonce bindings are echoed
+  for the host to authorize and consume — the UI never grants authority.
 - **Intake templates** — `FormTemplate` + `FieldSlot` generate a
   workflow's intake form at ask-time from named candidate providers
   (`PROVIDERS`): tools describe what they need once, and the form

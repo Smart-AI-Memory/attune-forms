@@ -1,6 +1,6 @@
 """Standalone MCP server for the attune-forms substrate (spec Phase 2).
 
-Mirrors attune-ai\'s four elicitation tools — same names, same schemas,
+Mirrors attune-ai\'s elicitation tools — same names, same schemas,
 same result shapes (chair-ruled D3: identical surface makes the later
 convergence a pure swap and lets docs/skills transfer verbatim):
 
@@ -8,6 +8,8 @@ convergence a pure swap and lets docs/skills transfer verbatim):
 - ``elicitation_render_widget``   — form dict -> self-contained HTML
 - ``elicitation_collect_response``— form + answers -> validated response
 - ``elicitation_ask``             — native MCP elicitation round-trip
+- ``elicitation_render_workspace``— workspace dict -> widget + markdown
+- ``elicitation_collect_workspace_action`` — bound action validation
 
 Launch: ``attune-forms-mcp`` (console script) or
 ``uvx --from 'attune-forms[mcp]' attune-forms-mcp`` — the exact command
@@ -39,6 +41,14 @@ from attune_forms.bridge import (
 from attune_forms.elicitation_schema import form_to_elicitation_schema
 from attune_forms.form_events import log_submission, maybe_keyboard_hint
 from attune_forms.widget import form_to_widget_html
+from attune_forms.workspace import (
+    WorkspaceActionBinding,
+    WorkspaceValidationError,
+    collect_workspace_action,
+    workspace_from_dict,
+    workspace_to_markdown,
+    workspace_to_widget_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +198,152 @@ def _form_schema() -> dict[str, Any]:
     }
 
 
+def _workspace_schema() -> dict[str, Any]:
+    """Closed serializable workspace grammar mirrored by workspace_from_dict."""
+    item = {
+        "type": "object",
+        "properties": {
+            "label": {"type": "string"},
+            "value": {"type": "string"},
+            "detail": {"type": "string"},
+            "status": {"type": "string"},
+        },
+        "required": ["label"],
+        "additionalProperties": False,
+    }
+    block = {
+        "type": "object",
+        "properties": {
+            "kind": {
+                "type": "string",
+                "enum": [
+                    "key_value",
+                    "code",
+                    "timeline",
+                    "change_summary",
+                    "evidence",
+                    "disclosure",
+                    "action_list",
+                ],
+            },
+            "title": {"type": "string"},
+            "body": {"type": "string"},
+            "items": {"type": "array", "items": item},
+            "language": {"type": "string"},
+        },
+        "required": ["kind"],
+        "additionalProperties": False,
+    }
+    section = {
+        "type": "object",
+        "properties": {
+            "heading": {"type": "string"},
+            "tone": {
+                "type": "string",
+                "enum": [
+                    "neutral",
+                    "action",
+                    "recommendation",
+                    "success",
+                    "warning",
+                    "danger",
+                ],
+            },
+            "blocks": {"type": "array", "items": block},
+        },
+        "required": ["blocks"],
+        "additionalProperties": False,
+    }
+    action = {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$"},
+            "label": {"type": "string"},
+            "intent": {
+                "type": "string",
+                "enum": ["primary", "secondary", "danger"],
+            },
+            "consequence": {"type": "string"},
+            "requires_explicit_choice": {"type": "boolean"},
+        },
+        "required": ["id", "label"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "description": "Validated command-workspace view document.",
+        "properties": {
+            "id": {
+                "type": "string",
+                "enum": ["intake", "preview", "execution", "receipt"],
+            },
+            "title": {"type": "string"},
+            "summary": {"type": "string"},
+            "sections": {"type": "array", "items": section},
+            "actions": {"type": "array", "items": action},
+            "form": _form_schema(),
+        },
+        "required": ["id", "title"],
+        "additionalProperties": False,
+    }
+
+
+def _workspace_binding_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "workspace_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            },
+            "revision": {"type": "integer", "minimum": 0},
+            "action_nonce": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{16,128}$",
+            },
+            "contract_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        },
+        "required": ["workspace_id", "revision", "action_nonce", "contract_hash"],
+        "additionalProperties": False,
+    }
+
+
+def _workspace_response_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "__elicitation_response__": {"type": "boolean", "const": True},
+            "title": {"type": "string"},
+            "workspace_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            },
+            "revision": {"type": "integer", "minimum": 0},
+            "view": {
+                "type": "string",
+                "enum": ["intake", "preview", "execution", "receipt"],
+            },
+            "action": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            },
+            "action_nonce": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{16,128}$",
+            },
+            "contract_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "confirmed": {"type": "boolean"},
+        },
+        "required": ["__elicitation_response__", "title", "view", "action", "confirmed"],
+        "additionalProperties": False,
+    }
+
+
 def tool_definitions() -> list[types.Tool]:
-    """The four mirrored tools (names/schemas match attune-ai\'s server)."""
+    """The mirrored tools (names/schemas match attune-ai\'s server)."""
     form = _form_schema()
+    workspace = _workspace_schema()
+    binding = _workspace_binding_schema()
     return [
         types.Tool(
             name="elicitation_render_form",
@@ -256,6 +409,44 @@ def tool_definitions() -> list[types.Tool]:
                     "message": {"type": "string"},
                 },
                 "required": ["form"],
+            },
+        ),
+        types.Tool(
+            name="elicitation_render_workspace",
+            description=(
+                "Validate one command-workspace view and render equivalent "
+                "widget HTML and portable Markdown. An optional action binding "
+                "is copied into display-action responses; it never grants "
+                "execution authority."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "workspace": workspace,
+                    "binding": binding,
+                    "instance_id": {"type": "string"},
+                },
+                "required": ["workspace"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="elicitation_collect_workspace_action",
+            description=(
+                "Validate a workspace action against the exact rendered view "
+                "and optional revision/hash/nonce binding. Returns only a "
+                "validated action envelope; the host still authorizes and "
+                "dispatches it."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "workspace": workspace,
+                    "response": _workspace_response_schema(),
+                    "binding": binding,
+                },
+                "required": ["workspace", "response"],
+                "additionalProperties": False,
             },
         ),
     ]
@@ -344,6 +535,77 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _parse_workspace_binding(
+    raw: Any,
+) -> tuple[WorkspaceActionBinding | None, dict[str, Any] | None]:
+    if raw is None:
+        return None, None
+    if not isinstance(raw, dict):
+        return None, {"success": False, "problems": ["'binding' must be an object"]}
+    expected = {"workspace_id", "revision", "action_nonce", "contract_hash"}
+    problems = [f"binding has unknown key {key!r}" for key in raw if key not in expected]
+    problems.extend(f"binding requires {key!r}" for key in sorted(expected - set(raw)))
+    if problems:
+        return None, {"success": False, "problems": problems}
+    try:
+        return WorkspaceActionBinding(**raw), None
+    except (TypeError, ValueError) as exc:
+        return None, {"success": False, "problems": [str(exc)]}
+
+
+async def handle_render_workspace(args: dict[str, Any]) -> dict[str, Any]:
+    """Render a strict workspace document through both portable surfaces."""
+    try:
+        view = workspace_from_dict(args.get("workspace", {}))
+    except WorkspaceValidationError as exc:
+        return {"success": False, "problems": exc.problems}
+    binding, failure = _parse_workspace_binding(args.get("binding"))
+    if failure:
+        return failure
+    instance_id = args.get("instance_id")
+    if instance_id is not None and not isinstance(instance_id, str):
+        return {"success": False, "problems": ["'instance_id' must be a string"]}
+    try:
+        html = workspace_to_widget_html(view, instance_id, binding=binding)
+        markdown = workspace_to_markdown(view, binding=binding)
+    except ValueError as exc:
+        return {"success": False, "problems": [str(exc)]}
+    return {
+        "success": True,
+        "html": html,
+        "markdown": markdown,
+        "title": view.title,
+        "view": view.id.value,
+        "action_ids": [action.id for action in view.actions],
+        "bound": binding is not None,
+    }
+
+
+async def handle_collect_workspace_action(args: dict[str, Any]) -> dict[str, Any]:
+    """Validate one returned action without authorizing or executing it."""
+    try:
+        view = workspace_from_dict(args.get("workspace", {}))
+    except WorkspaceValidationError as exc:
+        return {"success": False, "problems": exc.problems}
+    binding, failure = _parse_workspace_binding(args.get("binding"))
+    if failure:
+        return failure
+    try:
+        response = collect_workspace_action(view, args.get("response", {}), binding)
+    except WorkspaceValidationError as exc:
+        return {"success": False, "problems": exc.problems}
+    return {
+        "success": True,
+        "view": response.view.value,
+        "action": response.action,
+        "confirmed": response.confirmed,
+        "workspace_id": response.workspace_id,
+        "revision": response.revision,
+        "action_nonce": response.action_nonce,
+        "contract_hash": response.contract_hash,
+    }
+
+
 async def handle_ask(args: dict[str, Any]) -> dict[str, Any]:
     form, problems = _parse_form(args)
     if problems:
@@ -394,6 +656,8 @@ _HANDLERS = {
     "elicitation_render_widget": handle_render_widget,
     "elicitation_collect_response": handle_collect_response,
     "elicitation_ask": handle_ask,
+    "elicitation_render_workspace": handle_render_workspace,
+    "elicitation_collect_workspace_action": handle_collect_workspace_action,
 }
 
 

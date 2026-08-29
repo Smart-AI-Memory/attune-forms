@@ -6,6 +6,21 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-08-29
+
+### Added
+- **Bound workspace action round trips** — optional workspace id,
+  revision, contract hash, and one-render nonce context is preserved by
+  widget and Markdown renderers. The strict collector accepts only an
+  action defined by the rendered view, requires explicit confirmation
+  where declared, and rejects stale or fabricated context without
+  authorizing or executing the action.
+- **Workspace dictionary and MCP boundaries** —
+  `workspace_from_dict` rejects unknown keys throughout the closed view
+  grammar. `elicitation_render_workspace` and
+  `elicitation_collect_workspace_action` expose the same render/collect
+  pattern as forms, with a non-mocked stdio round-trip receipt.
+
 ## [0.9.0] — 2026-08-29
 
 ### Added

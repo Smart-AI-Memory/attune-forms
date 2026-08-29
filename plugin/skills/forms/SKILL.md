@@ -11,12 +11,20 @@ argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refacto
 > **Forms** — Gathering the independent dimensions of this decision as
 > one validated form instead of asking one question at a time.
 
-This skill drives the four `attune-forms` MCP tools:
+This skill drives the six `attune-forms` MCP tools:
 
 - `elicitation_render_widget` — form dict → interactive HTML (rich surface).
 - `elicitation_render_form` — form dict → batched plain-question payloads.
 - `elicitation_collect_response` — form + answers → validated response.
 - `elicitation_ask` — native MCP elicitation dialog, where supported.
+- `elicitation_render_workspace` — validated workspace view → widget + markdown.
+- `elicitation_collect_workspace_action` — view + action envelope → validated action.
+
+Command workspaces compose forms with typed evidence, progress, receipt,
+and action blocks. For consequential actions, render a host-generated
+revision/hash/nonce binding and validate the returned envelope before
+the host authorizes anything. A successful collection proves only that
+the action belongs to that rendered view; it never executes the action.
 
 ## When to use a multi-field form (the batching rule)
 

@@ -34,6 +34,38 @@ _FORM = {
     ],
 }
 
+_WORKSPACE = {
+    "id": "preview",
+    "title": "Fix preview",
+    "sections": [
+        {
+            "heading": "Contract",
+            "blocks": [
+                {
+                    "kind": "key_value",
+                    "items": [{"label": "Outcome", "value": "Repair parsing"}],
+                }
+            ],
+        }
+    ],
+    "actions": [
+        {
+            "id": "run_fix",
+            "label": "Run Fix",
+            "intent": "primary",
+            "consequence": "Execute the previewed contract.",
+            "requires_explicit_choice": True,
+        },
+        {"id": "edit_contract", "label": "Back to edit"},
+    ],
+}
+_BINDING = {
+    "workspace_id": "fix-demo",
+    "revision": 3,
+    "action_nonce": "nonce_0123456789abcdef",
+    "contract_hash": "a" * 64,
+}
+
 
 def _server_params(home: Path) -> StdioServerParameters:
     """Spawn params with an explicit env: stdio_client's default env strips
@@ -86,6 +118,41 @@ async def _round_trip(home: Path) -> dict[str, dict]:
 
             r = await session.call_tool("elicitation_ask", {"form": _FORM})
             out["ask"] = _payload(r)
+
+            r = await session.call_tool(
+                "elicitation_render_workspace",
+                {"workspace": _WORKSPACE, "binding": _BINDING},
+            )
+            out["render_workspace"] = _payload(r)
+
+            response = {
+                "__elicitation_response__": True,
+                "title": "Fix preview",
+                "view": "preview",
+                "action": "run_fix",
+                "confirmed": True,
+                **_BINDING,
+            }
+            r = await session.call_tool(
+                "elicitation_collect_workspace_action",
+                {
+                    "workspace": _WORKSPACE,
+                    "binding": _BINDING,
+                    "response": response,
+                },
+            )
+            out["collect_workspace"] = _payload(r)
+
+            response["revision"] = 2
+            r = await session.call_tool(
+                "elicitation_collect_workspace_action",
+                {
+                    "workspace": _WORKSPACE,
+                    "binding": _BINDING,
+                    "response": response,
+                },
+            )
+            out["collect_workspace_stale"] = _payload(r)
     return out
 
 
@@ -94,12 +161,14 @@ def round_trip(tmp_path_factory):
     return asyncio.run(_round_trip(tmp_path_factory.mktemp("attune-home")))
 
 
-def test_all_four_tools_listed(round_trip):
+def test_all_six_tools_listed(round_trip):
     assert round_trip["tools"]["names"] == [
         "elicitation_ask",
         "elicitation_collect_response",
+        "elicitation_collect_workspace_action",
         "elicitation_render_form",
         "elicitation_render_widget",
+        "elicitation_render_workspace",
     ]
 
 
@@ -134,6 +203,107 @@ def test_ask_degrades_without_elicitation_capability(round_trip):
     p = round_trip["ask"]
     assert p["success"] is False
     assert p["action"] in ("unsupported", "error", "cancel", "decline")
+
+
+def test_workspace_tools_round_trip_over_real_stdio(round_trip):
+    rendered = round_trip["render_workspace"]
+    assert rendered["success"] is True
+    assert rendered["bound"] is True
+    assert rendered["action_ids"] == ["run_fix", "edit_contract"]
+    assert '"workspace_id":"fix-demo"' in rendered["html"]
+    assert '"workspace_id": "fix-demo"' in rendered["markdown"]
+
+    collected = round_trip["collect_workspace"]
+    assert collected["success"] is True
+    assert collected["action"] == "run_fix"
+    assert collected["revision"] == 3
+
+    stale = round_trip["collect_workspace_stale"]
+    assert stale["success"] is False
+    assert any("revision does not match" in problem for problem in stale["problems"])
+
+
+def test_workspace_handlers_preserve_the_problems_contract_on_import() -> None:
+    from attune_forms.mcp_server import handle_render_workspace
+
+    rendered = asyncio.run(
+        handle_render_workspace(
+            {"workspace": _WORKSPACE, "binding": _BINDING, "instance_id": "direct"}
+        )
+    )
+    assert rendered["success"] is True
+    assert rendered["bound"] is True
+
+    bad_view = asyncio.run(handle_render_workspace({"workspace": {"id": "preview"}}))
+    assert bad_view["success"] is False
+    assert any("title" in problem for problem in bad_view["problems"])
+
+    bad_binding = asyncio.run(handle_render_workspace({"workspace": _WORKSPACE, "binding": "bad"}))
+    assert bad_binding == {"success": False, "problems": ["'binding' must be an object"]}
+
+    missing_binding_key = asyncio.run(
+        handle_render_workspace(
+            {
+                "workspace": _WORKSPACE,
+                "binding": {"workspace_id": "fix-demo", "extra": "bad"},
+            }
+        )
+    )
+    assert missing_binding_key["success"] is False
+    assert any("unknown key" in problem for problem in missing_binding_key["problems"])
+    assert any("requires 'revision'" in problem for problem in missing_binding_key["problems"])
+
+    malformed_binding = asyncio.run(
+        handle_render_workspace(
+            {"workspace": _WORKSPACE, "binding": {**_BINDING, "revision": True}}
+        )
+    )
+    assert malformed_binding["success"] is False
+    assert any("revision" in problem for problem in malformed_binding["problems"])
+
+    bad_instance = asyncio.run(handle_render_workspace({"workspace": _WORKSPACE, "instance_id": 7}))
+    assert bad_instance == {
+        "success": False,
+        "problems": ["'instance_id' must be a string"],
+    }
+
+    form_workspace = {
+        "id": "intake",
+        "title": "Fix intake",
+        "form": _FORM,
+        "actions": [{"id": "preview_fix", "label": "Preview fix"}],
+    }
+    bound_form = asyncio.run(
+        handle_render_workspace({"workspace": form_workspace, "binding": _BINDING})
+    )
+    assert bound_form["success"] is False
+    assert any("not valid on a form view" in problem for problem in bound_form["problems"])
+
+
+def test_workspace_collect_handler_rejects_invalid_view_binding_and_response() -> None:
+    from attune_forms.mcp_server import handle_collect_workspace_action
+
+    bad_view = asyncio.run(handle_collect_workspace_action({"workspace": {}}))
+    assert bad_view["success"] is False
+
+    bad_binding = asyncio.run(
+        handle_collect_workspace_action(
+            {"workspace": _WORKSPACE, "binding": {**_BINDING, "revision": True}}
+        )
+    )
+    assert bad_binding["success"] is False
+
+    bad_response = asyncio.run(
+        handle_collect_workspace_action(
+            {
+                "workspace": _WORKSPACE,
+                "binding": _BINDING,
+                "response": {"action": "delete_repo"},
+            }
+        )
+    )
+    assert bad_response["success"] is False
+    assert any("not allowed" in problem for problem in bad_response["problems"])
 
 
 def test_field_schema_default_is_answer_shaped_and_inferred_from_declared():
@@ -232,3 +402,28 @@ def test_field_schema_covers_the_whole_grammar():
     question_fields = {f.name for f in dc_fields(FormQuestion)}
     missing = question_fields - schema_props
     assert not missing, f"FormQuestion field(s) absent from _field_schema: {sorted(missing)}"
+
+
+def test_workspace_schemas_match_the_strict_parser_key_sets():
+    """The MCP gate and import-path parser must reject the same extra keys."""
+    from attune_forms.mcp_server import _workspace_response_schema, _workspace_schema
+    from attune_forms.workspace import (
+        _ACTION_KEYS,
+        _ACTION_RESPONSE_KEYS,
+        _BLOCK_KEYS,
+        _ITEM_KEYS,
+        _SECTION_KEYS,
+        _WORKSPACE_KEYS,
+    )
+
+    workspace = _workspace_schema()
+    assert set(workspace["properties"]) == set(_WORKSPACE_KEYS)
+    section = workspace["properties"]["sections"]["items"]
+    assert set(section["properties"]) == set(_SECTION_KEYS)
+    block = section["properties"]["blocks"]["items"]
+    assert set(block["properties"]) == set(_BLOCK_KEYS)
+    item = block["properties"]["items"]["items"]
+    assert set(item["properties"]) == set(_ITEM_KEYS)
+    action = workspace["properties"]["actions"]["items"]
+    assert set(action["properties"]) == set(_ACTION_KEYS)
+    assert set(_workspace_response_schema()["properties"]) == set(_ACTION_RESPONSE_KEYS)
