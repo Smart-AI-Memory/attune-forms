@@ -38,13 +38,61 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
+from attune_forms.tokens import token
+
+CSS_SEMANTIC_TOKENS = (
+    "#attune-elicit-form {\n"
+    f"  --ae-action:var(--primary,{token('color.light.action')}); "
+    f"--ae-action-hover:var(--primary-dark,{token('color.light.action_hover')});\n"
+    "  --ae-action-text:var(--on-primary,#fff);\n"
+    f"  --ae-success:var(--text-success,{token('color.light.success')}); "
+    f"--ae-warning:var(--text-accent,{token('color.light.warning')});\n"
+    f"  --ae-danger:var(--text-danger,{token('color.light.danger')}); "
+    f"--ae-recommendation:var(--accent,{token('color.light.recommendation')});\n"
+    f"  --ae-text:var(--text-primary,{token('color.light.neutral_text')}); "
+    f"--ae-muted:var(--text-muted,{token('color.light.neutral_muted')});\n"
+    f"  --ae-surface:var(--surface-1,{token('color.light.surface')}); "
+    f"--ae-surface-raised:var(--surface-2,{token('color.light.surface_raised')});\n"
+    f"  --ae-border:var(--border,{token('color.light.border')}); "
+    f"--ae-focus:var(--focus-ring,{token('color.light.focus')});\n"
+    f"  --ae-radius-control:{token('radius.control')}; "
+    f"--ae-radius-panel:{token('radius.panel')};\n"
+    f"  --ae-space-md:{token('spacing.md')};\n"
+    f"  --ae-motion-fast:{token('motion.fast')}; "
+    f"--ae-motion-normal:{token('motion.normal')}; "
+    f"--ae-target-min:{token('control.minimum_target')};\n"
+    f"  --ae-font-body:{token('typography.body')}; "
+    f"--ae-font-heading:{token('typography.heading')}; "
+    f"--ae-font-mono:{token('typography.mono')}; }}\n"
+)
+
+CSS_WORKSPACE_DARK_TOKENS = (
+    "@media (prefers-color-scheme:dark) { #attune-workspace {\n"
+    f"  --ae-action:var(--primary,{token('color.dark.action')}); "
+    f"--ae-action-hover:var(--primary-dark,{token('color.dark.action_hover')});\n"
+    "  --ae-action-text:var(--on-primary,#0b1c30);\n"
+    f"  --ae-success:var(--text-success,{token('color.dark.success')}); "
+    f"--ae-warning:var(--text-accent,{token('color.dark.warning')}); "
+    f"--ae-danger:var(--text-danger,{token('color.dark.danger')});\n"
+    f"  --ae-recommendation:var(--accent,{token('color.dark.recommendation')}); "
+    f"--ae-text:var(--text-primary,{token('color.dark.neutral_text')}); "
+    f"--ae-muted:var(--text-muted,{token('color.dark.neutral_muted')});\n"
+    f"  --ae-surface:var(--surface-1,{token('color.dark.surface')}); "
+    f"--ae-surface-raised:var(--surface-2,{token('color.dark.surface_raised')});\n"
+    f"  --ae-border:var(--border,{token('color.dark.border')}); "
+    f"--ae-focus:var(--focus-ring,{token('color.dark.focus')}); }} }}\n"
+)
+
 #: Base rules every form emits (scoped under ``#attune-elicit-form``;
 #: the widget renderer rewrites the id per instance).
-CSS_BASE = """#attune-elicit-form { display:block; width:100%; padding:1rem 0;
-  color:var(--text-primary,#2c2c2a); line-height:1.5; }
+CSS_BASE = (
+    CSS_SEMANTIC_TOKENS
+    + """#attune-elicit-form { display:block; width:100%; padding:1rem 0;
+  color:var(--ae-text,#0b1c30); line-height:1.5; font-family:var(--ae-font-body,system-ui); }
 #attune-elicit-form .sr-only { position:absolute; width:1px; height:1px;
   overflow:hidden; clip:rect(0 0 0 0); }
-#attune-elicit-form h3 { font-size:18px; font-weight:500; margin:0 0 .25rem; }
+#attune-elicit-form h3 { font-family:var(--ae-font-heading,system-ui); font-size:18px;
+  font-weight:650; letter-spacing:-.015em; margin:0 0 .25rem; }
 #attune-elicit-form .ae-msg { margin:0 0 .5rem; color:var(--text-secondary,#5f5e59); }
 #attune-elicit-form .ae-desc { margin:0 0 1rem; color:var(--text-muted,#8a887f);
   font-size:15px; }
@@ -65,22 +113,33 @@ CSS_BASE = """#attune-elicit-form { display:block; width:100%; padding:1rem 0;
 #attune-elicit-form .ae-help { font-size:13px; color:var(--text-muted,#8a887f);
   margin:0 0 .35rem; }
 #attune-elicit-form .ae-submit { margin-top:.5rem; padding:.55rem 1.1rem;
-  font-size:15px; font-weight:500; cursor:pointer; color:var(--text-primary,#2c2c2a);
-  background:var(--bg-accent,#f3ece4); border:1px solid var(--border-accent,#d8b89a);
-  border-radius:var(--radius,8px); }
+  min-height:var(--ae-target-min,2.5rem); font-size:15px; font-weight:600; cursor:pointer;
+  color:#fff; background:var(--ae-action,#004ac6); border:1px solid var(--ae-action,#004ac6);
+  border-radius:var(--ae-radius-control,8px); transition:background var(--ae-motion-fast,120ms); }
+#attune-elicit-form .ae-submit:hover { background:var(--ae-action-hover,#003ea8); }
 #attune-elicit-form .ae-submit:disabled { opacity:.6; cursor:default; }
+#attune-elicit-form .ae-submit-consequence { color:var(--ae-muted,#5f6470);
+  font-size:13px; margin:.25rem 0; }
 #attune-elicit-form .ae-error { margin-top:.5rem; font-size:14px;
   color:var(--text-accent,#a1571c); }
 #attune-elicit-form .ae-field-missing { border-left:3px solid
-  var(--text-accent,#a1571c); padding-left:.6rem; }
+  var(--ae-danger,#ba1a1a); padding-left:.6rem; }
+#attune-elicit-form :is(input,select,textarea,button):focus-visible {
+  outline:3px solid var(--ae-focus,#2563eb); outline-offset:2px; }
+#attune-elicit-form :is(input,select,textarea,button):disabled { opacity:.6; cursor:not-allowed; }
 #attune-elicit-form .ae-detail-block { flex-basis:100%; white-space:pre-wrap;
-  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-family:var(--ae-font-mono,ui-monospace);
   overflow-x:auto; }
+@media (prefers-reduced-motion:reduce) { #attune-elicit-form * {
+  scroll-behavior:auto!important; transition-duration:0ms!important;
+  animation-duration:0ms!important; } }
 """
+)
 
 #: INPUT — text_input, textarea, number, date, boolean, non-list single_select.
 CSS_INPUT = """#attune-elicit-form .ae-input { width:100%; box-sizing:border-box;
-  padding:.5rem .6rem; font-size:15px; color:var(--text-primary,#2c2c2a);
+  min-height:var(--ae-target-min,2.5rem); padding:.5rem .6rem;
+  font-size:15px; color:var(--text-primary,#2c2c2a);
   background:var(--surface-1,#f7f6f3); border:1px solid var(--border,#e3e1dc);
   border-radius:var(--radius,8px); }
 #attune-elicit-form .ae-textarea { resize:vertical; min-height:3.5rem; }
@@ -108,7 +167,9 @@ CSS_CARDS = """#attune-elicit-form .ae-cards { display:flex; flex-direction:colu
   border:1px solid var(--border,#e3e1dc); border-radius:var(--radius,8px);
   cursor:pointer; }
 #attune-elicit-form .ae-card:hover { border-color:var(--text-muted,#8a887f); }
-#attune-elicit-form .ae-card-rec { border-color:var(--border-accent,#d8b89a); }
+#attune-elicit-form .ae-card-rec { border-color:var(--ae-recommendation,#7c3aed); }
+#attune-elicit-form .ae-card:has(input:checked) { border-color:var(--ae-action,#004ac6);
+  background:var(--ae-surface-raised,#eff4ff); }
 #attune-elicit-form .ae-card input { position:absolute; top:.7rem; right:.6rem; }
 #attune-elicit-form .ae-card-title { font-weight:500; }
 #attune-elicit-form .ae-card-note { font-size:13px; color:var(--text-muted,#8a887f); }
@@ -241,5 +302,74 @@ CSS_FAMILIES: list[tuple[str, str]] = [
 
 #: The full theme: base + every family, in cascade order. This exact
 #: string is what the ops dashboard serves at ``/static/form-theme.css``
-#: (byte-equal by drift test) and what the 4 KB budget test measures.
+#: (byte-equal by drift test) and what the 12 KB budget test measures.
 FORM_THEME_CSS = CSS_BASE + "".join(css for _name, css in CSS_FAMILIES)
+
+#: Workspace chrome is separate from ``FORM_THEME_CSS``: ordinary forms
+#: never pay for command-workspace styles. It shares the exact semantic
+#: token source and remains scoped/rewriteable like the form sheet.
+CSS_WORKSPACE = (
+    CSS_SEMANTIC_TOKENS.replace("#attune-elicit-form", "#attune-workspace")
+    + """#attune-workspace { color:var(--ae-text,#0b1c30);
+  font-family:var(--ae-font-body,system-ui); line-height:1.5; }
+#attune-workspace .ae-ws-head { margin-bottom:var(--ae-space-md,1rem); }
+#attune-workspace .ae-ws-title { font-family:var(--ae-font-heading,system-ui);
+  font-size:20px; font-weight:650; letter-spacing:-.015em; margin:0; }
+#attune-workspace .ae-ws-summary { color:var(--ae-muted,#5f6470); margin:.25rem 0 0; }
+#attune-workspace [id^="attune-elicit-form-"] { --ae-action:inherit;
+  --ae-action-hover:inherit; --ae-action-text:inherit; --ae-danger:inherit;
+  --ae-text:inherit; --ae-muted:inherit; --ae-surface:inherit;
+  --ae-surface-raised:inherit; --ae-border:inherit; --ae-focus:inherit; }
+#attune-workspace .ae-ws-section { border-top:1px solid var(--ae-border,#c3c6d7);
+  padding:1rem 0; }
+#attune-workspace .ae-ws-section:first-of-type { border-top:0; }
+#attune-workspace .ae-ws-section h3 { margin:0 0 .5rem; font-size:14px; font-weight:650; }
+#attune-workspace .ae-ws-action { min-height:var(--ae-target-min,2.5rem);
+  padding:.55rem 1rem; border-radius:var(--ae-radius-control,8px); cursor:pointer;
+  border:1px solid var(--ae-border,#c3c6d7); background:transparent;
+  color:var(--ae-text,#0b1c30); font-weight:600; }
+#attune-workspace .ae-ws-action-primary { color:var(--ae-action-text,#fff);
+  background:var(--ae-action,#004ac6); border-color:var(--ae-action,#004ac6); }
+#attune-workspace .ae-ws-action-danger { color:var(--ae-danger,#ba1a1a);
+  border-color:var(--ae-danger,#ba1a1a); }
+#attune-workspace .ae-ws-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
+#attune-workspace .ae-ws-action-group { display:grid; gap:.25rem; }
+#attune-workspace .ae-ws-consequence { color:var(--ae-muted,#5f6470); font-size:12px; }
+#attune-workspace .ae-ws-dispatch { min-height:1.25rem; color:var(--ae-success,#006c49);
+  font-size:13px; }
+#attune-workspace [data-tone="recommendation"] { border-left:3px solid
+  var(--ae-recommendation,#7c3aed); padding-left:.75rem; }
+#attune-workspace [data-tone="success"] { border-left:3px solid
+  var(--ae-success,#006c49); padding-left:.75rem; }
+#attune-workspace [data-tone="warning"] { border-left:3px solid
+  var(--ae-warning,#a1571c); padding-left:.75rem; }
+#attune-workspace [data-tone="danger"] { border-left:3px solid
+  var(--ae-danger,#ba1a1a); padding-left:.75rem; }
+#attune-workspace :is(button,summary):focus-visible { outline:3px solid
+  var(--ae-focus,#2563eb); outline-offset:2px; }
+#attune-workspace .ae-ws-kv { display:grid; grid-template-columns:minmax(7rem,auto) 1fr;
+  gap:.35rem 1rem; margin:0; }
+#attune-workspace .ae-ws-kv dt { color:var(--ae-muted,#5f6470); }
+#attune-workspace .ae-ws-kv dd { margin:0; }
+#attune-workspace .ae-ws-code { white-space:pre-wrap; overflow-x:auto;
+  background:var(--ae-surface-raised,#eff4ff); border-radius:var(--ae-radius-control,8px);
+  padding:.75rem; font-family:var(--ae-font-mono,ui-monospace); }
+#attune-workspace .ae-ws-list { display:grid; gap:.4rem; padding-left:1.25rem; }
+#attune-workspace .ae-ws-change_summary { list-style:none; padding-left:0; }
+#attune-workspace .ae-ws-change_summary li { border-left:3px solid
+  var(--ae-action,#004ac6); padding-left:.6rem; }
+#attune-workspace .ae-ws-action_list { list-style:none; padding-left:0; }
+#attune-workspace .ae-ws-status { font-size:11px; font-weight:650;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--ae-muted,#5f6470); }
+#attune-workspace .ae-ws-evidence { width:100%; border-collapse:collapse; font-size:14px; }
+#attune-workspace .ae-ws-evidence :is(th,td) { padding:.4rem; text-align:left;
+  border-bottom:1px solid var(--ae-border,#c3c6d7); }
+#attune-workspace details { border:1px solid var(--ae-border,#c3c6d7);
+  border-radius:var(--ae-radius-control,8px); padding:.5rem .75rem; }
+@media (max-width:32rem) { #attune-workspace .ae-ws-kv { grid-template-columns:1fr; }
+  #attune-workspace .ae-ws-kv dd { margin-bottom:.4rem; } }
+@media (prefers-reduced-motion:reduce) { #attune-workspace * {
+  transition-duration:0ms!important; animation-duration:0ms!important; } }
+"""
+    + CSS_WORKSPACE_DARK_TOKENS
+)

@@ -83,7 +83,21 @@ from attune_forms.models import (
 )
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
 from attune_forms.template_store import form_from_template, list_templates
+from attune_forms.tokens import SEMANTIC_TOKENS, token
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
+from attune_forms.workspace import (
+    WorkspaceAction,
+    WorkspaceActionIntent,
+    WorkspaceBlock,
+    WorkspaceBlockKind,
+    WorkspaceItem,
+    WorkspaceSection,
+    WorkspaceTone,
+    WorkspaceView,
+    WorkspaceViewId,
+    workspace_to_markdown,
+    workspace_to_widget_html,
+)
 
 __all__ = [
     "EXAMPLE_ANSWERS",
@@ -103,6 +117,7 @@ __all__ = [
     "validate_template",
     "REFERENCE_FORM",
     "WIDGET_RESPONSE_MARKER",
+    "SEMANTIC_TOKENS",
     "FormValidationError",
     "collect_form_response",
     "form_from_dict",
@@ -122,6 +137,18 @@ __all__ = [
     "problems_to_markdown",
     "select_form_surface",
     "set_keyboard_mode",
+    "token",
+    "WorkspaceAction",
+    "WorkspaceActionIntent",
+    "WorkspaceBlock",
+    "WorkspaceBlockKind",
+    "WorkspaceItem",
+    "WorkspaceSection",
+    "WorkspaceTone",
+    "WorkspaceView",
+    "WorkspaceViewId",
+    "workspace_to_markdown",
+    "workspace_to_widget_html",
     "ASSUMPTION_RULINGS",
     "ranking_slot_count",
     "triage_item_key",

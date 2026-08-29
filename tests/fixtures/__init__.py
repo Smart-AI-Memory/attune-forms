@@ -1,0 +1,1 @@
+"""Reusable rendered-surface fixtures."""

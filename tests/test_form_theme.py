@@ -7,6 +7,7 @@ import re
 
 from attune_forms import theme
 from attune_forms import widget as widget_mod
+from attune_forms.tokens import token
 
 #: Chair-ruled cap (workflow-intake-forms decisions.md D1: 4 KB -> 6 KB
 #: with the 5,574 B measurement; 6 KB -> 8 KB with the grammar-expansion
@@ -14,6 +15,7 @@ from attune_forms import widget as widget_mod
 #: decisions.md D2-a — a consolidation pass was offered and NOT chosen,
 #: so the cap is not a ratchet: the next raise needs its own ruling).
 _BUDGET_BYTES = 12288
+_WORKSPACE_BUDGET_BYTES = 6144
 
 #: ``var(--name)`` with NO fallback value — the pattern the theme
 #: must never contain (host-token fallbacks are the design).
@@ -27,6 +29,10 @@ def test_form_theme_budget() -> None:
         "theme past the cap is a design decision — see "
         "docs/specs/workflow-intake-forms/decisions.md D1"
     )
+
+
+def test_workspace_theme_budget() -> None:
+    assert len(theme.CSS_WORKSPACE.encode("utf-8")) <= _WORKSPACE_BUDGET_BYTES
 
 
 def test_forbidden_latency_constructs_absent() -> None:
@@ -49,6 +55,53 @@ def test_widget_css_is_theme_source_by_identity() -> None:
 def test_full_sheet_is_base_plus_all_families_in_order() -> None:
     expected = theme.CSS_BASE + "".join(css for _n, css in theme.CSS_FAMILIES)
     assert theme.FORM_THEME_CSS == expected
+
+
+def test_semantic_state_matrix_is_present() -> None:
+    css = theme.FORM_THEME_CSS
+    for state in (
+        ":hover",
+        ":focus-visible",
+        ":disabled",
+        ":checked",
+        ".ae-field-missing",
+        "prefers-reduced-motion",
+    ):
+        assert state in css
+    for role in (
+        "--ae-action",
+        "--ae-success",
+        "--ae-warning",
+        "--ae-danger",
+        "--ae-recommendation",
+        "--ae-focus",
+        "--ae-space-md",
+    ):
+        assert role in css
+
+
+def test_workspace_theme_consumes_dark_semantic_tokens() -> None:
+    css = theme.CSS_WORKSPACE
+    assert "prefers-color-scheme:dark" in css
+    assert "--ae-surface-raised:var(--surface-2,#1a2d42)" in css
+    assert "--ae-action-text:var(--on-primary,#0b1c30)" in css
+    assert "--ae-text:var(--text-primary,#f8f9ff)" in css
+
+
+def _relative_luminance(hex_color: str) -> float:
+    channels = [int(hex_color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [
+        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+        for value in channels
+    ]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def test_dark_primary_action_meets_wcag_aa_contrast() -> None:
+    foreground = _relative_luminance(token("color.light.neutral_text"))
+    background = _relative_luminance(token("color.dark.action"))
+    ratio = (max(foreground, background) + 0.05) / (min(foreground, background) + 0.05)
+    assert ratio >= 4.5
 
 
 #: A selector's STYLED class: the last ``.class`` token before the rule

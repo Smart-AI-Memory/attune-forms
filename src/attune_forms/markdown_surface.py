@@ -322,7 +322,12 @@ def _skeleton_value(q: FormQuestion) -> Any:
     return q.recommended if q.recommended else None
 
 
-def reply_skeleton(form: FormSchema, questions: list[FormQuestion] | None = None) -> dict[str, Any]:
+def reply_skeleton(
+    form: FormSchema,
+    questions: list[FormQuestion] | None = None,
+    action: str | None = None,
+    view: str | None = None,
+) -> dict[str, Any]:
     """The sentinel-marked reply skeleton for a form (or a subset of it).
 
     ``questions`` restricts the ``answers`` map to those fields — the
@@ -333,14 +338,26 @@ def reply_skeleton(form: FormSchema, questions: list[FormQuestion] | None = None
     ingested as a reply (confirmation pass 2, 2026-08-20).
     """
     chosen = questions if questions is not None else form.questions
-    return {
+    payload = {
         WIDGET_RESPONSE_MARKER: True,
         "title": form.title,
         "answers": {q.id: _skeleton_value(q) for q in chosen},
     }
+    if action is not None:
+        payload["action"] = action
+    if view is not None:
+        payload["view"] = view
+    return payload
 
 
-def form_to_markdown(form: FormSchema, message: str = "") -> str:
+def form_to_markdown(
+    form: FormSchema,
+    message: str = "",
+    action: str | None = None,
+    submit_label: str | None = None,
+    include_title: bool = True,
+    view: str | None = None,
+) -> str:
     """Render a declarative form as portable markdown (S4).
 
     For hosts that render neither HTML widgets nor a question tool: the
@@ -354,11 +371,18 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
         form: The validated form to render (build it with
             :func:`form_from_dict` first).
         message: Optional prompt shown above the form.
+        action: Optional stable host action id added to the answer
+            skeleton.
+        submit_label: Optional action-specific instruction label.
+        include_title: Whether to emit the form's level-two heading.
+            Workspace renderers disable it because their shell already
+            owns the view heading.
+        view: Optional workspace view id added to the answer skeleton.
 
     Returns:
         A markdown string ready to relay to any text host.
     """
-    lines = [f"## {form.title}"]
+    lines = [f"## {form.title}"] if include_title else []
     if message:
         lines += ["", message]
     if form.description:
@@ -373,13 +397,13 @@ def form_to_markdown(form: FormSchema, message: str = "") -> str:
     lines += [
         "",
         "---",
-        "Reply by filling the `answers` values below, or with shorthand "
+        f"{submit_label or 'Reply'} by filling the `answers` values below, or with shorthand "
         "lines — `field_id: value` or `N: value` (field number); a triage "
         "row is `field_id.item_id: disposition`; a ranking is a comma list "
         "in order (`field_id: b, a, c`) or one slot per line "
         "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
         "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
-        *_skeleton_block(reply_skeleton(form)),
+        *_skeleton_block(reply_skeleton(form, action=action, view=view)),
     ]
     return "\n".join(lines)
