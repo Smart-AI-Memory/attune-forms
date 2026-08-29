@@ -29,6 +29,8 @@ def test_semantic_token_artifact_is_versioned_and_scalar_lookup_works() -> None:
     assert token("color.light.action") == "#004ac6"
     with pytest.raises(KeyError, match="mapping"):
         token("color.light")
+    with pytest.raises(TypeError):
+        SEMANTIC_TOKENS["color"]["light"]["action"] = "#f00"
 
 
 def test_workspace_rejects_executable_shape_and_ambiguous_authority() -> None:
@@ -47,6 +49,12 @@ def test_workspace_rejects_executable_shape_and_ambiguous_authority() -> None:
         )
     with pytest.raises(ValueError, match="code block requires body"):
         WorkspaceBlock(WorkspaceBlockKind.CODE)
+    with pytest.raises(ValueError, match="language identifier"):
+        WorkspaceBlock(
+            WorkspaceBlockKind.CODE,
+            body="safe",
+            language="text\n```\ninjected",
+        )
 
 
 def test_form_view_requires_exactly_one_submit_action() -> None:
@@ -73,6 +81,9 @@ def test_widget_form_action_uses_specific_label_and_stable_id() -> None:
     assert ">Preview fix</button>" in html
     assert "payload.action = submitAction" in html
     assert 'var submitAction = "preview_fix"' in html
+    assert 'var submitView = "intake"' in html
+    assert html.count("<h2") == 1
+    assert "<h3>All Constructs Reference</h3>" not in html
     assert "@import" not in html
 
 
@@ -82,6 +93,10 @@ def test_widget_display_actions_post_only_stable_action_id() -> None:
     assert 'data-workspace-action="edit_contract"' in html
     assert "action:b.getAttribute('data-workspace-action')" in html
     assert "typeof sendPrompt==='function'" in html
+    assert "window.confirm(consequence)" in html
+    assert 'data-consequence="Execute the previewed contract."' in html
+    assert "Workspace action submitted" in html
+    assert "view:root.getAttribute('data-workspace-view')" in html
     assert "<script>alert" not in html
 
 
@@ -89,6 +104,7 @@ def test_workspace_markdown_preserves_sections_actions_and_form_state() -> None:
     intake_md = workspace_to_markdown(showcase_views()[0])
     skeleton = json.loads(intake_md.split("```json")[-1].split("```")[0])
     assert skeleton["action"] == "preview_fix"
+    assert skeleton["view"] == "intake"
     assert set(skeleton["answers"])
     assert intake_md.count("## Fix") == 1
     preview_md = workspace_to_markdown(showcase_views()[1])
@@ -115,6 +131,27 @@ def test_workspace_markdown_escapes_evidence_table_cells() -> None:
     assert "line 1<br>line 2" in markdown
 
 
+def test_workspace_markdown_contains_multiline_author_text() -> None:
+    view = WorkspaceView(
+        id=WorkspaceViewId.EXECUTION,
+        title="Run *fix*",
+        sections=(
+            WorkspaceSection(
+                blocks=(
+                    WorkspaceBlock(
+                        WorkspaceBlockKind.TIMELINE,
+                        items=(WorkspaceItem("Edit", "one\ntwo", "three\nfour"),),
+                    ),
+                ),
+            ),
+        ),
+    )
+    markdown = workspace_to_markdown(view)
+    assert "Run \\*fix\\*" in markdown
+    assert "one<br>two" in markdown
+    assert "three<br>four" in markdown
+
+
 def test_workspace_escapes_all_author_text() -> None:
     view = WorkspaceView(
         id=WorkspaceViewId.RECEIPT,
@@ -129,7 +166,15 @@ def test_workspace_escapes_all_author_text() -> None:
                 ),
             ),
         ),
+        actions=(WorkspaceAction(id="inspect", label="Inspect"),),
     )
     html = workspace_to_widget_html(view, instance_id="escape")
     assert "<img" not in html and "<b>unsafe" not in html and "<script></script>" not in html
     assert "&lt;script&gt;" in html
+    assert "</script><img" not in html
+    assert "title:root.getAttribute('data-workspace-title')" in html
+
+
+def test_workspace_instance_suffix_is_ascii_only() -> None:
+    html = workspace_to_widget_html(showcase_views()[2], instance_id="fooｓ²")
+    assert 'id="attune-workspace-foo"' in html

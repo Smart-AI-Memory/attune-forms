@@ -65,6 +65,22 @@ CSS_SEMANTIC_TOKENS = (
     f"--ae-font-mono:{token('typography.mono')}; }}\n"
 )
 
+CSS_WORKSPACE_DARK_TOKENS = (
+    "@media (prefers-color-scheme:dark) { #attune-workspace {\n"
+    f"  --ae-action:{token('color.dark.action')}; "
+    f"--ae-action-hover:{token('color.dark.action_hover')};\n"
+    f"  --ae-success:{token('color.dark.success')}; "
+    f"--ae-warning:{token('color.dark.warning')}; "
+    f"--ae-danger:{token('color.dark.danger')};\n"
+    f"  --ae-recommendation:{token('color.dark.recommendation')}; "
+    f"--ae-text:{token('color.dark.neutral_text')}; "
+    f"--ae-muted:{token('color.dark.neutral_muted')};\n"
+    f"  --ae-surface:{token('color.dark.surface')}; "
+    f"--ae-surface-raised:{token('color.dark.surface_raised')};\n"
+    f"  --ae-border:{token('color.dark.border')}; "
+    f"--ae-focus:{token('color.dark.focus')}; }} }}\n"
+)
+
 #: Base rules every form emits (scoped under ``#attune-elicit-form``;
 #: the widget renderer rewrites the id per instance).
 CSS_BASE = (
@@ -299,7 +315,7 @@ CSS_WORKSPACE = (
 #attune-workspace .ae-ws-section { border-top:1px solid var(--ae-border,#c3c6d7);
   padding:1rem 0; }
 #attune-workspace .ae-ws-section:first-of-type { border-top:0; }
-#attune-workspace .ae-ws-section h4 { margin:0 0 .5rem; font-size:14px; font-weight:650; }
+#attune-workspace .ae-ws-section h3 { margin:0 0 .5rem; font-size:14px; font-weight:650; }
 #attune-workspace .ae-ws-action { min-height:var(--ae-target-min,2.5rem);
   padding:.55rem 1rem; border-radius:var(--ae-radius-control,8px); cursor:pointer;
   border:1px solid var(--ae-border,#c3c6d7); background:transparent;
@@ -309,6 +325,8 @@ CSS_WORKSPACE = (
 #attune-workspace .ae-ws-action-danger { color:var(--ae-danger,#ba1a1a);
   border-color:var(--ae-danger,#ba1a1a); }
 #attune-workspace .ae-ws-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
+#attune-workspace .ae-ws-action-group { display:grid; gap:.25rem; }
+#attune-workspace .ae-ws-consequence { color:var(--ae-muted,#5f6470); font-size:12px; }
 #attune-workspace :is(button,summary):focus-visible { outline:3px solid
   var(--ae-focus,#2563eb); outline-offset:2px; }
 #attune-workspace .ae-ws-kv { display:grid; grid-template-columns:minmax(7rem,auto) 1fr;
@@ -331,4 +349,5 @@ CSS_WORKSPACE = (
 @media (prefers-reduced-motion:reduce) { #attune-workspace * {
   transition-duration:0ms!important; animation-duration:0ms!important; } }
 """
+    + CSS_WORKSPACE_DARK_TOKENS
 )

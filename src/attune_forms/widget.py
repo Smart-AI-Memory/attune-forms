@@ -698,6 +698,8 @@ def form_to_widget_html(
     instance_id: str | None = None,
     submit_label: str | None = None,
     submit_action: str | None = None,
+    submit_view: str | None = None,
+    include_title: bool = True,
 ) -> str:
     """Render a declarative form as an inline ``show_widget`` HTML form.
 
@@ -732,6 +734,9 @@ def form_to_widget_html(
             callers retain the inferred Confirm/Submit label.
         submit_action: Optional stable host action id included beside
             the validated answers in the postback.
+        submit_view: Optional workspace view id included in the postback.
+        include_title: Whether to emit the form headings. Workspace
+            shells disable them because they own the heading hierarchy.
 
     Returns:
         An HTML string ready to pass straight to
@@ -759,12 +764,18 @@ def form_to_widget_html(
     )
     button_label = submit_label or ("Confirm" if confirm else "Submit")
     action_js = json.dumps(submit_action)
+    view_js = json.dumps(submit_view)
+    title_html = (
+        f'<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>\n'
+        f"<h3>{_esc(form.title)}</h3>"
+        if include_title
+        else ""
+    )
 
-    html = f"""<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>
-<form id="{form_id}" data-form-title="{_esc(form.title)}">
+    html = f"""<form id="{form_id}" data-form-title="{_esc(form.title)}">
 <style>
 {css}</style>
-<h3>{_esc(form.title)}</h3>
+{title_html}
 {intro}{desc}{confirm_html}
 {fields}
 <button type="button" id="ae-submit-{sfx}" class="ae-submit">{_esc(button_label)}</button>
@@ -929,6 +940,8 @@ def form_to_widget_html(
       title: form.getAttribute('data-form-title'), answers: answers }};
     var submitAction = {action_js};
     if (submitAction !== null) payload.action = submitAction;
+    var submitView = {view_js};
+    if (submitView !== null) payload.view = submitView;
     if (typeof sendPrompt === 'function') {{
       sendPrompt('Elicitation form submitted — parse and validate this '
         + 'response:\\n```json\\n' + JSON.stringify(payload) + '\\n```');

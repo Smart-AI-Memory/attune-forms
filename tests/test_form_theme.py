@@ -74,6 +74,13 @@ def test_semantic_state_matrix_is_present() -> None:
         assert role in css
 
 
+def test_workspace_theme_consumes_dark_semantic_tokens() -> None:
+    css = theme.CSS_WORKSPACE
+    assert "prefers-color-scheme:dark" in css
+    assert "--ae-text:#f8f9ff" in css
+    assert "--ae-surface-raised:#1a2d42" in css
+
+
 #: A selector's STYLED class: the last ``.class`` token before the rule
 #: body (pseudo-classes stripped). ``.ae-card .ae-prog-tag`` styles
 #: ``ae-prog-tag``; ``.ae-card:hover`` styles ``ae-card``.

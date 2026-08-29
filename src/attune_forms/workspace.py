@@ -20,6 +20,7 @@ from attune_forms.theme import CSS_WORKSPACE
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
 
 _ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+_LANG_RE = re.compile(r"^[A-Za-z0-9_+-]{1,32}$")
 
 
 class WorkspaceViewId(str, Enum):
@@ -90,6 +91,8 @@ class WorkspaceBlock:
         object.__setattr__(self, "items", tuple(self.items))
         if self.kind is WorkspaceBlockKind.CODE and not self.body:
             raise ValueError("code block requires body")
+        if self.kind is WorkspaceBlockKind.CODE and not _LANG_RE.fullmatch(self.language):
+            raise ValueError("code block language must be a short language identifier")
         if self.kind is WorkspaceBlockKind.DISCLOSURE and not (self.title and self.body):
             raise ValueError("disclosure block requires title and body")
         item_kinds = {
@@ -198,7 +201,7 @@ def _block_html(block: WorkspaceBlock) -> str:
 def _sections_html(sections: tuple[WorkspaceSection, ...]) -> str:
     rendered = []
     for section in sections:
-        heading = f"<h4>{escape(section.heading)}</h4>" if section.heading else ""
+        heading = f"<h3>{escape(section.heading)}</h3>" if section.heading else ""
         blocks = "".join(_block_html(block) for block in section.blocks)
         rendered.append(
             f'<section class="ae-ws-section" data-tone="{section.tone.value}">'
@@ -209,7 +212,10 @@ def _sections_html(sections: tuple[WorkspaceSection, ...]) -> str:
 
 def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None) -> str:
     """Render one workspace view as self-contained widget HTML."""
-    suffix = "".join(c for c in (instance_id or "") if c.isalnum()) or uuid.uuid4().hex[:8]
+    suffix = (
+        "".join(c for c in (instance_id or "") if c.isascii() and c.isalnum())
+        or uuid.uuid4().hex[:8]
+    )
     root_id = f"attune-workspace-{suffix}"
     css = CSS_WORKSPACE.replace("#attune-workspace", f"#{root_id}")
     summary = f'<p class="ae-ws-summary">{escape(view.summary)}</p>' if view.summary else ""
@@ -222,17 +228,28 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
             instance_id=f"{suffix}form",
             submit_label=action.label,
             submit_action=action.id,
+            submit_view=view.id.value,
+            include_title=False,
         )
         actions = ""
     else:
 
         def action_button(action: WorkspaceAction) -> str:
             explicit = ' data-explicit="1"' if action.requires_explicit_choice else ""
+            consequence = (
+                f' data-consequence="{escape(action.consequence)}"' if action.consequence else ""
+            )
+            note = (
+                f'<span class="ae-ws-consequence">{escape(action.consequence)}</span>'
+                if action.requires_explicit_choice
+                else ""
+            )
             return (
+                '<span class="ae-ws-action-group">'
                 f'<button type="button" class="ae-ws-action '
                 f'ae-ws-action-{action.intent.value}" '
-                f'data-workspace-action="{escape(action.id)}"{explicit}>'
-                f"{escape(action.label)}</button>"
+                f'data-workspace-action="{escape(action.id)}"{explicit}{consequence}>'
+                f"{escape(action.label)}</button>{note}</span>"
             )
 
         buttons = "".join(action_button(action) for action in view.actions)
@@ -245,23 +262,45 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
   root.addEventListener('click',function(e){{
     var b=e.target.closest?e.target.closest('[data-workspace-action]'):null;
     if(!b||!root.contains(b))return;
+    var consequence=b.getAttribute('data-consequence');
+    if(b.getAttribute('data-explicit')==='1'&&!window.confirm(consequence))return;
     var payload={{{json.dumps(WIDGET_RESPONSE_MARKER)}:true,
-      title:{json.dumps(view.title)},action:b.getAttribute('data-workspace-action')}};
-    if(typeof sendPrompt==='function'){{sendPrompt(JSON.stringify(payload));}}
+      title:root.getAttribute('data-workspace-title'),
+      view:root.getAttribute('data-workspace-view'),
+      action:b.getAttribute('data-workspace-action')}};
+    if(typeof sendPrompt==='function'){{
+      sendPrompt('Workspace action submitted — parse this response:\n```json\n'
+        +JSON.stringify(payload)+'\n```');
+    }}
   }});
 }})();</script>"""
-    return f'<div id="{root_id}" data-workspace-view="{view.id.value}"><style>{css}</style>{head}{sections}{content}{actions}{script}</div>'
+    return (
+        f'<div id="{root_id}" data-workspace-view="{view.id.value}" '
+        f'data-workspace-title="{escape(view.title)}"><style>{css}</style>'
+        f"{head}{sections}{content}{actions}{script}</div>"
+    )
+
+
+def _markdown_text(value: str) -> str:
+    """Keep author text inside its current Markdown structural slot."""
+    escaped = value.replace("\\", "\\\\")
+    for char in ("`", "*", "_", "[", "]", "<", ">", "|", "#"):
+        escaped = escaped.replace(char, f"\\{char}")
+    return escaped.replace("\n", "<br>")
 
 
 def _block_markdown(block: WorkspaceBlock) -> list[str]:
     if block.kind is WorkspaceBlockKind.KEY_VALUE:
-        return [f"- **{item.label}:** {item.value or item.detail}" for item in block.items]
+        return [
+            f"- **{_markdown_text(item.label)}:** " f"{_markdown_text(item.value or item.detail)}"
+            for item in block.items
+        ]
     if block.kind is WorkspaceBlockKind.CODE:
         return [f"```{block.language}", block.body.replace("```", "` ` `"), "```"]
     if block.kind is WorkspaceBlockKind.EVIDENCE:
 
         def cell(value: str) -> str:
-            return value.replace("|", "\\|").replace("\n", "<br>")
+            return _markdown_text(value)
 
         rows = ["| Evidence | Result | Status |", "| --- | --- | --- |"]
         rows.extend(
@@ -270,23 +309,24 @@ def _block_markdown(block: WorkspaceBlock) -> list[str]:
         )
         return rows
     if block.kind is WorkspaceBlockKind.DISCLOSURE:
-        return [f"**{block.title}**", "", block.body]
+        return [f"**{_markdown_text(block.title)}**", "", _markdown_text(block.body)]
     return [
-        f"- {f'[{item.status}] ' if item.status else ''}**{item.label}**"
-        f"{f': {item.value}' if item.value else ''}"
-        f"{f' — {item.detail}' if item.detail else ''}"
+        f"- {f'[{_markdown_text(item.status)}] ' if item.status else ''}"
+        f"**{_markdown_text(item.label)}**"
+        f"{f': {_markdown_text(item.value)}' if item.value else ''}"
+        f"{f' — {_markdown_text(item.detail)}' if item.detail else ''}"
         for item in block.items
     ]
 
 
 def workspace_to_markdown(view: WorkspaceView) -> str:
     """Render a workspace view to the portable markdown surface."""
-    lines = [f"## {view.title}"]
+    lines = [f"## {_markdown_text(view.title)}"]
     if view.summary:
-        lines += ["", view.summary]
+        lines += ["", _markdown_text(view.summary)]
     for section in view.sections:
         if section.heading:
-            lines += ["", f"### {section.heading}"]
+            lines += ["", f"### {_markdown_text(section.heading)}"]
         for block in section.blocks:
             lines += ["", *_block_markdown(block)]
     if view.form is not None:
@@ -298,13 +338,14 @@ def workspace_to_markdown(view: WorkspaceView) -> str:
                 action=action.id,
                 submit_label=action.label,
                 include_title=False,
+                view=view.id.value,
             ),
         ]
     elif view.actions:
         lines += ["", "### Actions"]
         lines.extend(
-            f"- `{action.id}` — {action.label}"
-            f"{f' — {action.consequence}' if action.consequence else ''}"
+            f"- `{action.id}` — {_markdown_text(action.label)}"
+            f"{f' — {_markdown_text(action.consequence)}' if action.consequence else ''}"
             for action in view.actions
         )
     return "\n".join(lines)

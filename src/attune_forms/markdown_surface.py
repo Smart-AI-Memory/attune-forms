@@ -326,6 +326,7 @@ def reply_skeleton(
     form: FormSchema,
     questions: list[FormQuestion] | None = None,
     action: str | None = None,
+    view: str | None = None,
 ) -> dict[str, Any]:
     """The sentinel-marked reply skeleton for a form (or a subset of it).
 
@@ -344,6 +345,8 @@ def reply_skeleton(
     }
     if action is not None:
         payload["action"] = action
+    if view is not None:
+        payload["view"] = view
     return payload
 
 
@@ -353,6 +356,7 @@ def form_to_markdown(
     action: str | None = None,
     submit_label: str | None = None,
     include_title: bool = True,
+    view: str | None = None,
 ) -> str:
     """Render a declarative form as portable markdown (S4).
 
@@ -373,6 +377,7 @@ def form_to_markdown(
         include_title: Whether to emit the form's level-two heading.
             Workspace renderers disable it because their shell already
             owns the view heading.
+        view: Optional workspace view id added to the answer skeleton.
 
     Returns:
         A markdown string ready to relay to any text host.
@@ -399,6 +404,6 @@ def form_to_markdown(
         "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
         "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
-        *_skeleton_block(reply_skeleton(form, action=action)),
+        *_skeleton_block(reply_skeleton(form, action=action, view=view)),
     ]
     return "\n".join(lines)
