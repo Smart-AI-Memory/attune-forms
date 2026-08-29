@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+import shutil
+import subprocess
 
 import pytest
 
@@ -16,6 +19,7 @@ from attune_forms import (
     WorkspaceView,
     WorkspaceViewId,
     form_from_dict,
+    form_to_widget_html,
     workspace_to_markdown,
     workspace_to_widget_html,
 )
@@ -55,6 +59,14 @@ def test_workspace_rejects_executable_shape_and_ambiguous_authority() -> None:
             body="safe",
             language="text\n```\ninjected",
         )
+    with pytest.raises(TypeError, match="block kind"):
+        WorkspaceBlock("code", body="x")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="section tone"):
+        WorkspaceSection(blocks=(WorkspaceBlock(WorkspaceBlockKind.CODE, body="x"),), tone="x")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="action intent"):
+        WorkspaceAction("run", "Run", intent="primary")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="view id"):
+        WorkspaceView(id="preview", title="T")  # type: ignore[arg-type]
 
 
 def test_form_view_requires_exactly_one_submit_action() -> None:
@@ -82,9 +94,17 @@ def test_widget_form_action_uses_specific_label_and_stable_id() -> None:
     assert "payload.action = submitAction" in html
     assert 'var submitAction = "preview_fix"' in html
     assert 'var submitView = "intake"' in html
+    assert 'data-form-title="Fix"' in html
     assert html.count("<h2") == 1
     assert "<h3>All Constructs Reference</h3>" not in html
     assert "@import" not in html
+
+
+def test_public_widget_context_rejects_script_values() -> None:
+    form = showcase_views()[0].form
+    assert form is not None
+    with pytest.raises(ValueError, match="stable lowercase identifier"):
+        form_to_widget_html(form, submit_action="</script><img src=x>")
 
 
 def test_widget_display_actions_post_only_stable_action_id() -> None:
@@ -97,6 +117,45 @@ def test_widget_display_actions_post_only_stable_action_id() -> None:
     assert 'data-consequence="Execute the previewed contract."' in html
     assert "Workspace action submitted" in html
     assert "view:root.getAttribute('data-workspace-view')" in html
+    assert 'role="status" aria-live="polite"' in html
+    assert "x.disabled=true" in html
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_widget_display_action_script_parses() -> None:
+    html = workspace_to_widget_html(showcase_views()[1], instance_id="parse")
+    script = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
+    assert script is not None
+    result = subprocess.run(
+        ["node", "--check"],
+        input=script.group(1),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_form_workspace_preserves_explicit_action_semantics() -> None:
+    intake = showcase_views()[0]
+    action = WorkspaceAction(
+        "preview_fix",
+        "Preview fix",
+        WorkspaceActionIntent.PRIMARY,
+        consequence="Build the deterministic preview.",
+        requires_explicit_choice=True,
+    )
+    view = WorkspaceView(
+        id=intake.id,
+        title=intake.title,
+        form=intake.form,
+        actions=(action,),
+    )
+    html = workspace_to_widget_html(view, instance_id="explicit")
+    assert "Build the deterministic preview." in html
+    assert "window.confirm(form.getAttribute('data-submit-consequence'))" in html
+    markdown = workspace_to_markdown(view)
+    assert "**Explicit confirmation required:** Build the deterministic preview." in markdown
     assert "<script>alert" not in html
 
 
@@ -111,6 +170,9 @@ def test_workspace_markdown_preserves_sections_actions_and_form_state() -> None:
     assert "### Contract" in preview_md
     assert "`run_fix` — Run Fix" in preview_md
     assert "Execute the previewed contract" in preview_md
+    action_skeleton = json.loads(preview_md.split("```json")[-1].split("```")[0])
+    assert action_skeleton["view"] == "preview"
+    assert action_skeleton["action"] is None
 
 
 def test_workspace_markdown_escapes_evidence_table_cells() -> None:
@@ -178,3 +240,7 @@ def test_workspace_escapes_all_author_text() -> None:
 def test_workspace_instance_suffix_is_ascii_only() -> None:
     html = workspace_to_widget_html(showcase_views()[2], instance_id="fooｓ²")
     assert 'id="attune-workspace-foo"' in html
+    hyphenated = workspace_to_widget_html(showcase_views()[2], instance_id="fix-1")
+    compact = workspace_to_widget_html(showcase_views()[2], instance_id="fix1")
+    assert 'id="attune-workspace-fix-1"' in hyphenated
+    assert 'id="attune-workspace-fix1"' in compact

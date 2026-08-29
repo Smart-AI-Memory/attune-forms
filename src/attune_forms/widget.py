@@ -22,6 +22,7 @@ Licensed under Apache 2.0
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -51,6 +52,7 @@ from attune_forms.theme import CSS_FAMILIES as _CSS_FAMILIES
 #: form postback among ordinary chat messages and route it to
 #: ``collect_form_response``. Kept in sync with the ``elicit`` skill.
 WIDGET_RESPONSE_MARKER = "__elicitation_response__"
+_CONTEXT_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 
 def _esc(value: object) -> str:
@@ -699,7 +701,10 @@ def form_to_widget_html(
     submit_label: str | None = None,
     submit_action: str | None = None,
     submit_view: str | None = None,
+    submit_title: str | None = None,
     include_title: bool = True,
+    submit_consequence: str = "",
+    requires_explicit_choice: bool = False,
 ) -> str:
     """Render a declarative form as an inline ``show_widget`` HTML form.
 
@@ -735,14 +740,22 @@ def form_to_widget_html(
         submit_action: Optional stable host action id included beside
             the validated answers in the postback.
         submit_view: Optional workspace view id included in the postback.
+        submit_title: Optional host workspace title used in the postback.
         include_title: Whether to emit the form headings. Workspace
             shells disable them because they own the heading hierarchy.
+        submit_consequence: User-visible effect of an explicit action.
+        requires_explicit_choice: Require confirmation before posting.
 
     Returns:
         An HTML string ready to pass straight to
         ``mcp__visualize__show_widget``.
     """
     start = time.perf_counter()
+    for name, value in (("submit_action", submit_action), ("submit_view", submit_view)):
+        if value is not None and not _CONTEXT_ID_RE.fullmatch(value):
+            raise ValueError(f"{name} must be a stable lowercase identifier")
+    if requires_explicit_choice and not submit_consequence.strip():
+        raise ValueError("an explicit submit action requires a consequence")
     sfx = "".join(c for c in (instance_id or "") if c.isalnum()) or uuid.uuid4().hex[:8]
     form_id = f"attune-elicit-form-{sfx}"
     intro = f'<p class="ae-msg">{_esc(message)}</p>' if message else ""
@@ -765,19 +778,26 @@ def form_to_widget_html(
     button_label = submit_label or ("Confirm" if confirm else "Submit")
     action_js = json.dumps(submit_action)
     view_js = json.dumps(submit_view)
+    explicit_js = "true" if requires_explicit_choice else "false"
     title_html = (
         f'<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>\n'
         f"<h3>{_esc(form.title)}</h3>"
         if include_title
         else ""
     )
+    consequence_html = (
+        f'<p class="ae-submit-consequence">{_esc(submit_consequence)}</p>'
+        if submit_consequence
+        else ""
+    )
 
-    html = f"""<form id="{form_id}" data-form-title="{_esc(form.title)}">
+    html = f"""<form id="{form_id}" data-form-title="{_esc(submit_title or form.title)}" data-submit-consequence="{_esc(submit_consequence)}">
 <style>
 {css}</style>
 {title_html}
 {intro}{desc}{confirm_html}
 {fields}
+{consequence_html}
 <button type="button" id="ae-submit-{sfx}" class="ae-submit">{_esc(button_label)}</button>
 <div id="ae-error-{sfx}" class="ae-error" role="alert"></div>
 <script>
@@ -936,6 +956,7 @@ def form_to_widget_html(
       return;
     }}
     err.textContent = '';
+    if ({explicit_js} && !window.confirm(form.getAttribute('data-submit-consequence'))) return;
     var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,
       title: form.getAttribute('data-form-title'), answers: answers }};
     var submitAction = {action_js};

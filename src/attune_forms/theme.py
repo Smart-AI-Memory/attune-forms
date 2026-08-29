@@ -44,6 +44,7 @@ CSS_SEMANTIC_TOKENS = (
     "#attune-elicit-form {\n"
     f"  --ae-action:var(--primary,{token('color.light.action')}); "
     f"--ae-action-hover:var(--primary-dark,{token('color.light.action_hover')});\n"
+    "  --ae-action-text:var(--on-primary,#fff);\n"
     f"  --ae-success:var(--text-success,{token('color.light.success')}); "
     f"--ae-warning:var(--text-accent,{token('color.light.warning')});\n"
     f"  --ae-danger:var(--text-danger,{token('color.light.danger')}); "
@@ -67,18 +68,19 @@ CSS_SEMANTIC_TOKENS = (
 
 CSS_WORKSPACE_DARK_TOKENS = (
     "@media (prefers-color-scheme:dark) { #attune-workspace {\n"
-    f"  --ae-action:{token('color.dark.action')}; "
-    f"--ae-action-hover:{token('color.dark.action_hover')};\n"
-    f"  --ae-success:{token('color.dark.success')}; "
-    f"--ae-warning:{token('color.dark.warning')}; "
-    f"--ae-danger:{token('color.dark.danger')};\n"
-    f"  --ae-recommendation:{token('color.dark.recommendation')}; "
-    f"--ae-text:{token('color.dark.neutral_text')}; "
-    f"--ae-muted:{token('color.dark.neutral_muted')};\n"
-    f"  --ae-surface:{token('color.dark.surface')}; "
-    f"--ae-surface-raised:{token('color.dark.surface_raised')};\n"
-    f"  --ae-border:{token('color.dark.border')}; "
-    f"--ae-focus:{token('color.dark.focus')}; }} }}\n"
+    f"  --ae-action:var(--primary,{token('color.dark.action')}); "
+    f"--ae-action-hover:var(--primary-dark,{token('color.dark.action_hover')});\n"
+    "  --ae-action-text:var(--on-primary,#0b1c30);\n"
+    f"  --ae-success:var(--text-success,{token('color.dark.success')}); "
+    f"--ae-warning:var(--text-accent,{token('color.dark.warning')}); "
+    f"--ae-danger:var(--text-danger,{token('color.dark.danger')});\n"
+    f"  --ae-recommendation:var(--accent,{token('color.dark.recommendation')}); "
+    f"--ae-text:var(--text-primary,{token('color.dark.neutral_text')}); "
+    f"--ae-muted:var(--text-muted,{token('color.dark.neutral_muted')});\n"
+    f"  --ae-surface:var(--surface-1,{token('color.dark.surface')}); "
+    f"--ae-surface-raised:var(--surface-2,{token('color.dark.surface_raised')});\n"
+    f"  --ae-border:var(--border,{token('color.dark.border')}); "
+    f"--ae-focus:var(--focus-ring,{token('color.dark.focus')}); }} }}\n"
 )
 
 #: Base rules every form emits (scoped under ``#attune-elicit-form``;
@@ -116,6 +118,8 @@ CSS_BASE = (
   border-radius:var(--ae-radius-control,8px); transition:background var(--ae-motion-fast,120ms); }
 #attune-elicit-form .ae-submit:hover { background:var(--ae-action-hover,#003ea8); }
 #attune-elicit-form .ae-submit:disabled { opacity:.6; cursor:default; }
+#attune-elicit-form .ae-submit-consequence { color:var(--ae-muted,#5f6470);
+  font-size:13px; margin:.25rem 0; }
 #attune-elicit-form .ae-error { margin-top:.5rem; font-size:14px;
   color:var(--text-accent,#a1571c); }
 #attune-elicit-form .ae-field-missing { border-left:3px solid
@@ -298,7 +302,7 @@ CSS_FAMILIES: list[tuple[str, str]] = [
 
 #: The full theme: base + every family, in cascade order. This exact
 #: string is what the ops dashboard serves at ``/static/form-theme.css``
-#: (byte-equal by drift test) and what the 4 KB budget test measures.
+#: (byte-equal by drift test) and what the 12 KB budget test measures.
 FORM_THEME_CSS = CSS_BASE + "".join(css for _name, css in CSS_FAMILIES)
 
 #: Workspace chrome is separate from ``FORM_THEME_CSS``: ordinary forms
@@ -312,6 +316,10 @@ CSS_WORKSPACE = (
 #attune-workspace .ae-ws-title { font-family:var(--ae-font-heading,system-ui);
   font-size:20px; font-weight:650; letter-spacing:-.015em; margin:0; }
 #attune-workspace .ae-ws-summary { color:var(--ae-muted,#5f6470); margin:.25rem 0 0; }
+#attune-workspace [id^="attune-elicit-form-"] { --ae-action:inherit;
+  --ae-action-hover:inherit; --ae-action-text:inherit; --ae-danger:inherit;
+  --ae-text:inherit; --ae-muted:inherit; --ae-surface:inherit;
+  --ae-surface-raised:inherit; --ae-border:inherit; --ae-focus:inherit; }
 #attune-workspace .ae-ws-section { border-top:1px solid var(--ae-border,#c3c6d7);
   padding:1rem 0; }
 #attune-workspace .ae-ws-section:first-of-type { border-top:0; }
@@ -320,13 +328,23 @@ CSS_WORKSPACE = (
   padding:.55rem 1rem; border-radius:var(--ae-radius-control,8px); cursor:pointer;
   border:1px solid var(--ae-border,#c3c6d7); background:transparent;
   color:var(--ae-text,#0b1c30); font-weight:600; }
-#attune-workspace .ae-ws-action-primary { color:#fff;
+#attune-workspace .ae-ws-action-primary { color:var(--ae-action-text,#fff);
   background:var(--ae-action,#004ac6); border-color:var(--ae-action,#004ac6); }
 #attune-workspace .ae-ws-action-danger { color:var(--ae-danger,#ba1a1a);
   border-color:var(--ae-danger,#ba1a1a); }
 #attune-workspace .ae-ws-actions { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem; }
 #attune-workspace .ae-ws-action-group { display:grid; gap:.25rem; }
 #attune-workspace .ae-ws-consequence { color:var(--ae-muted,#5f6470); font-size:12px; }
+#attune-workspace .ae-ws-dispatch { min-height:1.25rem; color:var(--ae-success,#006c49);
+  font-size:13px; }
+#attune-workspace [data-tone="recommendation"] { border-left:3px solid
+  var(--ae-recommendation,#7c3aed); padding-left:.75rem; }
+#attune-workspace [data-tone="success"] { border-left:3px solid
+  var(--ae-success,#006c49); padding-left:.75rem; }
+#attune-workspace [data-tone="warning"] { border-left:3px solid
+  var(--ae-warning,#a1571c); padding-left:.75rem; }
+#attune-workspace [data-tone="danger"] { border-left:3px solid
+  var(--ae-danger,#ba1a1a); padding-left:.75rem; }
 #attune-workspace :is(button,summary):focus-visible { outline:3px solid
   var(--ae-focus,#2563eb); outline-offset:2px; }
 #attune-workspace .ae-ws-kv { display:grid; grid-template-columns:minmax(7rem,auto) 1fr;
@@ -337,6 +355,10 @@ CSS_WORKSPACE = (
   background:var(--ae-surface-raised,#eff4ff); border-radius:var(--ae-radius-control,8px);
   padding:.75rem; font-family:var(--ae-font-mono,ui-monospace); }
 #attune-workspace .ae-ws-list { display:grid; gap:.4rem; padding-left:1.25rem; }
+#attune-workspace .ae-ws-change_summary { list-style:none; padding-left:0; }
+#attune-workspace .ae-ws-change_summary li { border-left:3px solid
+  var(--ae-action,#004ac6); padding-left:.6rem; }
+#attune-workspace .ae-ws-action_list { list-style:none; padding-left:0; }
 #attune-workspace .ae-ws-status { font-size:11px; font-weight:650;
   text-transform:uppercase; letter-spacing:.04em; color:var(--ae-muted,#5f6470); }
 #attune-workspace .ae-ws-evidence { width:100%; border-collapse:collapse; font-size:14px; }

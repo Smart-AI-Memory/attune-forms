@@ -89,6 +89,8 @@ class WorkspaceBlock:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "items", tuple(self.items))
+        if not isinstance(self.kind, WorkspaceBlockKind):
+            raise TypeError("workspace block kind must be WorkspaceBlockKind")
         if self.kind is WorkspaceBlockKind.CODE and not self.body:
             raise ValueError("code block requires body")
         if self.kind is WorkspaceBlockKind.CODE and not _LANG_RE.fullmatch(self.language):
@@ -116,6 +118,8 @@ class WorkspaceSection:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "blocks", tuple(self.blocks))
+        if not isinstance(self.tone, WorkspaceTone):
+            raise TypeError("workspace section tone must be WorkspaceTone")
         if not self.blocks:
             raise ValueError("workspace section requires at least one block")
 
@@ -131,6 +135,8 @@ class WorkspaceAction:
     requires_explicit_choice: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.intent, WorkspaceActionIntent):
+            raise TypeError("workspace action intent must be WorkspaceActionIntent")
         if not _ID_RE.fullmatch(self.id):
             raise ValueError("workspace action id must match [a-z][a-z0-9_-]{0,63}")
         if not self.label.strip():
@@ -153,6 +159,8 @@ class WorkspaceView:
     def __post_init__(self) -> None:
         object.__setattr__(self, "sections", tuple(self.sections))
         object.__setattr__(self, "actions", tuple(self.actions))
+        if not isinstance(self.id, WorkspaceViewId):
+            raise TypeError("workspace view id must be WorkspaceViewId")
         if not self.title.strip():
             raise ValueError("workspace title must not be empty")
         ids = [action.id for action in self.actions]
@@ -178,24 +186,31 @@ def _block_html(block: WorkspaceBlock) -> str:
             f"<dt>{escape(item.label)}</dt><dd>{escape(item.value or item.detail)}</dd>"
             for item in block.items
         )
-        return f'<dl class="ae-ws-kv">{rows}</dl>'
+        return f'<dl class="ae-ws-block ae-ws-kv">{rows}</dl>'
     if block.kind is WorkspaceBlockKind.CODE:
-        return f'<pre class="ae-ws-code"><code>{escape(block.body)}</code></pre>'
+        return (
+            '<pre class="ae-ws-block ae-ws-code">'
+            f'<code class="language-{escape(block.language)}">{escape(block.body)}</code></pre>'
+        )
     if block.kind is WorkspaceBlockKind.EVIDENCE:
         rows = "".join(
-            f"<tr><th>{escape(item.label)}</th><td>{escape(item.value)}</td>"
+            f'<tr><th scope="row">{escape(item.label)}</th><td>{escape(item.value)}</td>'
             f"<td>{escape(item.status or item.detail)}</td></tr>"
             for item in block.items
         )
         return (
-            '<table class="ae-ws-evidence"><thead><tr><th>Evidence</th>'
-            f"<th>Result</th><th>Status</th></tr></thead><tbody>{rows}</tbody></table>"
+            '<table class="ae-ws-block ae-ws-evidence"><thead><tr>'
+            '<th scope="col">Evidence</th><th scope="col">Result</th>'
+            f'<th scope="col">Status</th></tr></thead><tbody>{rows}</tbody></table>'
         )
     if block.kind is WorkspaceBlockKind.DISCLOSURE:
-        return f"<details><summary>{escape(block.title)}</summary><p>{escape(block.body)}</p></details>"
+        return (
+            '<details class="ae-ws-block ae-ws-disclosure">'
+            f"<summary>{escape(block.title)}</summary><p>{escape(block.body)}</p></details>"
+        )
     tag = "ol" if block.kind is WorkspaceBlockKind.TIMELINE else "ul"
     rows = "".join(f"<li>{_item_text(item)}</li>" for item in block.items)
-    return f'<{tag} class="ae-ws-list">{rows}</{tag}>'
+    return f'<{tag} class="ae-ws-block ae-ws-list ae-ws-{block.kind.value}">{rows}</{tag}>'
 
 
 def _sections_html(sections: tuple[WorkspaceSection, ...]) -> str:
@@ -212,10 +227,8 @@ def _sections_html(sections: tuple[WorkspaceSection, ...]) -> str:
 
 def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None) -> str:
     """Render one workspace view as self-contained widget HTML."""
-    suffix = (
-        "".join(c for c in (instance_id or "") if c.isascii() and c.isalnum())
-        or uuid.uuid4().hex[:8]
-    )
+    suffix = re.sub(r"[^A-Za-z0-9]+", "-", instance_id or "").strip("-")
+    suffix = suffix or uuid.uuid4().hex[:8]
     root_id = f"attune-workspace-{suffix}"
     css = CSS_WORKSPACE.replace("#attune-workspace", f"#{root_id}")
     summary = f'<p class="ae-ws-summary">{escape(view.summary)}</p>' if view.summary else ""
@@ -229,7 +242,10 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
             submit_label=action.label,
             submit_action=action.id,
             submit_view=view.id.value,
+            submit_title=view.title,
             include_title=False,
+            submit_consequence=action.consequence,
+            requires_explicit_choice=action.requires_explicit_choice,
         )
         actions = ""
     else:
@@ -253,7 +269,12 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
             )
 
         buttons = "".join(action_button(action) for action in view.actions)
-        actions = f'<div class="ae-ws-actions">{buttons}</div>' if buttons else ""
+        actions = (
+            f'<div class="ae-ws-actions">{buttons}</div>'
+            '<p class="ae-ws-dispatch" role="status" aria-live="polite"></p>'
+            if buttons
+            else ""
+        )
         content = ""
     script = ""
     if view.form is None and view.actions:
@@ -269,8 +290,11 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
       view:root.getAttribute('data-workspace-view'),
       action:b.getAttribute('data-workspace-action')}};
     if(typeof sendPrompt==='function'){{
-      sendPrompt('Workspace action submitted — parse this response:\n```json\n'
-        +JSON.stringify(payload)+'\n```');
+      sendPrompt('Workspace action submitted — parse this response:\\n```json\\n'
+        +JSON.stringify(payload)+'\\n```');
+      root.querySelectorAll('[data-workspace-action]').forEach(function(x){{x.disabled=true;}});
+      var status=root.querySelector('.ae-ws-dispatch');
+      if(status)status.textContent='Action submitted.';
     }}
   }});
 }})();</script>"""
@@ -331,6 +355,11 @@ def workspace_to_markdown(view: WorkspaceView) -> str:
             lines += ["", *_block_markdown(block)]
     if view.form is not None:
         action = view.actions[0]
+        if action.requires_explicit_choice:
+            lines += [
+                "",
+                f"**Explicit confirmation required:** {_markdown_text(action.consequence)}",
+            ]
         lines += [
             "",
             form_to_markdown(
@@ -348,4 +377,21 @@ def workspace_to_markdown(view: WorkspaceView) -> str:
             f"{f' — {_markdown_text(action.consequence)}' if action.consequence else ''}"
             for action in view.actions
         )
+        lines += [
+            "",
+            "Reply with the selected `action` value in this payload:",
+            "",
+            "```json",
+            json.dumps(
+                {
+                    WIDGET_RESPONSE_MARKER: True,
+                    "title": view.title,
+                    "view": view.id.value,
+                    "action": None,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            "```",
+        ]
     return "\n".join(lines)
