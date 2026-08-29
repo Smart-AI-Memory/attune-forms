@@ -69,6 +69,7 @@ def test_semantic_state_matrix_is_present() -> None:
         "--ae-danger",
         "--ae-recommendation",
         "--ae-focus",
+        "--ae-space-md",
     ):
         assert role in css
 

@@ -247,7 +247,7 @@ def workspace_to_widget_html(view: WorkspaceView, instance_id: str | None = None
     if(!b||!root.contains(b))return;
     var payload={{{json.dumps(WIDGET_RESPONSE_MARKER)}:true,
       title:{json.dumps(view.title)},action:b.getAttribute('data-workspace-action')}};
-    sendPrompt(JSON.stringify(payload));
+    if(typeof sendPrompt==='function'){{sendPrompt(JSON.stringify(payload));}}
   }});
 }})();</script>"""
     return f'<div id="{root_id}" data-workspace-view="{view.id.value}"><style>{css}</style>{head}{sections}{content}{actions}{script}</div>'
@@ -259,9 +259,13 @@ def _block_markdown(block: WorkspaceBlock) -> list[str]:
     if block.kind is WorkspaceBlockKind.CODE:
         return [f"```{block.language}", block.body.replace("```", "` ` `"), "```"]
     if block.kind is WorkspaceBlockKind.EVIDENCE:
+
+        def cell(value: str) -> str:
+            return value.replace("|", "\\|").replace("\n", "<br>")
+
         rows = ["| Evidence | Result | Status |", "| --- | --- | --- |"]
         rows.extend(
-            f"| {item.label} | {item.value} | {item.status or item.detail} |"
+            f"| {cell(item.label)} | {cell(item.value)} | " f"{cell(item.status or item.detail)} |"
             for item in block.items
         )
         return rows
@@ -287,7 +291,15 @@ def workspace_to_markdown(view: WorkspaceView) -> str:
             lines += ["", *_block_markdown(block)]
     if view.form is not None:
         action = view.actions[0]
-        lines += ["", form_to_markdown(view.form, action=action.id, submit_label=action.label)]
+        lines += [
+            "",
+            form_to_markdown(
+                view.form,
+                action=action.id,
+                submit_label=action.label,
+                include_title=False,
+            ),
+        ]
     elif view.actions:
         lines += ["", "### Actions"]
         lines.extend(

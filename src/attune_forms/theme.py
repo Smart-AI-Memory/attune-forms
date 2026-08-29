@@ -56,6 +56,7 @@ CSS_SEMANTIC_TOKENS = (
     f"--ae-focus:var(--focus-ring,{token('color.light.focus')});\n"
     f"  --ae-radius-control:{token('radius.control')}; "
     f"--ae-radius-panel:{token('radius.panel')};\n"
+    f"  --ae-space-md:{token('spacing.md')};\n"
     f"  --ae-motion-fast:{token('motion.fast')}; "
     f"--ae-motion-normal:{token('motion.normal')}; "
     f"--ae-target-min:{token('control.minimum_target')};\n"

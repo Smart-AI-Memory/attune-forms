@@ -81,6 +81,7 @@ def test_widget_display_actions_post_only_stable_action_id() -> None:
     assert 'data-workspace-action="run_fix" data-explicit="1"' in html
     assert 'data-workspace-action="edit_contract"' in html
     assert "action:b.getAttribute('data-workspace-action')" in html
+    assert "typeof sendPrompt==='function'" in html
     assert "<script>alert" not in html
 
 
@@ -89,10 +90,29 @@ def test_workspace_markdown_preserves_sections_actions_and_form_state() -> None:
     skeleton = json.loads(intake_md.split("```json")[-1].split("```")[0])
     assert skeleton["action"] == "preview_fix"
     assert set(skeleton["answers"])
+    assert intake_md.count("## Fix") == 1
     preview_md = workspace_to_markdown(showcase_views()[1])
     assert "### Contract" in preview_md
     assert "`run_fix` — Run Fix" in preview_md
     assert "Execute the previewed contract" in preview_md
+
+
+def test_workspace_markdown_escapes_evidence_table_cells() -> None:
+    receipt = showcase_views()[-1]
+    evidence = receipt.sections[0].blocks[-1]
+    unsafe = WorkspaceBlock(
+        WorkspaceBlockKind.EVIDENCE,
+        items=(WorkspaceItem("lint | test", "a | b", detail="line 1\nline 2"),),
+    )
+    view = WorkspaceView(
+        id=receipt.id,
+        title=receipt.title,
+        sections=(WorkspaceSection(blocks=(evidence, unsafe)),),
+    )
+    markdown = workspace_to_markdown(view)
+    assert "lint \\| test" in markdown
+    assert "a \\| b" in markdown
+    assert "line 1<br>line 2" in markdown
 
 
 def test_workspace_escapes_all_author_text() -> None:

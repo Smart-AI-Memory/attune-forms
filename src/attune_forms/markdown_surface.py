@@ -352,6 +352,7 @@ def form_to_markdown(
     message: str = "",
     action: str | None = None,
     submit_label: str | None = None,
+    include_title: bool = True,
 ) -> str:
     """Render a declarative form as portable markdown (S4).
 
@@ -369,11 +370,14 @@ def form_to_markdown(
         action: Optional stable host action id added to the answer
             skeleton.
         submit_label: Optional action-specific instruction label.
+        include_title: Whether to emit the form's level-two heading.
+            Workspace renderers disable it because their shell already
+            owns the view heading.
 
     Returns:
         A markdown string ready to relay to any text host.
     """
-    lines = [f"## {form.title}"]
+    lines = [f"## {form.title}"] if include_title else []
     if message:
         lines += ["", message]
     if form.description:
