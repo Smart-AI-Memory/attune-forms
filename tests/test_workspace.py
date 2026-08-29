@@ -11,21 +11,63 @@ import pytest
 
 from attune_forms import (
     WorkspaceAction,
+    WorkspaceActionBinding,
     WorkspaceActionIntent,
     WorkspaceBlock,
     WorkspaceBlockKind,
     WorkspaceItem,
     WorkspaceSection,
+    WorkspaceValidationError,
     WorkspaceView,
     WorkspaceViewId,
+    collect_workspace_action,
     form_from_dict,
     form_to_widget_html,
+    workspace_from_dict,
     workspace_to_markdown,
     workspace_to_widget_html,
 )
 from attune_forms.models import QuestionType
 from attune_forms.tokens import SEMANTIC_TOKENS, token
 from tests.fixtures.workspace_showcase import showcase_views
+
+_CONTRACT_HASH = "a" * 64
+_BINDING = WorkspaceActionBinding(
+    workspace_id="fix-demo",
+    revision=3,
+    action_nonce="nonce_0123456789abcdef",
+    contract_hash=_CONTRACT_HASH,
+)
+
+
+def _preview_definition() -> dict:
+    return {
+        "id": "preview",
+        "title": "Fix preview",
+        "summary": "Nothing has run.",
+        "sections": [
+            {
+                "heading": "Contract",
+                "tone": "neutral",
+                "blocks": [
+                    {
+                        "kind": "key_value",
+                        "items": [{"label": "Outcome", "value": "Repair parsing"}],
+                    }
+                ],
+            }
+        ],
+        "actions": [
+            {
+                "id": "run_fix",
+                "label": "Run Fix",
+                "intent": "primary",
+                "consequence": "Execute the previewed contract.",
+                "requires_explicit_choice": True,
+            },
+            {"id": "edit_contract", "label": "Back to edit"},
+        ],
+    }
 
 
 def test_semantic_token_artifact_is_versioned_and_scalar_lookup_works() -> None:
@@ -67,6 +109,244 @@ def test_workspace_rejects_executable_shape_and_ambiguous_authority() -> None:
         WorkspaceAction("run", "Run", intent="primary")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="view id"):
         WorkspaceView(id="preview", title="T")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("workspace_id", "bad id", "workspace id"),
+        ("revision", True, "revision"),
+        ("revision", -1, "negative"),
+        ("action_nonce", "short", "nonce"),
+        ("contract_hash", "A" * 64, "contract hash"),
+    ],
+)
+def test_workspace_action_binding_rejects_malformed_authority_context(
+    field, value, message
+) -> None:
+    values = {
+        "workspace_id": "fix-demo",
+        "revision": 3,
+        "action_nonce": "nonce_0123456789abcdef",
+        "contract_hash": _CONTRACT_HASH,
+    }
+    values[field] = value
+    with pytest.raises((TypeError, ValueError), match=message):
+        WorkspaceActionBinding(**values)
+
+
+def test_workspace_from_dict_casts_the_closed_document_grammar() -> None:
+    view = workspace_from_dict(_preview_definition())
+    assert view.id is WorkspaceViewId.PREVIEW
+    assert view.sections[0].blocks[0].items[0].value == "Repair parsing"
+    assert [action.id for action in view.actions] == ["run_fix", "edit_contract"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda raw: raw.update({"callback": "run()"}),
+        lambda raw: raw["actions"][0].update({"callback": "run()"}),
+        lambda raw: raw["sections"][0]["blocks"][0].update({"html": "<script>"}),
+    ],
+)
+def test_workspace_from_dict_rejects_every_unknown_definition_key(mutation) -> None:
+    raw = _preview_definition()
+    mutation(raw)
+    with pytest.raises(WorkspaceValidationError, match="unknown definition key"):
+        workspace_from_dict(raw)
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ([], "must be a mapping"),
+        (
+            {
+                "id": "unknown",
+                "title": 7,
+                "summary": [],
+                "sections": "bad",
+                "actions": "bad",
+                "form": "bad",
+            },
+            "must be one of",
+        ),
+        (
+            {
+                "id": "preview",
+                "title": "T",
+                "sections": [7, {"blocks": "bad"}],
+                "actions": [7],
+            },
+            "must be a mapping",
+        ),
+        (
+            {
+                "id": "preview",
+                "title": "T",
+                "sections": [
+                    {
+                        "blocks": [
+                            7,
+                            {"kind": "code"},
+                            {"kind": "timeline", "items": "bad"},
+                            {"kind": "key_value", "items": [7]},
+                        ]
+                    }
+                ],
+            },
+            "requires body",
+        ),
+        (
+            {
+                "id": "preview",
+                "title": "T",
+                "actions": [
+                    {"id": "Bad", "label": "Bad"},
+                    {
+                        "id": "run",
+                        "label": "Run",
+                        "requires_explicit_choice": "yes",
+                    },
+                ],
+            },
+            "action id",
+        ),
+        (
+            {
+                "id": "intake",
+                "title": "T",
+                "form": {"title": "Broken", "fields": []},
+            },
+            "workspace form",
+        ),
+    ],
+)
+def test_workspace_from_dict_reports_malformed_nested_definitions(raw, message) -> None:
+    with pytest.raises(WorkspaceValidationError, match=message):
+        workspace_from_dict(raw)
+
+
+def test_bound_renderers_emit_the_same_action_envelope() -> None:
+    view = workspace_from_dict(_preview_definition())
+    html = workspace_to_widget_html(view, instance_id="bound", binding=_BINDING)
+    assert 'Object.assign(payload,{"workspace_id":"fix-demo","revision":3' in html
+    assert f'"contract_hash":"{_CONTRACT_HASH}"' in html
+    assert "confirmed:explicit" in html
+
+    markdown = workspace_to_markdown(view, binding=_BINDING)
+    skeleton = json.loads(markdown.split("```json")[-1].split("```")[0])
+    assert skeleton == {
+        "__elicitation_response__": True,
+        "title": "Fix preview",
+        "workspace_id": "fix-demo",
+        "revision": 3,
+        "view": "preview",
+        "action": None,
+        "action_nonce": "nonce_0123456789abcdef",
+        "contract_hash": _CONTRACT_HASH,
+        "confirmed": False,
+    }
+
+
+def test_collect_workspace_action_accepts_only_the_bound_rendered_action() -> None:
+    view = workspace_from_dict(_preview_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "run_fix",
+        "confirmed": True,
+        **_BINDING.to_payload(),
+    }
+    response = collect_workspace_action(view, payload, _BINDING)
+    assert response.action == "run_fix"
+    assert response.revision == 3
+    assert response.contract_hash == _CONTRACT_HASH
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("action", "delete_repo", "not allowed"),
+        ("view", "receipt", "view does not match"),
+        ("revision", 2, "revision does not match"),
+        ("action_nonce", "different_0123456789", "nonce does not match"),
+        ("contract_hash", "b" * 64, "contract hash does not match"),
+        ("confirmed", False, "explicit confirmation"),
+    ],
+)
+def test_collect_workspace_action_rejects_stale_or_fabricated_context(key, value, message) -> None:
+    view = workspace_from_dict(_preview_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "run_fix",
+        "confirmed": True,
+        **_BINDING.to_payload(),
+    }
+    payload[key] = value
+    with pytest.raises(WorkspaceValidationError, match=message):
+        collect_workspace_action(view, payload, _BINDING)
+
+
+def test_collect_workspace_action_rejects_unknown_response_keys() -> None:
+    view = workspace_from_dict(_preview_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "edit_contract",
+        "confirmed": False,
+        "callback": "run()",
+    }
+    with pytest.raises(WorkspaceValidationError, match="unknown key 'callback'"):
+        collect_workspace_action(view, payload)
+
+
+def test_collect_workspace_action_accepts_an_unbound_secondary_action() -> None:
+    view = workspace_from_dict(_preview_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "edit_contract",
+        "confirmed": False,
+    }
+    response = collect_workspace_action(view, payload)
+    assert response.action == "edit_contract"
+    assert response.revision is None
+
+
+def test_collect_workspace_action_rejects_unexpected_binding_and_bad_shape() -> None:
+    view = workspace_from_dict(_preview_definition())
+    with pytest.raises(WorkspaceValidationError, match="must be a mapping"):
+        collect_workspace_action(view, "run_fix")
+
+    payload = {
+        "__elicitation_response__": False,
+        "title": "different",
+        "view": view.id.value,
+        "action": None,
+        "confirmed": "yes",
+        **_BINDING.to_payload(),
+    }
+    with pytest.raises(WorkspaceValidationError) as exc:
+        collect_workspace_action(view, payload)
+    assert any(
+        "requires __elicitation_response__=true" in problem for problem in exc.value.problems
+    )
+    assert any("unexpected binding" in problem for problem in exc.value.problems)
+
+
+def test_form_workspace_rejects_action_binding_on_both_renderers() -> None:
+    intake = showcase_views()[0]
+    with pytest.raises(ValueError, match="not valid on a form view"):
+        workspace_to_widget_html(intake, binding=_BINDING)
+    with pytest.raises(ValueError, match="not valid on a form view"):
+        workspace_to_markdown(intake, binding=_BINDING)
 
 
 def test_form_view_requires_exactly_one_submit_action() -> None:
