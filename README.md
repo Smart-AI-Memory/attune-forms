@@ -15,6 +15,22 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
+## What's new in 0.10.0
+
+- **Inline MCP Apps surfaces** — hosts that advertise the standard MCP
+  Apps capability can discover and render Attune forms and command
+  workspaces directly in the conversation from one shared `ui://` resource.
+- **Validated interactive round trips** — a click is never treated as
+  authority. The embedded surface sends it through the existing server-side
+  collector, and only a successful validated result reaches model context.
+- **Portable by construction** — hosts without MCP Apps keep the same native,
+  structured-text, and Markdown paths. Partial support is named visibly so a
+  rendered control never fails silently.
+
+This is the provider-neutral transport layer. Individual agent products still
+choose whether to render it inline, open it as a browser artifact, or use the
+fallback that matches their advertised capabilities.
+
 ## Install
 
 **As a Claude Code plugin** (skill + MCP server, no Python setup):
@@ -44,7 +60,7 @@ parsed back into the same validator.
 pip install attune-forms
 ```
 
-Python 3.10+, one runtime dependency (structlog), 610+ tests, CI on
+Python 3.10+, one runtime dependency (structlog), 880+ tests, CI on
 Linux/macOS/Windows. Apache 2.0.
 
 ## The grammar

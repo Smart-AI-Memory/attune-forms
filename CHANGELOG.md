@@ -6,6 +6,8 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-30
+
 ### Added
 - **Portable MCP Apps transport** — capability-aware tool metadata links
   form and workspace renderers to one self-contained `ui://` resource.
