@@ -207,14 +207,20 @@ wearing a new construct.
 
 ## Choosing a surface
 
-1. **Widget host** (the client renders HTML): call
-   `elicitation_render_widget` and show the returned `html`. The form
-   posts answers back as a JSON block marked
+1. **MCP Apps host**: call `elicitation_render_widget` (or
+   `elicitation_render_workspace`). After capability negotiation the host
+   discovers the linked `ui://attune-forms/dynamic-surface/v1` resource and
+   renders it inline. Its actions call the named server-side collector; only
+   a validated result is offered back to model context. If the embedded view
+   names a missing submission or continuation capability, continue with the
+   native or text path below — do not treat the rendered click as authority.
+2. **Legacy widget host** (the client renders returned HTML): show the
+   returned `html`. The form posts answers back as a JSON block marked
    `__elicitation_response__` — parse it and validate with
    `elicitation_collect_response`.
-2. **Native elicitation host**: call `elicitation_ask`; on
-   `action: "unsupported"`, fall back to (3).
-3. **Plain conversation**: call `elicitation_render_form` and map each
+3. **Native elicitation host**: call `elicitation_ask`; on
+   `action: "unsupported"`, fall back to (4).
+4. **Plain conversation**: call `elicitation_render_form` and map each
    batched payload to your host's question tool (or plain prose):
    recommendation-first ordering, `multi_select` → multi-select,
    constructs → single-select with the recommended option first and
@@ -222,7 +228,7 @@ wearing a new construct.
    pre-expanded as one single-select per item; a ranking as one
    single-select per rank slot; an assumption review as one
    single-select per assumption plus its paired text question).
-4. **No widget, no question tool** (text-only hosts): render the form
+5. **No widget, no question tool** (text-only hosts): render the form
    with `form_to_markdown` (library) and relay the markdown verbatim.
    It ends with a JSON answer skeleton — the widget's exact postback
    shape — and documents the line shorthand (`field_id: value`,

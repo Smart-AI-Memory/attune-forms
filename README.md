@@ -31,9 +31,11 @@ and serves six MCP tools — `elicitation_render_form`,
 `elicitation_collect_workspace_action` — from this package via `uvx`. Decision cards,
 pushback cards, progress forms, deliberation cards, triage boards,
 confirm gates, ranking lists, and assumption reviews work out of the
-box; rich HTML renders where the host
-supports widgets, degrades to plain questions where it doesn't, and
-renders as portable markdown on text-only hosts — with typed replies
+box. MCP Apps hosts discover one shared `ui://` resource, render the
+rich surface inline, send user actions through the same server-side
+validator, and return the validated result to the conversation. Other
+hosts degrade to plain questions where possible and render as portable
+markdown on text-only hosts — with typed replies
 parsed back into the same validator.
 
 **As a Python library:**
@@ -102,6 +104,13 @@ if select_form_surface(form) == "widget":
 
 ## One schema, every surface
 
+- **MCP Apps transport** — capable hosts advertise
+  `io.modelcontextprotocol/ui`, receive UI metadata only after that
+  negotiation, and render the shared `ui://attune-forms/dynamic-surface/v1`
+  resource. App submissions call the existing collector tools; only a
+  successful validated result is offered back to model context. Hosts
+  missing app-to-server or app-to-chat capabilities show an explicit
+  manual-continuation state rather than a dead control.
 - **Renderers** — `form_to_widget_html` (self-contained interactive
   widget with postback), `form_to_askuserquestion` (batched payloads),
   `form_to_elicitation_schema` (native MCP elicitation), and

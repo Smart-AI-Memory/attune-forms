@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Portable MCP Apps transport** — capability-aware tool metadata links
+  form and workspace renderers to one self-contained `ui://` resource.
+  User actions post back through the existing validation tools, and only
+  validated results are offered to host model context. Non-supporting and
+  partially supporting hosts retain the meaningful structured/text result
+  and name the manual fallback visibly.
+
 ## [0.9.1] — 2026-08-29
 
 ### Added
