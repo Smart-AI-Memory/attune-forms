@@ -17,7 +17,15 @@ import pytest
 mcp = pytest.importorskip("mcp")
 
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
+from mcp import types as mcp_types  # noqa: E402
 from mcp.client.stdio import get_default_environment, stdio_client  # noqa: E402
+from mcp.shared.version import LATEST_PROTOCOL_VERSION  # noqa: E402
+
+from attune_forms.mcp_app import (  # noqa: E402
+    MCP_APP_MIME_TYPE,
+    MCP_APP_RESOURCE_URI,
+    MCP_APPS_EXTENSION,
+)
 
 _SRC = str(Path(__file__).resolve().parents[1] / "src")
 
@@ -89,6 +97,38 @@ def _payload(result) -> dict:
     return json.loads(text)
 
 
+class _McpAppsClientSession(ClientSession):
+    """ClientSession that advertises the official MCP Apps extension."""
+
+    async def initialize(self) -> mcp_types.InitializeResult:
+        capabilities = mcp_types.ClientCapabilities.model_validate(
+            {
+                "extensions": {
+                    MCP_APPS_EXTENSION: {
+                        "mimeTypes": [MCP_APP_MIME_TYPE],
+                    }
+                }
+            }
+        )
+        result = await self.send_request(
+            mcp_types.ClientRequest(
+                mcp_types.InitializeRequest(
+                    params=mcp_types.InitializeRequestParams(
+                        protocolVersion=LATEST_PROTOCOL_VERSION,
+                        capabilities=capabilities,
+                        clientInfo=self._client_info,
+                    )
+                )
+            ),
+            mcp_types.InitializeResult,
+        )
+        self._server_capabilities = result.capabilities
+        await self.send_notification(
+            mcp_types.ClientNotification(mcp_types.InitializedNotification())
+        )
+        return result
+
+
 async def _round_trip(home: Path) -> dict[str, dict]:
     out: dict[str, dict] = {}
     async with stdio_client(_server_params(home)) as (read, write):
@@ -156,9 +196,41 @@ async def _round_trip(home: Path) -> dict[str, dict]:
     return out
 
 
+async def _mcp_apps_round_trip(home: Path) -> dict[str, object]:
+    out: dict[str, object] = {}
+    async with stdio_client(_server_params(home)) as (read, write):
+        async with _McpAppsClientSession(read, write) as session:
+            initialized = await session.initialize()
+            out["server_capabilities"] = initialized.capabilities.model_dump(
+                by_alias=True, exclude_none=True
+            )
+
+            tools = await session.list_tools()
+            out["tool_meta"] = {tool.name: tool.meta for tool in tools.tools}
+
+            resources = await session.list_resources()
+            out["resource_uris"] = [str(resource.uri) for resource in resources.resources]
+            resource = await session.read_resource(resources.resources[0].uri)
+            out["resource"] = resource.contents[0]
+
+            rendered = await session.call_tool("elicitation_render_widget", {"form": _FORM})
+            out["render_widget"] = _payload(rendered)
+            workspace = await session.call_tool(
+                "elicitation_render_workspace",
+                {"workspace": _WORKSPACE, "binding": _BINDING},
+            )
+            out["render_workspace"] = _payload(workspace)
+    return out
+
+
 @pytest.fixture(scope="module")
 def round_trip(tmp_path_factory):
     return asyncio.run(_round_trip(tmp_path_factory.mktemp("attune-home")))
+
+
+@pytest.fixture(scope="module")
+def mcp_apps_round_trip(tmp_path_factory):
+    return asyncio.run(_mcp_apps_round_trip(tmp_path_factory.mktemp("attune-app-home")))
 
 
 def test_all_six_tools_listed(round_trip):
@@ -221,6 +293,41 @@ def test_workspace_tools_round_trip_over_real_stdio(round_trip):
     stale = round_trip["collect_workspace_stale"]
     assert stale["success"] is False
     assert any("revision does not match" in problem for problem in stale["problems"])
+
+
+def test_mcp_apps_negotiates_resource_metadata_and_transport_over_real_stdio(
+    mcp_apps_round_trip,
+) -> None:
+    extensions = mcp_apps_round_trip["server_capabilities"]["extensions"]
+    assert extensions[MCP_APPS_EXTENSION]["mimeTypes"] == [MCP_APP_MIME_TYPE]
+
+    tool_meta = mcp_apps_round_trip["tool_meta"]
+    assert tool_meta["elicitation_render_widget"]["ui"]["resourceUri"] == MCP_APP_RESOURCE_URI
+    assert tool_meta["elicitation_render_workspace"]["ui"]["resourceUri"] == MCP_APP_RESOURCE_URI
+    assert tool_meta["elicitation_render_form"] is None
+
+    assert mcp_apps_round_trip["resource_uris"] == [MCP_APP_RESOURCE_URI]
+    resource = mcp_apps_round_trip["resource"]
+    assert resource.mimeType == MCP_APP_MIME_TYPE
+    assert "ui/notifications/tool-result" in resource.text
+
+    form = mcp_apps_round_trip["render_widget"]
+    assert form["mcp_app"]["collect_tool"] == "elicitation_collect_response"
+    assert form["mcp_app"]["collect_mode"] == "form"
+    workspace = mcp_apps_round_trip["render_workspace"]
+    assert workspace["mcp_app"]["collect_tool"] == "elicitation_collect_workspace_action"
+    assert workspace["mcp_app"]["collect_mode"] == "workspace"
+
+
+def test_non_ui_client_gets_no_ui_metadata_but_keeps_meaningful_result(round_trip) -> None:
+    from attune_forms.mcp_server import tool_definitions
+
+    tools = {tool.name: tool for tool in tool_definitions()}
+    assert tools["elicitation_render_widget"].meta is None
+    rendered = round_trip["render_widget"]
+    assert rendered["success"] is True
+    assert rendered["html"]
+    assert rendered["mcp_app"]["collect_mode"] == "form"
 
 
 def test_workspace_handlers_preserve_the_problems_contract_on_import() -> None:

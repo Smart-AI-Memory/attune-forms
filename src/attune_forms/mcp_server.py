@@ -27,6 +27,7 @@ from typing import Any
 
 import mcp.types as types
 from mcp.server import Server
+from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
 
 from attune_forms.bridge import (
@@ -40,6 +41,14 @@ from attune_forms.bridge import (
 )
 from attune_forms.elicitation_schema import form_to_elicitation_schema
 from attune_forms.form_events import log_submission, maybe_keyboard_hint
+from attune_forms.mcp_app import (
+    MCP_APP_MIME_TYPE,
+    MCP_APPS_EXTENSION,
+    client_supports_mcp_apps,
+    mcp_app_resource,
+    mcp_app_result,
+    mcp_app_tool_meta,
+)
 from attune_forms.widget import form_to_widget_html
 from attune_forms.workspace import (
     WorkspaceActionBinding,
@@ -339,11 +348,12 @@ def _workspace_response_schema() -> dict[str, Any]:
     }
 
 
-def tool_definitions() -> list[types.Tool]:
+def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
     """The mirrored tools (names/schemas match attune-ai\'s server)."""
     form = _form_schema()
     workspace = _workspace_schema()
     binding = _workspace_binding_schema()
+    app_meta = mcp_app_tool_meta() if mcp_apps else None
     return [
         types.Tool(
             name="elicitation_render_form",
@@ -376,6 +386,7 @@ def tool_definitions() -> list[types.Tool]:
                 },
                 "required": ["form"],
             },
+            **({"_meta": app_meta} if app_meta else {}),
         ),
         types.Tool(
             name="elicitation_collect_response",
@@ -429,6 +440,7 @@ def tool_definitions() -> list[types.Tool]:
                 "required": ["workspace"],
                 "additionalProperties": False,
             },
+            **({"_meta": app_meta} if app_meta else {}),
         ),
         types.Tool(
             name="elicitation_collect_workspace_action",
@@ -498,6 +510,10 @@ async def handle_render_widget(args: dict[str, Any]) -> dict[str, Any]:
         "html": form_to_widget_html(form, args.get("message") or ""),
         "title": form.title,
         "field_ids": [q.id for q in form.questions],
+        "mcp_app": mcp_app_result(
+            collect_tool="elicitation_collect_response",
+            collect_mode="form",
+        ),
     }
 
 
@@ -578,6 +594,10 @@ async def handle_render_workspace(args: dict[str, Any]) -> dict[str, Any]:
         "view": view.id.value,
         "action_ids": [action.id for action in view.actions],
         "bound": binding is not None,
+        "mcp_app": mcp_app_result(
+            collect_tool="elicitation_collect_workspace_action",
+            collect_mode="workspace",
+        ),
     }
 
 
@@ -663,7 +683,11 @@ _HANDLERS = {
 
 @_server.list_tools()
 async def _list_tools() -> list[types.Tool]:
-    return tool_definitions()
+    try:
+        capabilities = _server.request_context.session.client_params.capabilities
+    except (AttributeError, LookupError, RuntimeError):
+        capabilities = None
+    return tool_definitions(mcp_apps=client_supports_mcp_apps(capabilities))
 
 
 @_server.call_tool()
@@ -674,9 +698,48 @@ async def _call_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, A
     return await handler(arguments or {})
 
 
+@_server.list_resources()
+async def _list_resources() -> list[types.Resource]:
+    resource = mcp_app_resource()
+    return [
+        types.Resource(
+            uri=resource["uri"],
+            name=resource["name"],
+            description=resource["description"],
+            mimeType=resource["mime_type"],
+            **{"_meta": resource["meta"]},
+        )
+    ]
+
+
+@_server.read_resource()
+async def _read_resource(uri: Any) -> list[ReadResourceContents]:
+    resource = mcp_app_resource()
+    if str(uri) != resource["uri"]:
+        raise ValueError(f"Unknown resource: {uri}")
+    return [
+        ReadResourceContents(
+            content=resource["text"],
+            mime_type=resource["mime_type"],
+        )
+    ]
+
+
+def _initialization_options() -> Any:
+    """Advertise the stable MCP Apps extension alongside core MCP."""
+    options = _server.create_initialization_options()
+    extensions = {
+        MCP_APPS_EXTENSION: {
+            "mimeTypes": [MCP_APP_MIME_TYPE],
+        }
+    }
+    capabilities = options.capabilities.model_copy(update={"extensions": extensions})
+    return options.model_copy(update={"capabilities": capabilities})
+
+
 async def _run() -> None:
     async with stdio_server() as (read, write):
-        await _server.run(read, write, _server.create_initialization_options())
+        await _server.run(read, write, _initialization_options())
 
 
 def main() -> None:

@@ -72,6 +72,16 @@ from attune_forms.intake_template import (
 )
 from attune_forms.markdown_ingestion import markdown_to_answers, problems_to_markdown
 from attune_forms.markdown_surface import form_to_markdown
+from attune_forms.mcp_app import (
+    MCP_APP_MIME_TYPE,
+    MCP_APP_PROTOCOL_VERSION,
+    MCP_APP_RESOURCE_URI,
+    MCP_APPS_EXTENSION,
+    client_supports_mcp_apps,
+    mcp_app_resource,
+    mcp_app_result,
+    mcp_app_tool_meta,
+)
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     FormQuestion,
@@ -138,6 +148,14 @@ __all__ = [
     "keyboard_mode_enabled",
     "list_templates",
     "markdown_to_answers",
+    "MCP_APPS_EXTENSION",
+    "MCP_APP_MIME_TYPE",
+    "MCP_APP_PROTOCOL_VERSION",
+    "MCP_APP_RESOURCE_URI",
+    "client_supports_mcp_apps",
+    "mcp_app_resource",
+    "mcp_app_result",
+    "mcp_app_tool_meta",
     "needs_widget",
     "problems_to_markdown",
     "select_form_surface",
