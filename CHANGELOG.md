@@ -6,6 +6,13 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `attune_forms.bridge.form_to_widget_html` now resolves lazily from the
+  bridge namespace alongside `form_to_askuserquestion`. The package root
+  remains the preferred import path; lazy resolution preserves the existing
+  bridge-to-widget dependency direction and avoids a circular import.
+
 ## [0.11.1] — 2026-08-31
 
 ### Fixed
