@@ -15,17 +15,15 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
-## What's new in 0.10.0
+## What's new in 0.11.0
 
-- **Inline MCP Apps surfaces** — hosts that advertise the standard MCP
-  Apps capability can discover and render Attune forms and command
-  workspaces directly in the conversation from one shared `ui://` resource.
-- **Validated interactive round trips** — a click is never treated as
-  authority. The embedded surface sends it through the existing server-side
-  collector, and only a successful validated result reaches model context.
-- **Portable by construction** — hosts without MCP Apps keep the same native,
-  structured-text, and Markdown paths. Partial support is named visibly so a
-  rendered control never fails silently.
+- **Project path fields** — text fields can opt into a Browse button with
+  host-supplied, project-relative file and folder choices.
+- **Searchable, accessible picker** — the widget modal filters paths, supports
+  Escape/backdrop closing and focus return, and avoids native-dialog browser
+  inconsistencies.
+- **Portable fallback** — native and text-only hosts keep ordinary manual path
+  entry while server-side validation remains authoritative.
 
 This is the provider-neutral transport layer. Individual agent products still
 choose whether to render it inline, open it as a browser artifact, or use the

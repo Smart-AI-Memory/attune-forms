@@ -522,7 +522,31 @@ def _control_text_input_html(q: FormQuestion) -> str:
     """Render TEXT_INPUT — also the fallback for any other type."""
     maxlen = f' maxlength="{_esc(q.max_length)}"' if q.max_length else ""
     default = f' value="{_esc(q.default)}"' if q.default is not None else ""
-    return f'<input type="text" data-control class="ae-input"{maxlen}{default}>'
+    control = f'<input type="text" data-control class="ae-input"{maxlen}{default}>'
+    if not q.path_kind:
+        return control
+    control = control.replace("ae-input", "ae-input ae-path-value", 1)
+    choices = "".join(
+        f'<button type="button" class="ae-path-choice" data-path-choice="{_esc(path)}">'
+        f'<span class="ae-path-icon" aria-hidden="true">›</span>{_esc(path)}</button>'
+        for path in q.path_options
+    )
+    empty = "" if choices else '<p class="ae-path-empty">No project paths were supplied.</p>'
+    kind = {"file": "file", "directory": "folder", "either": "path"}.get(q.path_kind, "path")
+    return (
+        f'<div class="ae-path-control">{control}'
+        f'<button type="button" class="ae-path-open" data-path-open>Browse…</button></div>'
+        f'<div class="ae-path-dialog" role="dialog" aria-modal="true" hidden>'
+        f'<div class="ae-path-panel"><div class="ae-path-head">'
+        f'<div class="ae-path-title"><strong>Choose a project {kind}</strong>'
+        f"<span>Paths are relative to the project root</span></div>"
+        f'<button type="button" class="ae-path-close" data-path-close '
+        f'aria-label="Close">×</button></div>'
+        f'<div class="ae-path-search"><input type="search" '
+        f'class="ae-input ae-path-filter" data-path-filter '
+        f'placeholder="Filter project paths…"></div>'
+        f'<div class="ae-path-list">{choices}{empty}</div></div></div>'
+    )
 
 
 #: Per-type control renderers. PROGRESS is special-cased in
@@ -683,6 +707,8 @@ def _families_for(question: FormQuestion) -> set[str]:
         return {"LIST"} if question.list_style else {"CHECKS"}
     if qtype == QuestionType.SINGLE_SELECT:
         return {"LIST"} if question.list_style else {"INPUT"}
+    if question.path_kind:
+        return {"INPUT", "PATH"}
     return {"INPUT"}  # boolean, number, date, textarea, text_input, fallback
 
 
@@ -805,6 +831,7 @@ def form_to_widget_html(
   var form = document.getElementById('{form_id}');
   var btn = document.getElementById('ae-submit-{sfx}');
   var err = document.getElementById('ae-error-{sfx}');
+  var pathOpener = null;
   if (!form || !btn) return;
   // Ranking controls: move a row between the pool and the ranked list,
   // or within the ranked list. Pure DOM moves — the ranked list's order
@@ -818,6 +845,40 @@ def form_to_widget_html(
     if (row) row.classList.toggle('ae-assume-editing', radio.value === 'edit');
   }});
   form.addEventListener('click', function(e) {{
+    var open = e.target.closest ? e.target.closest('[data-path-open]') : null;
+    if (open && form.contains(open)) {{
+      var field = open.closest('.ae-field'), dialog = field.querySelector('.ae-path-dialog');
+      if (dialog) {{
+        pathOpener = open;
+        dialog.hidden = false;
+        var filter = dialog.querySelector('[data-path-filter]');
+        if (filter) filter.focus();
+      }}
+      return;
+    }}
+    var close = e.target.closest ? e.target.closest('[data-path-close]') : null;
+    if (close && form.contains(close)) {{
+      var dialog = close.closest('.ae-path-dialog');
+      if (dialog) dialog.hidden = true;
+      if (pathOpener) pathOpener.focus();
+      return;
+    }}
+    var choice = e.target.closest ? e.target.closest('[data-path-choice]') : null;
+    if (choice && form.contains(choice)) {{
+      var field = choice.closest('.ae-field');
+      var input = field.querySelector('[data-control]');
+      var dialog = choice.closest('.ae-path-dialog');
+      if (input) input.value = choice.getAttribute('data-path-choice');
+      if (dialog) dialog.hidden = true;
+      if (input) input.focus();
+      return;
+    }}
+    var backdrop = e.target.closest ? e.target.closest('.ae-path-dialog') : null;
+    if (backdrop && e.target === backdrop) {{
+      backdrop.hidden = true;
+      if (pathOpener) pathOpener.focus();
+      return;
+    }}
     var b = e.target.closest ? e.target.closest('[data-rank]') : null;
     if (!b || !form.contains(b)) return;
     var row = b.closest('.ae-rank-row'), box = b.closest('.ae-rank');
@@ -836,6 +897,21 @@ def form_to_widget_html(
     }}
     var count = box.querySelector('.ae-rank-count');
     if (count) count.textContent = ranked.children.length;
+  }});
+  form.addEventListener('keydown', function(e) {{
+    if (e.key !== 'Escape') return;
+    var dialog = form.querySelector('.ae-path-dialog:not([hidden])');
+    if (!dialog) return;
+    dialog.hidden = true;
+    if (pathOpener) pathOpener.focus();
+  }});
+  form.addEventListener('input', function(e) {{
+    if (!e.target.hasAttribute || !e.target.hasAttribute('data-path-filter')) return;
+    var query = e.target.value.toLowerCase();
+    var dialog = e.target.closest('.ae-path-dialog');
+    dialog.querySelectorAll('[data-path-choice]').forEach(function(choice) {{
+      choice.hidden = choice.getAttribute('data-path-choice').toLowerCase().indexOf(query) < 0;
+    }});
   }});
   btn.addEventListener('click', function() {{
     var answers = {{}};

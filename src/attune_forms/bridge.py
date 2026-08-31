@@ -860,6 +860,8 @@ _DEFINITION_FIELD_KEYS = frozenset(
         "inferred_from",
         "top_n",
         "assumptions",
+        "path_kind",
+        "path_options",
     }
 )
 
@@ -1014,6 +1016,25 @@ def form_from_dict(data: dict[str, Any], *, source: str = "dict") -> FormSchema:
         inferred_from, inferred_problems = _parse_inferred_from(where, raw)
         problems.extend(inferred_problems)
 
+        path_kind = raw.get("path_kind")
+        path_options = raw.get("path_options", [])
+        if path_kind is not None and path_kind not in {"file", "directory", "either"}:
+            problems.append(f"{where} 'path_kind' must be 'file', 'directory', or 'either'")
+        if not isinstance(path_options, list) or any(
+            not isinstance(path, str) or not path.strip() for path in path_options
+        ):
+            problems.append(f"{where} 'path_options' must be a list of non-empty strings")
+            path_options = []
+        elif len(path_options) != len(set(path_options)):
+            problems.append(f"{where} 'path_options' entries must be unique")
+        if path_options and path_kind is None:
+            problems.append(f"{where} 'path_options' requires 'path_kind'")
+        if path_kind is not None and qtype not in {
+            QuestionType.TEXT_INPUT,
+            QuestionType.TEXTAREA,
+        }:
+            problems.append(f"{where} 'path_kind' is only valid for text fields")
+
         if fid and text and isinstance(fid, str) and isinstance(text, str):
             question = FormQuestion(
                 id=fid,
@@ -1041,6 +1062,8 @@ def form_from_dict(data: dict[str, Any], *, source: str = "dict") -> FormSchema:
                 inferred_from=inferred_from,
                 top_n=top_n,
                 assumptions=assumptions,
+                path_kind=path_kind,
+                path_options=path_options,
             )
             # R4 applies to the definition too: a `default` is a
             # pre-supplied answer, so it passes the same per-type

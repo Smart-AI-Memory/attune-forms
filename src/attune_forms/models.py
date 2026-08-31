@@ -414,6 +414,8 @@ class FormQuestion:
     inferred_from: str | None = None
     top_n: int | None = None
     assumptions: list[dict[str, str]] | None = None
+    path_kind: str | None = None
+    path_options: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Default a CONFIRM's options to the two-way gate.

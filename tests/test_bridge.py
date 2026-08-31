@@ -86,6 +86,32 @@ class TestFormFromDict:
         q = form_from_dict(data).questions[0]
         assert q.default == "x" and q.help_text == "h" and q.required is False
 
+    def test_path_picker_metadata_passthrough(self):
+        data = {
+            "title": "T",
+            "fields": [
+                {
+                    "id": "scope",
+                    "text": "Scope?",
+                    "type": "text_input",
+                    "path_kind": "either",
+                    "path_options": ["src/a.py", "tests"],
+                }
+            ],
+        }
+        q = form_from_dict(data).questions[0]
+        assert q.path_kind == "either"
+        assert q.path_options == ["src/a.py", "tests"]
+
+    @pytest.mark.parametrize("kind", ["filesystem", "", 1])
+    def test_rejects_invalid_path_kind(self, kind):
+        data = {
+            "title": "T",
+            "fields": [{"id": "scope", "text": "Scope?", "type": "text_input", "path_kind": kind}],
+        }
+        with pytest.raises(FormValidationError, match="path_kind"):
+            form_from_dict(data)
+
     def test_not_a_mapping(self):
         with pytest.raises(FormValidationError, match="mapping"):
             form_from_dict(["nope"])  # type: ignore[arg-type]

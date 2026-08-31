@@ -84,6 +84,27 @@ class TestControls:
         html = _render([{"id": "a", "text": "A?", "type": "text_input"}])
         assert '<input type="text"' in html
 
+    def test_path_input_renders_searchable_project_picker(self):
+        html = _render(
+            [
+                {
+                    "id": "scope",
+                    "text": "Scope?",
+                    "type": "text_input",
+                    "path_kind": "directory",
+                    "path_options": ["src", "tests/unit"],
+                }
+            ]
+        )
+        assert "Browse…" in html
+        assert 'class="ae-path-dialog" role="dialog" aria-modal="true" hidden' in html
+        assert 'data-path-choice="tests/unit"' in html
+        assert "data-path-filter" in html
+        assert "Paths are relative to the project root" in html
+        assert "showModal" not in html
+        assert "e.key !== 'Escape'" in html
+        assert "pathOpener.focus()" in html
+
     def test_textarea_renders_textarea(self):
         html = _render([{"id": "a", "text": "A?", "type": "textarea", "max_length": 200}])
         assert "<textarea" in html
