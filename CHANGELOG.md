@@ -6,6 +6,24 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-08-30
+
+Project path selection becomes a reusable form capability while preserving
+manual entry and portable fallbacks.
+
+### Added
+- **Path-aware text fields** — `path_kind` selects file, directory, or either,
+  while `path_options` carries host-validated project-relative choices.
+- **Searchable Browse modal** — widget forms render a polished, accessible path
+  picker with Safari/Chrome-compatible overlay behavior, filtering, Escape and
+  backdrop closing, focus management, and escaped option labels.
+- **Template support** — `FieldSlot.path_kind` lets intake templates request
+  the same picker without post-build mutation or form-id drift.
+
+### Changed
+- `FORM_THEME_CSS` budget raised 12 KB → 16 KB for the isolated path-picker
+  family (chair-ratified 2026-08-30); forms without path fields do not emit it.
+
 ## [0.10.0] — 2026-08-30
 
 ### Added

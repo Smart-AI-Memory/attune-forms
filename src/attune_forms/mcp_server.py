@@ -132,6 +132,16 @@ def _field_schema() -> dict[str, Any]:
             "minimum": {"type": "number"},
             "maximum": {"type": "number"},
             "max_length": {"type": "integer"},
+            "path_kind": {
+                "type": "string",
+                "enum": ["file", "directory", "either"],
+                "description": "Enable a project-relative path picker for this text field",
+            },
+            "path_options": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Host-validated project-relative paths offered by the picker",
+            },
             "rationale": {"type": "string"},
             "recommended": {"type": "string"},
             "option_notes": {"type": "object"},

@@ -97,6 +97,7 @@ class FieldSlot:
     help_text: str | None = None
     required: bool | None = None
     default: str | None = None
+    path_kind: str | None = None
 
 
 @dataclass
@@ -193,6 +194,12 @@ def _slot_field(
             candidates = overrides[slot.key]
         else:
             candidates = PROVIDERS[slot.provider](ctx)
+        if slot.path_kind is not None:
+            base["type"] = slot.control or "text_input"
+            base["path_kind"] = slot.path_kind
+            base["path_options"] = list(candidates)
+            base.setdefault("required", True)
+            return base
         if candidates:
             base["type"] = slot.control or "single_select"
             base["options"] = [*candidates, slot.other] if slot.other else list(candidates)

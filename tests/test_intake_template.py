@@ -244,3 +244,27 @@ class TestConfirmationPass2:
         t = FormTemplate("T", "d", [FieldSlot(key="k", text="q?")])
         ctx = ProviderContext(repo_root=Path("/nonexistent"), answered={"k": float("nan")})
         assert build_form(t, ctx).questions[0].default is None
+
+
+def test_path_slot_keeps_text_entry_and_exposes_provider_candidates() -> None:
+    PROVIDERS["_project_paths"] = lambda _ctx: ["src", "tests/unit"]
+    try:
+        template = FormTemplate(
+            title="Path",
+            description="",
+            fields=[
+                FieldSlot(
+                    key="scope",
+                    text="Scope?",
+                    control="text_input",
+                    provider="_project_paths",
+                    path_kind="either",
+                )
+            ],
+        )
+        question = build_form(template, ProviderContext(repo_root=Path("."))).questions[0]
+        assert question.type.value == "text_input"
+        assert question.path_kind == "either"
+        assert question.path_options == ["src", "tests/unit"]
+    finally:
+        del PROVIDERS["_project_paths"]

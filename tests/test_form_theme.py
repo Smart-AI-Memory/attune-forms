@@ -14,7 +14,8 @@ from attune_forms.tokens import token
 #: merge, 8,158 B; 8 KB -> 10 KB ratified 2026-08-15, ranking-construct
 #: decisions.md D2-a — a consolidation pass was offered and NOT chosen,
 #: so the cap is not a ratchet: the next raise needs its own ruling).
-_BUDGET_BYTES = 12288
+# Chair-ratified 2026-08-30: 12 KB -> 16 KB for the path-picker family.
+_BUDGET_BYTES = 16384
 _WORKSPACE_BUDGET_BYTES = 6144
 
 #: ``var(--name)`` with NO fallback value — the pattern the theme
