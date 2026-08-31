@@ -6,6 +6,13 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-08-31
+
+### Fixed
+- Consequential workspace actions now use an inline two-click confirmation
+  instead of `window.confirm`, which is unavailable in sandboxed MCP App
+  hosts. Choosing another action disarms and restores the pending action.
+
 ## [0.11.0] — 2026-08-30
 
 Project path selection becomes a reusable form capability while preserving
