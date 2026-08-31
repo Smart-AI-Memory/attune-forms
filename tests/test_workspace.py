@@ -393,7 +393,9 @@ def test_widget_display_actions_post_only_stable_action_id() -> None:
     assert 'data-workspace-action="edit_contract"' in html
     assert "action:b.getAttribute('data-workspace-action')" in html
     assert "typeof sendPrompt==='function'" in html
-    assert "window.confirm(consequence)" in html
+    assert "window.confirm" not in html
+    assert "data-confirm-armed" in html
+    assert "Click again to confirm." in html
     assert 'data-consequence="Execute the previewed contract."' in html
     assert "Workspace action submitted" in html
     assert "view:root.getAttribute('data-workspace-view')" in html
@@ -409,6 +411,84 @@ def test_widget_display_action_script_parses() -> None:
     result = subprocess.run(
         ["node", "--check"],
         input=script.group(1),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_consequential_action_requires_two_clicks_and_other_action_disarms() -> None:
+    html = workspace_to_widget_html(showcase_views()[1], instance_id="two-click")
+    script = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
+    assert script is not None
+    harness = f"""
+const assert = require('node:assert/strict');
+const listeners = {{}};
+const sent = [];
+function button(action, label, explicit, consequence) {{
+  const attrs = {{'data-workspace-action': action}};
+  if (explicit) attrs['data-explicit'] = '1';
+  if (consequence) attrs['data-consequence'] = consequence;
+  return {{
+    textContent: label,
+    disabled: false,
+    getAttribute: function (name) {{ return attrs[name] || null; }},
+    setAttribute: function (name, value) {{ attrs[name] = value; }},
+    removeAttribute: function (name) {{ delete attrs[name]; }}
+  }};
+}}
+const edit = button('edit_contract', 'Edit contract', false, null);
+const run = button('run_fix', 'Run Fix', true, 'Execute the previewed contract.');
+const status = {{textContent: ''}};
+const root = {{
+  addEventListener: function (name, callback) {{ listeners[name] = callback; }},
+  contains: function () {{ return true; }},
+  getAttribute: function (name) {{
+    return name === 'data-workspace-title' ? 'Fix preview' : 'preview';
+  }},
+  querySelector: function () {{ return status; }},
+  querySelectorAll: function (selector) {{
+    if (selector === '[data-workspace-action]') return [edit, run];
+    if (selector === '[data-explicit="1"][data-confirm-armed="1"]') {{
+      return run.getAttribute('data-confirm-armed') === '1' ? [run] : [];
+    }}
+    return [];
+  }}
+}};
+global.document = {{getElementById: function () {{ return root; }}}};
+global.sendPrompt = function (value) {{ sent.push(value); }};
+eval({json.dumps(script.group(1))});
+function click(target) {{
+  listeners.click({{
+    target: {{closest: function () {{ return target; }}}}
+  }});
+}}
+click(run);
+assert.equal(sent.length, 0);
+assert.equal(run.textContent, 'Confirm Run Fix');
+assert.equal(run.getAttribute('data-confirm-armed'), '1');
+assert.match(status.textContent, /Click again to confirm/);
+click(run);
+assert.equal(sent.length, 1);
+assert.match(sent[0], /"action":"run_fix"/);
+assert.match(sent[0], /"confirmed":true/);
+
+run.disabled = false;
+run.removeAttribute('data-confirm-armed');
+run.textContent = 'Run Fix';
+sent.length = 0;
+click(run);
+click(edit);
+assert.equal(run.textContent, 'Run Fix');
+assert.equal(run.getAttribute('data-confirm-armed'), null);
+assert.equal(sent.length, 1);
+assert.match(sent[0], /"action":"edit_contract"/);
+assert.match(sent[0], /"confirmed":false/);
+"""
+    result = subprocess.run(
+        ["node", "-e", harness],
         text=True,
         capture_output=True,
         check=False,

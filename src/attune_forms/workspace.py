@@ -650,12 +650,27 @@ def workspace_to_widget_html(
         )
         script = f"""<script>(function(){{
   var root=document.getElementById('{root_id}'); if(!root)return;
+  function disarmExplicitActions(except){{
+    root.querySelectorAll('[data-explicit="1"][data-confirm-armed="1"]').forEach(function(x){{
+      if(x===except)return;
+      x.removeAttribute('data-confirm-armed');
+      x.textContent=x.getAttribute('data-original-label');
+    }});
+  }}
   root.addEventListener('click',function(e){{
     var b=e.target.closest?e.target.closest('[data-workspace-action]'):null;
     if(!b||!root.contains(b))return;
     var consequence=b.getAttribute('data-consequence');
     var explicit=b.getAttribute('data-explicit')==='1';
-    if(explicit&&!window.confirm(consequence))return;
+    disarmExplicitActions(b);
+    if(explicit&&b.getAttribute('data-confirm-armed')!=='1'){{
+      b.setAttribute('data-confirm-armed','1');
+      b.setAttribute('data-original-label',b.textContent);
+      b.textContent='Confirm '+b.textContent;
+      var confirmation=root.querySelector('.ae-ws-dispatch');
+      if(confirmation)confirmation.textContent=consequence+' Click again to confirm.';
+      return;
+    }}
     var payload={{{json.dumps(WIDGET_RESPONSE_MARKER)}:true,
       title:root.getAttribute('data-workspace-title'),
       view:root.getAttribute('data-workspace-view'),
