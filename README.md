@@ -170,6 +170,44 @@ it.WORKFLOW_SCHEMA_RESOLVER = my_schema_resolver   # name -> input schema
 it.TEMPLATE_LOADERS.append(my_registration_loader)  # imports template modules
 ```
 
+## Interaction conformance
+
+`run_workspace_conformance` evaluates a command-neutral `WorkspaceFixture`
+against one of four capability profiles: `RICH_WIDGET_STANDARD`,
+`NATIVE_DIALOG_CONSTRAINED`, `PORTABLE_MARKDOWN`, or `HEADLESS_JSON`.
+The report checks the rendered structure and complete action set rather than
+screenshots or label substrings:
+
+```python
+from attune_forms import (
+    RICH_WIDGET_STANDARD,
+    ProjectionRenderers,
+    WorkspaceFixture,
+    run_workspace_conformance,
+)
+
+fixture = WorkspaceFixture(
+    owner="my-workflow",
+    pages=(workspace_view,),
+    expected_action_ids=tuple(action.id for action in workspace_view.actions),
+    submitted_summary="The review is complete.",
+)
+report = run_workspace_conformance(
+    fixture,
+    RICH_WIDGET_STANDARD,
+    renderers=ProjectionRenderers(retained=capture_submitted_projection),
+    latency_samples=observed_phase_samples,
+)
+```
+
+The `retained` callback captures the host's actual compacted submitted
+projection. The fixture's expected summary alone cannot pass retention.
+Latency samples name the cold/warm mode and the exact phase they measure.
+`measure_latency` can capture local operations; transport, acknowledgement,
+progress, and terminal phases must come from those real boundaries. A missing
+phase or an explicitly unavailable receipt remains non-passing. Profiles and
+reports describe evidence only—they cannot authorize a workspace action.
+
 ## Provenance
 
 Extracted from [attune-ai](https://github.com/Smart-AI-Memory/attune-ai)'s

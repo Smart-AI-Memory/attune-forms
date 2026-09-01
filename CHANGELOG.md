@@ -8,6 +8,11 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- A capability-based workspace conformance harness now checks structural DOM,
+  keyboard traversal, constrained viewports, projection parity, submitted-view
+  retention, and separately attributed cold/warm latency phases. Reports retain
+  raw samples plus p50/p95/p99 aggregates; missing or unavailable evidence can
+  never produce a passing result.
 - `attune_forms.bridge.form_to_widget_html` now resolves lazily from the
   bridge namespace alongside `form_to_askuserquestion`. The package root
   remains the preferred import path; lazy resolution preserves the existing
