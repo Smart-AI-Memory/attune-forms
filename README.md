@@ -149,8 +149,13 @@ if select_form_surface(form) == "widget":
   receipt views. `workspace_to_widget_html` and
   `workspace_to_markdown` render the same action contract;
   `collect_workspace_action` rejects unknown, stale, or mismatched
-  action envelopes. Optional revision/hash/nonce bindings are echoed
-  for the host to authorize and consume — the UI never grants authority.
+  action envelopes. An action may declare `response_fields` from the
+  existing form grammar; only the selected action's fields are accepted,
+  and every surface returns the same normalized `responses` mapping.
+  `workspace_action_contract` provides the immutable projection hosts bind
+  into their contract digest. Optional revision/hash/nonce bindings are
+  echoed for the host to authorize and consume — the UI never grants
+  authority.
 - **Intake templates** — `FormTemplate` + `FieldSlot` generate a
   workflow's intake form at ask-time from named candidate providers
   (`PROVIDERS`): tools describe what they need once, and the form

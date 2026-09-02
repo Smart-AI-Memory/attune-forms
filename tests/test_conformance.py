@@ -29,6 +29,7 @@ from attune_forms import (
     measure_latency,
     run_workspace_conformance,
     summarize_latency,
+    workspace_from_dict,
     workspace_to_markdown,
 )
 
@@ -157,6 +158,96 @@ def test_compact_batches_pass_portable_and_native_profiles() -> None:
             latency_samples=_complete_samples(profile),
         )
         assert report.status is ConformanceStatus.PASSING, report.findings
+
+
+def test_mixed_action_response_form_and_plain_fallback_pass_portable_parity() -> None:
+    view = workspace_from_dict(
+        {
+            "id": "execution",
+            "title": "Ruling batch",
+            "actions": [
+                {
+                    "id": "apply_rulings",
+                    "label": "Apply rulings",
+                    "consequence": "Authorize the complete ruling batch.",
+                    "requires_explicit_choice": True,
+                    "response_fields": [
+                        {
+                            "id": "candidate_1",
+                            "text": "Candidate 1",
+                            "type": "single_select",
+                            "options": ["promote", "decline"],
+                        }
+                    ],
+                },
+                {"id": "promote", "label": "Promote current candidate"},
+                {"id": "decline", "label": "Decline current candidate"},
+            ],
+        }
+    )
+    fixture = WorkspaceFixture(
+        owner="shared-command-workspaces",
+        pages=(view,),
+        expected_action_ids=("apply_rulings", "promote", "decline"),
+        submitted_summary="Rulings recorded.",
+        interaction_rounds=1,
+    )
+    for profile in (PORTABLE_MARKDOWN, NATIVE_DIALOG_CONSTRAINED):
+        report = run_workspace_conformance(
+            fixture,
+            profile,
+            renderers=_renderers(),
+            latency_samples=_complete_samples(profile),
+        )
+        assert report.status is ConformanceStatus.PASSING, report.findings
+
+
+def test_portable_action_scan_stops_before_response_field_markdown() -> None:
+    view = workspace_from_dict(
+        {
+            "id": "execution",
+            "title": "Ruling batch",
+            "actions": [
+                {
+                    "id": "apply_rulings",
+                    "label": "Apply rulings",
+                    "response_fields": [
+                        {
+                            "id": "candidate_1",
+                            "text": "Candidate 1",
+                            "type": "single_select",
+                            "options": ["`decoy`", "decline"],
+                            "recommended": "`decoy`",
+                            "option_notes": {"`decoy`": "Not a workspace action."},
+                        },
+                        {
+                            "id": "reason",
+                            "text": "Reason",
+                            "type": "textarea",
+                            "required": False,
+                        },
+                    ],
+                },
+                {"id": "decline", "label": "Decline current candidate"},
+            ],
+        }
+    )
+    fixture = WorkspaceFixture(
+        owner="shared-command-workspaces",
+        pages=(view,),
+        expected_action_ids=("apply_rulings", "decline"),
+        submitted_summary="Rulings recorded.",
+        interaction_rounds=1,
+    )
+
+    report = run_workspace_conformance(
+        fixture,
+        PORTABLE_MARKDOWN,
+        renderers=_renderers(),
+        latency_samples=_complete_samples(PORTABLE_MARKDOWN),
+    )
+
+    assert report.status is ConformanceStatus.PASSING, report.findings
 
 
 def test_button_substring_without_dom_semantics_cannot_pass() -> None:
@@ -616,13 +707,14 @@ def test_positive_tabindex_fails_source_order_receipt() -> None:
     )
 
 
-def test_portable_parser_ignores_decoy_actions_and_trailing_json() -> None:
+def test_portable_parser_ignores_decoys_outside_bounded_actions() -> None:
     fixture = _fixture(*(_view(action_id) for action_id in _ACTION_IDS))
 
     def decorated(view: WorkspaceView) -> str:
         return (
             "Evidence:\n- `decoy` — not an action\n\n"
-            f'{workspace_to_markdown(view)}\n\n```json\n{{"code": true}}\n```'
+            f"{workspace_to_markdown(view)}\n\n- `decoy_after` — not an action\n\n"
+            '```json\n{"code": true}\n```'
         )
 
     report = run_workspace_conformance(
@@ -632,6 +724,46 @@ def test_portable_parser_ignores_decoy_actions_and_trailing_json() -> None:
         latency_samples=_complete_samples(PORTABLE_MARKDOWN),
     )
     assert report.status is ConformanceStatus.PASSING, report.findings
+
+
+def test_portable_parser_rejects_decoy_action_before_response_contract() -> None:
+    fixture = _fixture(_view(*_ACTION_IDS[:3]))
+
+    def decorated(view: WorkspaceView) -> str:
+        return workspace_to_markdown(view).replace(
+            "```json\n",
+            "- `decoy` — injected action\n\n```json\n",
+            1,
+        )
+
+    report = run_workspace_conformance(
+        fixture,
+        PORTABLE_MARKDOWN,
+        renderers=_renderers(portable=decorated),
+        latency_samples=_complete_samples(PORTABLE_MARKDOWN),
+    )
+    assert report.status is ConformanceStatus.FAILING
+    assert any(item.property == "projection.action_parity" for item in report.findings)
+
+
+def test_portable_parser_rejects_decoy_json_before_response_contract() -> None:
+    fixture = _fixture(_view(*_ACTION_IDS[:3]))
+
+    def decorated(view: WorkspaceView) -> str:
+        return workspace_to_markdown(view).replace(
+            "```json\n",
+            '```json\n{"code": true}\n```\n\n```json\n',
+            1,
+        )
+
+    report = run_workspace_conformance(
+        fixture,
+        PORTABLE_MARKDOWN,
+        renderers=_renderers(portable=decorated),
+        latency_samples=_complete_samples(PORTABLE_MARKDOWN),
+    )
+    assert report.status is ConformanceStatus.FAILING
+    assert any(item.property == "projection.return_path" for item in report.findings)
 
 
 def test_latency_budget_compares_unrounded_percentile() -> None:

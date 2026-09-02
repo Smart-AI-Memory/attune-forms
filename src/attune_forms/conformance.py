@@ -515,10 +515,7 @@ class _PageEvidence:
 
 _PORTABLE_ACTION_RE = re.compile(r"^- `([a-z][a-z0-9_-]{0,63})` — ", re.MULTILINE)
 _ACTION_HEADING_RE = re.compile(r"^### Actions\s*$", re.MULTILINE)
-_REPLY_HEADING_RE = re.compile(
-    r"^Reply with the selected `action` value in this payload:\s*$",
-    re.MULTILINE,
-)
+_MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+", re.MULTILINE)
 _JSON_FENCE_RE = re.compile(r"```json\s*\n(?P<payload>.*?)\n```", re.DOTALL)
 _CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 _CSS_RULE_RE = re.compile(r"(?P<selectors>[^{}]+)\{(?P<body>[^{}]*)\}")
@@ -628,14 +625,15 @@ def _portable_ids(markdown: str) -> tuple[str, ...]:
     if not action_headings:
         raise ValueError("portable projection has no bounded Actions section")
     action_start = action_headings[-1].end()
-    reply_heading = _REPLY_HEADING_RE.search(markdown, action_start)
-    if reply_heading is None:
-        raise ValueError("portable projection has no JSON response contract")
-    action_section = markdown[action_start : reply_heading.start()]
-    ids = tuple(_PORTABLE_ACTION_RE.findall(action_section))
-    response = _JSON_FENCE_RE.search(markdown, reply_heading.end())
+    response = _JSON_FENCE_RE.search(markdown, action_start)
     if response is None:
         raise ValueError("portable projection has no JSON response contract")
+    next_heading = _MARKDOWN_HEADING_RE.search(markdown, action_start)
+    action_end = min(
+        response.start(),
+        next_heading.start() if next_heading is not None else response.start(),
+    )
+    ids = tuple(_PORTABLE_ACTION_RE.findall(markdown[action_start:action_end]))
     payload = json.loads(response.group("payload"))
     if not isinstance(payload, Mapping) or payload.get("__elicitation_response__") is not True:
         raise ValueError("portable projection has no validated response sentinel")

@@ -12,14 +12,14 @@ import json
 import re
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import FrozenInstanceError, dataclass, field, fields
 from enum import Enum
 from html import escape
 from typing import Any
 
-from attune_forms.bridge import FormValidationError, form_from_dict
+from attune_forms.bridge import FormValidationError, collect_form_response, form_from_dict
 from attune_forms.markdown_surface import form_to_markdown
-from attune_forms.models import FormSchema
+from attune_forms.models import FormQuestion, FormSchema
 from attune_forms.theme import CSS_WORKSPACE
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
 
@@ -33,7 +33,16 @@ _WORKSPACE_KEYS = frozenset({"id", "title", "sections", "actions", "summary", "f
 _SECTION_KEYS = frozenset({"blocks", "heading", "tone"})
 _BLOCK_KEYS = frozenset({"kind", "title", "body", "items", "language"})
 _ITEM_KEYS = frozenset({"label", "value", "detail", "status"})
-_ACTION_KEYS = frozenset({"id", "label", "intent", "consequence", "requires_explicit_choice"})
+_ACTION_KEYS = frozenset(
+    {
+        "id",
+        "label",
+        "intent",
+        "consequence",
+        "requires_explicit_choice",
+        "response_fields",
+    }
+)
 _ACTION_RESPONSE_KEYS = frozenset(
     {
         WIDGET_RESPONSE_MARKER,
@@ -45,6 +54,7 @@ _ACTION_RESPONSE_KEYS = frozenset(
         "action_nonce",
         "contract_hash",
         "confirmed",
+        "responses",
     }
 )
 
@@ -172,8 +182,10 @@ class WorkspaceAction:
     intent: WorkspaceActionIntent = WorkspaceActionIntent.SECONDARY
     consequence: str = ""
     requires_explicit_choice: bool = False
+    response_fields: tuple[FormQuestion, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        response_fields = tuple(self.response_fields)
         if not isinstance(self.intent, WorkspaceActionIntent):
             raise TypeError("workspace action intent must be WorkspaceActionIntent")
         if not _ID_RE.fullmatch(self.id):
@@ -182,6 +194,18 @@ class WorkspaceAction:
             raise ValueError("workspace action label must not be empty")
         if self.requires_explicit_choice and not self.consequence.strip():
             raise ValueError("explicit workspace action requires a consequence")
+        if not all(isinstance(question, FormQuestion) for question in response_fields):
+            raise TypeError("workspace action response fields must be FormQuestion values")
+        object.__setattr__(
+            self,
+            "response_fields",
+            tuple(_freeze_form_question(question) for question in response_fields),
+        )
+        field_ids = [question.id for question in self.response_fields]
+        if any(not isinstance(field_id, str) or not field_id for field_id in field_ids):
+            raise ValueError("workspace action response field ids must be non-empty strings")
+        if len(field_ids) != len(set(field_ids)):
+            raise ValueError("workspace action response field ids must be unique")
 
 
 @dataclass(frozen=True)
@@ -231,6 +255,14 @@ class WorkspaceActionResponse:
     revision: int | None = None
     action_nonce: str = ""
     contract_hash: str = ""
+    responses: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "responses", _freeze_mapping(self.responses))
+
+    def responses_payload(self) -> dict[str, Any]:
+        """Return the validated responses as a JSON-safe detached mapping."""
+        return {key: _thaw_value(value) for key, value in self.responses.items()}
 
 
 @dataclass(frozen=True)
@@ -259,6 +291,236 @@ class WorkspaceView:
             raise ValueError("workspace view permits at most one primary action")
         if self.form is not None and len(self.actions) != 1:
             raise ValueError("a form workspace view requires exactly one submit action")
+        if self.form is not None and any(action.response_fields for action in self.actions):
+            raise ValueError("a form submit action cannot also declare response fields")
+
+
+class _FrozenList(list[Any]):
+    """A JSON-compatible list whose contents cannot drift after validation."""
+
+    def __init__(self, values: Any = ()) -> None:
+        list.__init__(self, (_freeze_form_value(item) for item in values))
+
+    @staticmethod
+    def _immutable(*args: Any, **kwargs: Any) -> None:
+        raise TypeError("validated workspace response fields are immutable")
+
+    __delitem__ = _immutable
+    __iadd__ = _immutable
+    __imul__ = _immutable
+    __setitem__ = _immutable
+    append = _immutable
+    clear = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    reverse = _immutable
+    sort = _immutable
+
+    def __hash__(self) -> int:
+        return hash(tuple(_hashable_value(item) for item in self))
+
+    def __copy__(self) -> _FrozenList:
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _FrozenList:
+        memo[id(self)] = self
+        return self
+
+    def __reduce_ex__(self, protocol: int) -> tuple[Any, tuple[list[Any]]]:
+        return _FrozenList, (list(self),)
+
+
+class _FrozenDict(dict[Any, Any]):
+    """A JSON-compatible dict whose contents cannot drift after validation."""
+
+    def __init__(self, values: Mapping[Any, Any] | None = None) -> None:
+        dict.__init__(
+            self,
+            ((key, _freeze_form_value(value)) for key, value in (values or {}).items()),
+        )
+
+    @staticmethod
+    def _immutable(*args: Any, **kwargs: Any) -> None:
+        raise TypeError("validated workspace response fields are immutable")
+
+    __delitem__ = _immutable
+    __ior__ = _immutable
+    __setitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+    def __hash__(self) -> int:
+        items = sorted(self.items(), key=lambda item: repr(item[0]))
+        return hash(tuple((key, _hashable_value(value)) for key, value in items))
+
+    def __copy__(self) -> _FrozenDict:
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _FrozenDict:
+        memo[id(self)] = self
+        return self
+
+    def __reduce_ex__(self, protocol: int) -> tuple[Any, tuple[dict[Any, Any]]]:
+        return _FrozenDict, (dict(self),)
+
+
+class _FrozenFormQuestion(FormQuestion):
+    """A defensive FormQuestion snapshot shared by render and collection."""
+
+    def __init__(self, **values: Any) -> None:
+        object.__setattr__(self, "_workspace_sealed", False)
+        super().__init__(
+            **{
+                definition.name: values[definition.name]
+                for definition in fields(FormQuestion)
+                if definition.init
+            }
+        )
+        for definition in fields(FormQuestion):
+            object.__setattr__(
+                self,
+                definition.name,
+                _freeze_form_value(values.get(definition.name, getattr(self, definition.name))),
+            )
+        object.__setattr__(self, "_workspace_sealed", True)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if getattr(self, "_workspace_sealed", False):
+            raise FrozenInstanceError("validated workspace response fields are immutable")
+        object.__setattr__(self, name, value)
+
+    def __hash__(self) -> int:
+        return hash(
+            tuple(
+                _hashable_value(getattr(self, definition.name))
+                for definition in fields(FormQuestion)
+            )
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FormQuestion):
+            return NotImplemented
+        return all(
+            getattr(self, definition.name) == getattr(other, definition.name)
+            for definition in fields(FormQuestion)
+        )
+
+    def __copy__(self) -> _FrozenFormQuestion:
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _FrozenFormQuestion:
+        memo[id(self)] = self
+        return self
+
+    def __reduce_ex__(self, protocol: int) -> tuple[Any, tuple[dict[str, Any]]]:
+        values = {
+            definition.name: getattr(self, definition.name) for definition in fields(FormQuestion)
+        }
+        return _restore_frozen_form_question, (values,)
+
+
+def _freeze_form_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _FrozenDict(value)
+    if isinstance(value, list | tuple):
+        return _FrozenList(value)
+    return value
+
+
+def _freeze_form_question(question: FormQuestion) -> FormQuestion:
+    return _FrozenFormQuestion(
+        **{
+            definition.name: _freeze_form_value(getattr(question, definition.name))
+            for definition in fields(FormQuestion)
+        }
+    )
+
+
+def _restore_frozen_form_question(values: dict[str, Any]) -> FormQuestion:
+    """Rebuild a pickled immutable response-field snapshot."""
+    return _FrozenFormQuestion(**values)
+
+
+def _hashable_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        items = sorted(value.items(), key=lambda item: repr(item[0]))
+        return tuple((key, _hashable_value(item)) for key, item in items)
+    if isinstance(value, list | tuple):
+        return tuple(_hashable_value(item) for item in value)
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _freeze_value(value: Any) -> Any:
+    """Recursively detach and freeze one validator-normalized value."""
+    if isinstance(value, Mapping):
+        return _FrozenDict({str(key): _freeze_value(item) for key, item in value.items()})
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_value(item) for item in value)
+    return value
+
+
+def _freeze_mapping(values: Mapping[str, Any]) -> Mapping[str, Any]:
+    return _FrozenDict({str(key): _freeze_value(value) for key, value in values.items()})
+
+
+def _thaw_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _thaw_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_thaw_value(item) for item in value]
+    return value
+
+
+def _contract_value(value: Any) -> Any:
+    """Normalize declarative values for a stable host-side digest."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, Mapping):
+        return {str(key): _contract_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_contract_value(item) for item in value]
+    return value
+
+
+def workspace_action_contract(action: WorkspaceAction) -> dict[str, Any]:
+    """Return the complete declarative action contract for canonical hashing.
+
+    Field and option order are retained, and the schema remains associated
+    with its action id. Hosts include this value in their revision-bound
+    contract rather than reconstructing a partial response schema.
+    """
+    response_fields = [
+        {
+            definition.name: _contract_value(getattr(question, definition.name))
+            for definition in fields(FormQuestion)
+        }
+        for question in action.response_fields
+    ]
+    return {
+        "id": action.id,
+        "label": action.label,
+        "intent": action.intent.value,
+        "consequence": action.consequence,
+        "requires_explicit_choice": action.requires_explicit_choice,
+        "response_fields": response_fields,
+    }
+
+
+def _action_response_form(action: WorkspaceAction, *, title: str | None = None) -> FormSchema:
+    """Adapt one action's declared fields to the public form validator."""
+    return FormSchema(
+        title=title or action.label,
+        description="",
+        questions=list(action.response_fields),
+        form_id=f"workspace-action-{action.id}",
+    )
 
 
 def _unknown_keys(where: str, raw: Mapping[str, Any], allowed: frozenset[str]) -> list[str]:
@@ -404,9 +666,34 @@ def _actions_from_data(raw_actions: Any, where: str, problems: list[str]) -> lis
         explicit = raw_action.get("requires_explicit_choice", False)
         if not isinstance(explicit, bool):
             action_problems.append(f"{action_where} 'requires_explicit_choice' must be a boolean")
+        response_fields: tuple[FormQuestion, ...] = ()
+        raw_response_fields = raw_action.get("response_fields")
+        if raw_response_fields is not None:
+            try:
+                response_form = form_from_dict(
+                    {
+                        "title": label or action_id or "Workspace action",
+                        "fields": raw_response_fields,
+                    },
+                    source="workspace-action",
+                )
+                response_fields = tuple(response_form.questions)
+            except FormValidationError as exc:
+                action_problems.extend(
+                    f"{action_where} response fields: {problem}" for problem in exc.problems
+                )
         if intent is not None and not action_problems:
             try:
-                actions.append(WorkspaceAction(action_id, label, intent, consequence, explicit))
+                actions.append(
+                    WorkspaceAction(
+                        action_id,
+                        label,
+                        intent,
+                        consequence,
+                        explicit,
+                        response_fields,
+                    )
+                )
             except (TypeError, ValueError) as exc:
                 action_problems.append(f"{action_where}: {exc}")
         problems.extend(action_problems)
@@ -489,6 +776,23 @@ def collect_workspace_action(
     elif action is not None and action.requires_explicit_choice and not confirmed:
         problems.append(f"workspace action {action.id!r} requires explicit confirmation")
 
+    normalized_responses: Mapping[str, Any] = {}
+    if action is not None and action.response_fields:
+        raw_responses = payload.get("responses")
+        if not isinstance(raw_responses, Mapping):
+            problems.append("workspace action response 'responses' must be a mapping")
+        else:
+            try:
+                normalized_responses = collect_form_response(
+                    _action_response_form(action),
+                    dict(raw_responses),
+                    template_id=f"workspace-action-{action.id}",
+                ).responses
+            except FormValidationError as exc:
+                problems.extend(f"workspace action response: {problem}" for problem in exc.problems)
+    elif action is not None and "responses" in payload:
+        problems.append(f"workspace action {action.id!r} does not declare response fields")
+
     binding_keys = ("workspace_id", "revision", "action_nonce", "contract_hash")
     if binding is None:
         unexpected = [key for key in binding_keys if key in payload]
@@ -505,11 +809,17 @@ def collect_workspace_action(
         elif revision != binding.revision:
             problems.append("workspace action response revision does not match")
         nonce = payload.get("action_nonce")
-        if not isinstance(nonce, str) or not hmac.compare_digest(nonce, binding.action_nonce):
+        if (
+            not isinstance(nonce, str)
+            or not _ACTION_NONCE_RE.fullmatch(nonce)
+            or not hmac.compare_digest(nonce, binding.action_nonce)
+        ):
             problems.append("workspace action response nonce does not match")
         contract_hash = payload.get("contract_hash")
-        if not isinstance(contract_hash, str) or not hmac.compare_digest(
-            contract_hash, binding.contract_hash
+        if (
+            not isinstance(contract_hash, str)
+            or not _CONTRACT_HASH_RE.fullmatch(contract_hash)
+            or not hmac.compare_digest(contract_hash, binding.contract_hash)
         ):
             problems.append("workspace action response contract hash does not match")
 
@@ -519,6 +829,7 @@ def collect_workspace_action(
         view=view.id,
         action=action_id,
         confirmed=confirmed,
+        responses=normalized_responses,
         workspace_id=binding.workspace_id if binding else "",
         revision=binding.revision if binding else None,
         action_nonce=binding.action_nonce if binding else "",
@@ -633,16 +944,47 @@ def workspace_to_widget_html(
                 f"{escape(action.label)}</button>{note}</span>"
             )
 
-        buttons = "".join(action_button(action) for action in view.actions)
+        def action_control(action: WorkspaceAction, ordinal: int) -> str:
+            if not action.response_fields:
+                return action_button(action)
+            return (
+                '<div class="ae-ws-action-form">'
+                + form_to_widget_html(
+                    _action_response_form(action),
+                    instance_id=f"{suffix}{ordinal}{action.id}",
+                    submit_label=action.label,
+                    submit_action=action.id,
+                    submit_view=view.id.value,
+                    submit_title=view.title,
+                    include_title=True,
+                    submit_consequence=action.consequence,
+                    requires_explicit_choice=action.requires_explicit_choice,
+                    submit_response_key="responses",
+                    submit_context={
+                        "confirmed": action.requires_explicit_choice,
+                        **(binding.to_payload() if binding else {}),
+                    },
+                )
+                + "</div>"
+            )
+
+        controls = "".join(
+            action_control(action, ordinal) for ordinal, action in enumerate(view.actions)
+        )
         actions = (
-            f'<div class="ae-ws-actions">{buttons}</div>'
+            f'<div class="ae-ws-actions">{controls}</div>'
             '<p class="ae-ws-dispatch" role="status" aria-live="polite"></p>'
-            if buttons
+            if controls
             else ""
         )
         content = ""
     script = ""
-    if view.form is None and view.actions:
+    if view.form is None and any(not action.response_fields for action in view.actions):
+        response_form_guard = (
+            "\n    if(b.closest&&b.closest('form'))return;"
+            if any(action.response_fields for action in view.actions)
+            else ""
+        )
         binding_json = json.dumps(
             binding.to_payload() if binding else {},
             ensure_ascii=True,
@@ -659,7 +1001,7 @@ def workspace_to_widget_html(
   }}
   root.addEventListener('click',function(e){{
     var b=e.target.closest?e.target.closest('[data-workspace-action]'):null;
-    if(!b||!root.contains(b))return;
+    if(!b||!root.contains(b))return;{response_form_guard}
     var consequence=b.getAttribute('data-consequence');
     var explicit=b.getAttribute('data-explicit')==='1';
     disarmExplicitActions(b);
@@ -761,7 +1103,7 @@ def workspace_to_markdown(
                 view=view.id.value,
             ),
         ]
-    elif view.actions:
+    elif view.actions and not any(action.response_fields for action in view.actions):
         lines += ["", "### Actions"]
         lines.extend(
             f"- `{action.id}` — {_markdown_text(action.label)}"
@@ -787,4 +1129,57 @@ def workspace_to_markdown(
             ),
             "```",
         ]
+    elif view.actions:
+        plain_actions = [action for action in view.actions if not action.response_fields]
+        lines += ["", "### Actions"]
+        lines.extend(
+            f"- `{action.id}` — {_markdown_text(action.label)}"
+            f"{f' — {_markdown_text(action.consequence)}' if action.consequence else ''}"
+            for action in view.actions
+        )
+        for action in view.actions:
+            if not action.response_fields:
+                continue
+            lines += ["", f"### {_markdown_text(action.label)}"]
+            if action.requires_explicit_choice:
+                lines += [
+                    "",
+                    f"**Explicit confirmation required:** {_markdown_text(action.consequence)} "
+                    "Set `confirmed` to `true` only when approving this complete response.",
+                ]
+            lines += [
+                "",
+                form_to_markdown(
+                    _action_response_form(action, title=view.title),
+                    action=action.id,
+                    submit_label=action.label,
+                    include_title=False,
+                    view=view.id.value,
+                    answer_key="responses",
+                    payload_context={
+                        "confirmed": False,
+                        **(binding.to_payload() if binding else {}),
+                    },
+                ),
+            ]
+        if plain_actions:
+            lines += [
+                "",
+                "For an action without fields, reply with its `action` value in this payload:",
+                "",
+                "```json",
+                json.dumps(
+                    {
+                        WIDGET_RESPONSE_MARKER: True,
+                        "title": view.title,
+                        "view": view.id.value,
+                        "action": None,
+                        "confirmed": False,
+                        **(binding.to_payload() if binding else {}),
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                "```",
+            ]
     return "\n".join(lines)

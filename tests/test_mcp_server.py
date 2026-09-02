@@ -67,6 +67,34 @@ _WORKSPACE = {
         {"id": "edit_contract", "label": "Back to edit"},
     ],
 }
+_ACTION_RESPONSE_WORKSPACE = {
+    "id": "preview",
+    "title": "Roundtable promotion review",
+    "actions": [
+        {
+            "id": "apply_rulings",
+            "label": "Apply rulings",
+            "intent": "primary",
+            "consequence": "Apply this complete ruling batch.",
+            "requires_explicit_choice": True,
+            "response_fields": [
+                {
+                    "id": "candidate_1",
+                    "text": "Candidate one",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                },
+                {
+                    "id": "candidate_2",
+                    "text": "Candidate two",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                },
+            ],
+        },
+        {"id": "another_round", "label": "Another round"},
+    ],
+}
 _BINDING = {
     "workspace_id": "fix-demo",
     "revision": 3,
@@ -165,6 +193,12 @@ async def _round_trip(home: Path) -> dict[str, dict]:
             )
             out["render_workspace"] = _payload(r)
 
+            r = await session.call_tool(
+                "elicitation_render_workspace",
+                {"workspace": _ACTION_RESPONSE_WORKSPACE, "binding": _BINDING},
+            )
+            out["render_workspace_responses"] = _payload(r)
+
             response = {
                 "__elicitation_response__": True,
                 "title": "Fix preview",
@@ -182,6 +216,25 @@ async def _round_trip(home: Path) -> dict[str, dict]:
                 },
             )
             out["collect_workspace"] = _payload(r)
+
+            action_response = {
+                "__elicitation_response__": True,
+                "title": "Roundtable promotion review",
+                "view": "preview",
+                "action": "apply_rulings",
+                "confirmed": True,
+                "responses": {"candidate_1": "promote", "candidate_2": "decline"},
+                **_BINDING,
+            }
+            r = await session.call_tool(
+                "elicitation_collect_workspace_action",
+                {
+                    "workspace": _ACTION_RESPONSE_WORKSPACE,
+                    "binding": _BINDING,
+                    "response": action_response,
+                },
+            )
+            out["collect_workspace_responses"] = _payload(r)
 
             response["revision"] = 2
             r = await session.call_tool(
@@ -285,10 +338,25 @@ def test_workspace_tools_round_trip_over_real_stdio(round_trip):
     assert '"workspace_id":"fix-demo"' in rendered["html"]
     assert '"workspace_id": "fix-demo"' in rendered["markdown"]
 
+    rendered_responses = round_trip["render_workspace_responses"]
+    assert rendered_responses["success"] is True
+    assert rendered_responses["bound"] is True
+    assert rendered_responses["action_ids"] == ["apply_rulings", "another_round"]
+    assert 'payload["responses"] = answers' in rendered_responses["html"]
+    assert '"candidate_1": null' in rendered_responses["markdown"]
+
     collected = round_trip["collect_workspace"]
     assert collected["success"] is True
     assert collected["action"] == "run_fix"
     assert collected["revision"] == 3
+    assert collected["responses"] == {}
+
+    action_responses = round_trip["collect_workspace_responses"]
+    assert action_responses["success"] is True
+    assert action_responses["responses"] == {
+        "candidate_1": "promote",
+        "candidate_2": "decline",
+    }
 
     stale = round_trip["collect_workspace_stale"]
     assert stale["success"] is False
