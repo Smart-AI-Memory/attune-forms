@@ -15,15 +15,20 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
-## What's new in 0.11.0
+## What's new in 0.12.1
 
-- **Project path fields** — text fields can opt into a Browse button with
-  host-supplied, project-relative file and folder choices.
-- **Searchable, accessible picker** — the widget modal filters paths, supports
-  Escape/backdrop closing and focus return, and avoids native-dialog browser
-  inconsistencies.
-- **Portable fallback** — native and text-only hosts keep ordinary manual path
-  entry while server-side validation remains authoritative.
+- **Action-scoped workspace responses** — one workspace action can collect a
+  validated response mapping across widget, Markdown, headless, and MCP stdio
+  surfaces.
+- **Atomic multi-item decisions** — revision-bound action contracts support
+  compact batches such as Roundtable's `3 + 3 + 1` promotion rulings without
+  moving command authority into the renderer.
+- **Interaction conformance evidence** — the packaged harness checks structural
+  DOM, keyboard traversal, constrained viewports, projection parity, submitted
+  state, and separately attributed cold/warm latency phases.
+
+Version 0.12.1 corrects the published project overview; the runtime features
+were introduced in 0.12.0.
 
 This is the provider-neutral transport layer. Individual agent products still
 choose whether to render it inline, open it as a browser artifact, or use the
@@ -58,7 +63,7 @@ parsed back into the same validator.
 pip install attune-forms
 ```
 
-Python 3.10+, one runtime dependency (structlog), 880+ tests, CI on
+Python 3.10+, one runtime dependency (structlog), 950+ tests, CI on
 Linux/macOS/Windows. Apache 2.0.
 
 ## The grammar

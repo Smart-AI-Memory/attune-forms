@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-09-02
+
+### Fixed
+
+- The PyPI project overview now presents the 0.12 action-scoped workspace
+  responses, atomic multi-item decisions, and interaction conformance harness
+  instead of the stale 0.11 project-path highlights.
+
 ## [0.12.0] — 2026-09-02
 
 ### Added
@@ -717,7 +725,8 @@ verified master.
 - Initial extraction of the attune-ai elicitation subsystem: declarative `FormSchema`, build/collect validation, multi-surface renderers (widget HTML, AskUserQuestion batching, MCP elicitation), surface router, template layer with ask-time intake generation
 - Trusted-publishing release workflow (tag-triggered, PyPI environment)
 
-[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.10.0...v0.11.0

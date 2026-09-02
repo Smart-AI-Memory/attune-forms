@@ -1,8 +1,8 @@
-"""The version lives in three files — this guard keeps them one value.
+"""The release version and public overview stay synchronized.
 
 pyproject.toml is the source of truth; the plugin manifest and the
-marketplace manifest must match it exactly (a release that bumps only
-pyproject would otherwise ship a plugin claiming the old version).
+marketplace manifest must match it exactly, and the README must present
+the current version in its public ``What's new`` heading.
 """
 
 from __future__ import annotations
@@ -31,3 +31,8 @@ def test_marketplace_manifest_matches_pyproject() -> None:
     version = _pyproject_version()
     assert market["metadata"]["version"] == version
     assert all(p["version"] == version for p in market["plugins"])
+
+
+def test_readme_whats_new_matches_pyproject() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"## What's new in {_pyproject_version()}" in readme
