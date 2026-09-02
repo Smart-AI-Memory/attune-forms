@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from attune_forms.models import (
@@ -40,6 +41,7 @@ from attune_forms.widget import WIDGET_RESPONSE_MARKER
 
 #: Any run of three or more backticks — a markdown fence opener/closer.
 _FENCE_RUN_RE = re.compile(r"`{3,}")
+_PAYLOAD_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 #: Woven between backticks to defuse a run; invisible in a terminal.
 _FENCE_ZWSP = "​"
@@ -327,6 +329,8 @@ def reply_skeleton(
     questions: list[FormQuestion] | None = None,
     action: str | None = None,
     view: str | None = None,
+    answer_key: str = "answers",
+    payload_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The sentinel-marked reply skeleton for a form (or a subset of it).
 
@@ -338,10 +342,29 @@ def reply_skeleton(
     ingested as a reply (confirmation pass 2, 2026-08-20).
     """
     chosen = questions if questions is not None else form.questions
+    if not _PAYLOAD_KEY_RE.fullmatch(answer_key):
+        raise ValueError("answer_key must be a stable lowercase identifier")
+    context = dict(payload_context or {})
+    if any(not isinstance(key, str) or not _PAYLOAD_KEY_RE.fullmatch(key) for key in context):
+        raise ValueError("payload_context keys must be stable lowercase identifiers")
+    reserved = {
+        WIDGET_RESPONSE_MARKER,
+        "title",
+        "answers",
+        "responses",
+        "action",
+        "view",
+    }
+    collisions = sorted(reserved.intersection(context))
+    if collisions:
+        raise ValueError(
+            "payload_context cannot replace reserved response fields: " + ", ".join(collisions)
+        )
     payload = {
         WIDGET_RESPONSE_MARKER: True,
         "title": form.title,
-        "answers": {q.id: _skeleton_value(q) for q in chosen},
+        answer_key: {q.id: _skeleton_value(q) for q in chosen},
+        **context,
     }
     if action is not None:
         payload["action"] = action
@@ -357,6 +380,8 @@ def form_to_markdown(
     submit_label: str | None = None,
     include_title: bool = True,
     view: str | None = None,
+    answer_key: str = "answers",
+    payload_context: Mapping[str, Any] | None = None,
 ) -> str:
     """Render a declarative form as portable markdown (S4).
 
@@ -378,6 +403,10 @@ def form_to_markdown(
             Workspace renderers disable it because their shell already
             owns the view heading.
         view: Optional workspace view id added to the answer skeleton.
+        answer_key: Payload key for the field-id mapping. Standalone forms
+            retain ``answers``; action-scoped workspace forms use
+            ``responses``.
+        payload_context: Additional trusted response-envelope fields.
 
     Returns:
         A markdown string ready to relay to any text host.
@@ -397,13 +426,21 @@ def form_to_markdown(
     lines += [
         "",
         "---",
-        f"{submit_label or 'Reply'} by filling the `answers` values below, or with shorthand "
+        f"{submit_label or 'Reply'} by filling the `{answer_key}` values below, or with shorthand "
         "lines — `field_id: value` or `N: value` (field number); a triage "
         "row is `field_id.item_id: disposition`; a ranking is a comma list "
         "in order (`field_id: b, a, c`) or one slot per line "
         "(`field_id.1: b`); an assumption row is `field_id.item_id: accept`, "
         "`field_id.item_id: reject`, or `field_id.item_id: edit: <text>`:",
         "",
-        *_skeleton_block(reply_skeleton(form, action=action, view=view)),
+        *_skeleton_block(
+            reply_skeleton(
+                form,
+                action=action,
+                view=view,
+                answer_key=answer_key,
+                payload_context=payload_context,
+            )
+        ),
     ]
     return "\n".join(lines)

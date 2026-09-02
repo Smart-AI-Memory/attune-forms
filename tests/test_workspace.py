@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import json
+import pickle
 import re
 import shutil
 import subprocess
+from hashlib import sha256
 
 import pytest
 
@@ -13,6 +16,7 @@ from attune_forms import (
     WorkspaceAction,
     WorkspaceActionBinding,
     WorkspaceActionIntent,
+    WorkspaceActionResponse,
     WorkspaceBlock,
     WorkspaceBlockKind,
     WorkspaceItem,
@@ -22,7 +26,9 @@ from attune_forms import (
     WorkspaceViewId,
     collect_workspace_action,
     form_from_dict,
+    form_to_markdown,
     form_to_widget_html,
+    workspace_action_contract,
     workspace_from_dict,
     workspace_to_markdown,
     workspace_to_widget_html,
@@ -70,6 +76,40 @@ def _preview_definition() -> dict:
     }
 
 
+def _action_response_definition() -> dict:
+    raw = _preview_definition()
+    raw["actions"] = [
+        {
+            "id": "apply_rulings",
+            "label": "Apply rulings",
+            "intent": "primary",
+            "consequence": "Apply every ruling in this batch atomically.",
+            "requires_explicit_choice": True,
+            "response_fields": [
+                {
+                    "id": "candidate_1",
+                    "text": "First candidate",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                    "recommended": "promote",
+                    "option_notes": {
+                        "promote": "Advance this candidate.",
+                        "decline": "Leave this candidate out.",
+                    },
+                },
+                {
+                    "id": "candidate_2",
+                    "text": "Second candidate",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                },
+            ],
+        },
+        {"id": "another_round", "label": "Another round"},
+    ]
+    return raw
+
+
 def test_semantic_token_artifact_is_versioned_and_scalar_lookup_works() -> None:
     assert SEMANTIC_TOKENS["version"] == 1
     assert token("color.light.action") == "#004ac6"
@@ -111,6 +151,55 @@ def test_workspace_rejects_executable_shape_and_ambiguous_authority() -> None:
         WorkspaceView(id="preview", title="T")  # type: ignore[arg-type]
 
 
+def test_workspace_rejects_invalid_direct_action_response_schemas() -> None:
+    valid = form_from_dict(
+        {"title": "T", "fields": [{"id": "x", "text": "X", "type": "text_input"}]}
+    ).questions[0]
+    with pytest.raises(TypeError, match="FormQuestion"):
+        WorkspaceAction("run", "Run", response_fields=(object(),))  # type: ignore[arg-type]
+
+    invalid_id = form_from_dict(
+        {"title": "T", "fields": [{"id": "x", "text": "X", "type": "text_input"}]}
+    ).questions[0]
+    invalid_id.id = ""
+    with pytest.raises(ValueError, match="non-empty"):
+        WorkspaceAction("run", "Run", response_fields=(invalid_id,))
+    with pytest.raises(ValueError, match="unique"):
+        WorkspaceAction("run", "Run", response_fields=(valid, valid))
+
+    form = form_from_dict(
+        {"title": "T", "fields": [{"id": "y", "text": "Y", "type": "text_input"}]}
+    )
+    with pytest.raises(ValueError, match="cannot also declare"):
+        WorkspaceView(
+            WorkspaceViewId.INTAKE,
+            "T",
+            actions=(WorkspaceAction("run", "Run", response_fields=(valid,)),),
+            form=form,
+        )
+
+
+def test_form_renderers_reject_ambiguous_response_envelopes() -> None:
+    form = form_from_dict(
+        {"title": "T", "fields": [{"id": "x", "text": "X", "type": "text_input"}]}
+    )
+    with pytest.raises(ValueError, match="submit_response_key"):
+        form_to_widget_html(form, submit_response_key="Bad")
+    with pytest.raises(ValueError, match="reserved"):
+        form_to_widget_html(form, submit_context={"answers": "collision"})
+    with pytest.raises(ValueError, match="keys"):
+        form_to_widget_html(form, submit_context={"Bad": "value"})
+    with pytest.raises(TypeError, match="values"):
+        form_to_widget_html(form, submit_context={"extra": []})  # type: ignore[dict-item]
+
+    with pytest.raises(ValueError, match="answer_key"):
+        form_to_markdown(form, answer_key="Bad")
+    with pytest.raises(ValueError, match="keys"):
+        form_to_markdown(form, payload_context={"Bad": "value"})
+    with pytest.raises(ValueError, match="reserved"):
+        form_to_markdown(form, payload_context={"responses": {}})
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
@@ -140,6 +229,99 @@ def test_workspace_from_dict_casts_the_closed_document_grammar() -> None:
     assert view.id is WorkspaceViewId.PREVIEW
     assert view.sections[0].blocks[0].items[0].value == "Repair parsing"
     assert [action.id for action in view.actions] == ["run_fix", "edit_contract"]
+
+
+def test_workspace_action_response_fields_are_validated_and_canonical() -> None:
+    view = workspace_from_dict(_action_response_definition())
+    action = view.actions[0]
+    assert [question.id for question in action.response_fields] == [
+        "candidate_1",
+        "candidate_2",
+    ]
+    contract = workspace_action_contract(action)
+    assert contract["id"] == "apply_rulings"
+    assert [field["id"] for field in contract["response_fields"]] == [
+        "candidate_1",
+        "candidate_2",
+    ]
+    assert contract["response_fields"][0]["options"] == ["promote", "decline"]
+
+    altered = _action_response_definition()
+    altered["actions"][0]["response_fields"][0]["options"].reverse()
+    altered_contract = workspace_action_contract(workspace_from_dict(altered).actions[0])
+
+    reordered = _action_response_definition()
+    reordered["actions"][0]["response_fields"].reverse()
+    reordered_contract = workspace_action_contract(workspace_from_dict(reordered).actions[0])
+
+    def digest(value) -> str:
+        return sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    assert digest(contract) != digest(altered_contract)
+    assert digest(contract) != digest(reordered_contract)
+
+
+def test_workspace_action_response_schema_is_an_immutable_snapshot() -> None:
+    source = form_from_dict(
+        {
+            "title": "Action",
+            "fields": [
+                {
+                    "id": "ruling",
+                    "text": "Ruling",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                }
+            ],
+        }
+    ).questions[0]
+    action = WorkspaceAction("apply", "Apply", response_fields=(source,))
+    view = WorkspaceView(
+        id=WorkspaceViewId.PREVIEW,
+        title="Review",
+        actions=(action,),
+    )
+    contract = workspace_action_contract(action)
+
+    source.options.append("defer")
+    assert workspace_action_contract(action) == contract
+    with pytest.raises(TypeError, match="immutable"):
+        action.response_fields[0].options.append("defer")
+    with pytest.raises(AttributeError, match="immutable"):
+        action.response_fields[0].id = "changed"
+    with pytest.raises(WorkspaceValidationError, match="not in options"):
+        collect_workspace_action(
+            view,
+            {
+                "__elicitation_response__": True,
+                "title": "Review",
+                "view": "preview",
+                "action": "apply",
+                "confirmed": True,
+                "responses": {"ruling": "defer"},
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    ("response_fields", "message"),
+    [
+        ([], "non-empty 'fields'"),
+        ([{"id": "x", "text": "X", "type": "unknown"}], "invalid type"),
+        (
+            [
+                {"id": "x", "text": "X", "type": "text_input"},
+                {"id": "x", "text": "Again", "type": "text_input"},
+            ],
+            "duplicate id",
+        ),
+    ],
+)
+def test_workspace_rejects_malformed_action_response_fields(response_fields, message) -> None:
+    raw = _action_response_definition()
+    raw["actions"][0]["response_fields"] = response_fields
+    with pytest.raises(WorkspaceValidationError, match=message):
+        workspace_from_dict(raw)
 
 
 @pytest.mark.parametrize(
@@ -250,6 +432,76 @@ def test_bound_renderers_emit_the_same_action_envelope() -> None:
     }
 
 
+def test_action_response_renderers_share_the_bound_response_envelope() -> None:
+    view = workspace_from_dict(_action_response_definition())
+    html = workspace_to_widget_html(view, instance_id="batch", binding=_BINDING)
+    assert 'data-workspace-action="apply_rulings"' in html
+    assert 'payload["responses"] = answers' in html
+    assert 'Object.assign(payload, {"confirmed":true,"workspace_id":"fix-demo"' in html
+    assert "if(b.closest&&b.closest('form'))return" in html
+
+    markdown = workspace_to_markdown(view, binding=_BINDING)
+    skeletons = [
+        json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", markdown, flags=re.DOTALL)
+    ]
+    response_skeleton = next(
+        payload for payload in skeletons if payload.get("action") == "apply_rulings"
+    )
+    assert response_skeleton == {
+        "__elicitation_response__": True,
+        "title": "Fix preview",
+        "responses": {"candidate_1": "promote", "candidate_2": None},
+        "confirmed": False,
+        "workspace_id": "fix-demo",
+        "revision": 3,
+        "action_nonce": "nonce_0123456789abcdef",
+        "contract_hash": _CONTRACT_HASH,
+        "action": "apply_rulings",
+        "view": "preview",
+    }
+    assert any(payload.get("action") is None for payload in skeletons)
+
+    baked = re.search(r"Object\.assign\(payload, (\{[^;]+\})\);", html)
+    assert baked is not None
+    response = collect_workspace_action(
+        view,
+        {
+            "__elicitation_response__": True,
+            "title": view.title,
+            "view": view.id.value,
+            "action": "apply_rulings",
+            "responses": {"candidate_1": "promote", "candidate_2": "decline"},
+            **json.loads(baked.group(1)),
+        },
+        _BINDING,
+    )
+    assert response.confirmed is True
+    assert response.responses_payload()["candidate_1"] == "promote"
+
+
+def test_version_one_default_rendering_bytes_are_pinned() -> None:
+    view = workspace_from_dict(_preview_definition())
+    form = form_from_dict(
+        {
+            "title": "Compatibility intake",
+            "description": "Stable defaults.",
+            "fields": [{"id": "scope", "text": "Scope?", "type": "text_input"}],
+        }
+    )
+    rendered = (
+        workspace_to_widget_html(view, instance_id="compat-v1"),
+        workspace_to_markdown(view),
+        form_to_widget_html(form, instance_id="compat-form"),
+        form_to_markdown(form),
+    )
+    assert tuple(sha256(value.encode()).hexdigest() for value in rendered) == (
+        "c5d34815e48efc95b51b1f93f1639c0d57916f7f1e85261a7b7aa70714f2d736",
+        "062d00bc6d2fb186498ac9927f730d3e5c0bc75c3e028d93a8076d1a45adaf42",
+        "34dc6d7d9f742a8beef0fc86255ad7e74e6a36c8f692369d2481321a114b1b45",
+        "4d19c915b09c4822bcffd1dfb9c81b74dd86e562d6090c5b223a329c5cb043e3",
+    )
+
+
 def test_collect_workspace_action_accepts_only_the_bound_rendered_action() -> None:
     view = workspace_from_dict(_preview_definition())
     payload = {
@@ -264,6 +516,190 @@ def test_collect_workspace_action_accepts_only_the_bound_rendered_action() -> No
     assert response.action == "run_fix"
     assert response.revision == 3
     assert response.contract_hash == _CONTRACT_HASH
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("action_nonce", "nönce_0123456789abcdef", "nonce does not match"),
+        ("contract_hash", "é" * 64, "contract hash does not match"),
+    ],
+)
+def test_bound_workspace_action_rejects_non_ascii_authority_as_validation(
+    field, value, message
+) -> None:
+    view = workspace_from_dict(_preview_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "run_fix",
+        "confirmed": True,
+        **_BINDING.to_payload(),
+    }
+    payload[field] = value
+    with pytest.raises(WorkspaceValidationError, match=message):
+        collect_workspace_action(view, payload, _BINDING)
+
+
+def test_collect_workspace_action_returns_immutable_validated_responses() -> None:
+    view = workspace_from_dict(_action_response_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "apply_rulings",
+        "confirmed": True,
+        "responses": {"candidate_1": "promote", "candidate_2": "decline"},
+        **_BINDING.to_payload(),
+    }
+    response = collect_workspace_action(view, payload, _BINDING)
+    assert response.responses_payload() == {
+        "candidate_1": "promote",
+        "candidate_2": "decline",
+    }
+    with pytest.raises(TypeError):
+        response.responses["candidate_1"] = "decline"  # type: ignore[index]
+    detached = response.responses_payload()
+    detached["candidate_1"] = "decline"
+    assert response.responses["candidate_1"] == "promote"
+
+    nested = WorkspaceActionResponse(
+        WorkspaceViewId.PREVIEW,
+        "apply_rulings",
+        True,
+        responses={"ordered": ["a", "b"], "rulings": {"a": "promote"}},
+    )
+    assert nested.responses_payload() == {
+        "ordered": ["a", "b"],
+        "rulings": {"a": "promote"},
+    }
+    with pytest.raises(TypeError):
+        nested.responses["rulings"]["a"] = "decline"  # type: ignore[index]
+    nested_detached = nested.responses_payload()
+    nested_detached["ordered"].append("c")
+    assert nested.responses_payload()["ordered"] == ["a", "b"]
+
+
+def test_workspace_actions_and_responses_preserve_hashability() -> None:
+    action = workspace_from_dict(_action_response_definition()).actions[0]
+    response = WorkspaceActionResponse(
+        WorkspaceViewId.PREVIEW,
+        "apply_rulings",
+        True,
+        responses={"ordered": ["a", "b"], "rulings": {"a": "promote"}},
+    )
+    assert isinstance(hash(action.response_fields[0].options), int)
+    assert {action: "action"}[action] == "action"
+    assert {response: "response"}[response] == "response"
+
+
+def test_immutable_workspace_values_support_copy_and_pickle_round_trips() -> None:
+    source_question = form_from_dict(
+        {
+            "title": "Ruling",
+            "fields": [
+                {
+                    "id": "candidate_1",
+                    "text": "Candidate 1",
+                    "type": "single_select",
+                    "options": ["promote", "decline"],
+                    "option_notes": {"promote": "Advance."},
+                }
+            ],
+        }
+    ).questions[0]
+    action = WorkspaceAction("apply_rulings", "Apply rulings", response_fields=(source_question,))
+    response = WorkspaceActionResponse(
+        WorkspaceViewId.PREVIEW,
+        "apply_rulings",
+        True,
+        responses={"ordered": ["a", "b"], "rulings": {"a": "promote"}},
+    )
+
+    assert action.response_fields[0] == source_question
+    assert action.response_fields[0] != object()
+    assert copy.copy(action.response_fields[0]) is action.response_fields[0]
+    assert copy.copy(action.response_fields[0].options) is action.response_fields[0].options
+    assert copy.deepcopy(action.response_fields[0].options) is action.response_fields[0].options
+    assert (
+        copy.copy(action.response_fields[0].option_notes) is action.response_fields[0].option_notes
+    )
+    assert copy.copy(action) == action
+    assert copy.deepcopy(action) == action
+    assert copy.deepcopy(response) == response
+    assert pickle.loads(pickle.dumps(action)) == action
+    assert pickle.loads(pickle.dumps(response)) == response
+    with pytest.raises(TypeError):
+        pickle.loads(pickle.dumps(action)).response_fields[0].options.append("later")
+
+
+def test_all_response_field_actions_render_without_plain_dispatch_script() -> None:
+    definition = _action_response_definition()
+    definition["actions"] = definition["actions"][:1]
+    view = workspace_from_dict(definition)
+
+    html = workspace_to_widget_html(view, instance_id="all-response", binding=_BINDING)
+    markdown = workspace_to_markdown(view, binding=_BINDING)
+
+    assert html.count('data-workspace-action="apply_rulings"') == 1
+    assert "window.confirm(form.getAttribute('data-submit-consequence'))" in html
+    assert "root.addEventListener('click'" not in html
+    assert 'class="ae-ws-dispatch" role="status" aria-live="polite"' in html
+    assert "### Apply rulings" in markdown
+    assert "For an action without fields" not in markdown
+
+
+@pytest.mark.parametrize(
+    ("responses", "message"),
+    [
+        (None, "must be a mapping"),
+        ({"candidate_1": "promote"}, "candidate_2.*required"),
+        (
+            {"candidate_1": "promote", "candidate_2": "decline", "foreign": "promote"},
+            "unknown answer key 'foreign'",
+        ),
+        (
+            {"candidate_1": "maybe", "candidate_2": "decline"},
+            "candidate_1.*not in options",
+        ),
+    ],
+)
+def test_collect_workspace_action_rejects_malformed_response_batches(responses, message) -> None:
+    view = workspace_from_dict(_action_response_definition())
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "apply_rulings",
+        "confirmed": True,
+        **_BINDING.to_payload(),
+    }
+    if responses is not None:
+        payload["responses"] = responses
+    with pytest.raises(WorkspaceValidationError, match=message):
+        collect_workspace_action(view, payload, _BINDING)
+
+
+def test_collect_workspace_action_selects_only_the_submitted_action_schema() -> None:
+    view = workspace_from_dict(_action_response_definition())
+    field_free_payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": "another_round",
+        "confirmed": False,
+        **_BINDING.to_payload(),
+    }
+    response = collect_workspace_action(view, field_free_payload, _BINDING)
+    assert response.responses_payload() == {}
+
+    with pytest.raises(WorkspaceValidationError, match="does not declare response fields"):
+        collect_workspace_action(
+            view,
+            {**field_free_payload, "responses": {}},
+            _BINDING,
+        )
 
 
 @pytest.mark.parametrize(

@@ -25,7 +25,7 @@ import json
 import re
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from html import escape
 
 from attune_forms.bridge import is_fully_inferred
@@ -731,6 +731,8 @@ def form_to_widget_html(
     include_title: bool = True,
     submit_consequence: str = "",
     requires_explicit_choice: bool = False,
+    submit_response_key: str = "answers",
+    submit_context: Mapping[str, str | int | bool] | None = None,
 ) -> str:
     """Render a declarative form as an inline ``show_widget`` HTML form.
 
@@ -771,6 +773,11 @@ def form_to_widget_html(
             shells disable them because they own the heading hierarchy.
         submit_consequence: User-visible effect of an explicit action.
         requires_explicit_choice: Require confirmation before posting.
+        submit_response_key: Payload key that carries the validated field
+            mapping. Standalone forms retain ``answers``; action-scoped
+            workspace forms use ``responses``.
+        submit_context: Additional trusted primitive response fields, such as
+            a workspace binding. Reserved form/action keys cannot be replaced.
 
     Returns:
         An HTML string ready to pass straight to
@@ -780,6 +787,29 @@ def form_to_widget_html(
     for name, value in (("submit_action", submit_action), ("submit_view", submit_view)):
         if value is not None and not _CONTEXT_ID_RE.fullmatch(value):
             raise ValueError(f"{name} must be a stable lowercase identifier")
+    if not _CONTEXT_ID_RE.fullmatch(submit_response_key):
+        raise ValueError("submit_response_key must be a stable lowercase identifier")
+    context = dict(submit_context or {})
+    reserved = {
+        WIDGET_RESPONSE_MARKER,
+        "title",
+        "answers",
+        "responses",
+        "action",
+        "view",
+    }
+    collisions = sorted(reserved.intersection(context))
+    if collisions:
+        raise ValueError(
+            "submit_context cannot replace reserved response fields: " + ", ".join(collisions)
+        )
+    for key, value in context.items():
+        if not _CONTEXT_ID_RE.fullmatch(key):
+            raise ValueError("submit_context keys must be stable lowercase identifiers")
+        if isinstance(value, bool):
+            continue
+        if not isinstance(value, str | int):
+            raise TypeError("submit_context values must be strings, integers, or booleans")
     if requires_explicit_choice and not submit_consequence.strip():
         raise ValueError("an explicit submit action requires a consequence")
     sfx = "".join(c for c in (instance_id or "") if c.isalnum()) or uuid.uuid4().hex[:8]
@@ -805,6 +835,13 @@ def form_to_widget_html(
     action_js = json.dumps(submit_action)
     view_js = json.dumps(submit_view)
     explicit_js = "true" if requires_explicit_choice else "false"
+    response_key_js = json.dumps(submit_response_key)
+    context_js = (
+        json.dumps(context, ensure_ascii=True, separators=(",", ":"))
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
     title_html = (
         f'<h2 class="sr-only">{_esc(form.title)} — interactive form</h2>\n'
         f"<h3>{_esc(form.title)}</h3>"
@@ -816,6 +853,23 @@ def form_to_widget_html(
         if submit_consequence
         else ""
     )
+    workspace_action_attr = (
+        f' data-workspace-action="{_esc(submit_action)}"'
+        if submit_action and submit_response_key != "answers"
+        else ""
+    )
+    if submit_response_key == "answers" and not context:
+        response_payload_js = (
+            f"var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,\n"
+            "      title: form.getAttribute('data-form-title'), answers: answers };"
+        )
+    else:
+        response_payload_js = (
+            f"var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,\n"
+            "      title: form.getAttribute('data-form-title') };\n"
+            f"    payload[{response_key_js}] = answers;\n"
+            f"    Object.assign(payload, {context_js});"
+        )
 
     html = f"""<form id="{form_id}" data-form-title="{_esc(submit_title or form.title)}" data-submit-consequence="{_esc(submit_consequence)}">
 <style>
@@ -824,7 +878,7 @@ def form_to_widget_html(
 {intro}{desc}{confirm_html}
 {fields}
 {consequence_html}
-<button type="button" id="ae-submit-{sfx}" class="ae-submit">{_esc(button_label)}</button>
+<button type="button" id="ae-submit-{sfx}" class="ae-submit"{workspace_action_attr}>{_esc(button_label)}</button>
 <div id="ae-error-{sfx}" class="ae-error" role="alert"></div>
 <script>
 (function() {{
@@ -1033,8 +1087,7 @@ def form_to_widget_html(
     }}
     err.textContent = '';
     if ({explicit_js} && !window.confirm(form.getAttribute('data-submit-consequence'))) return;
-    var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,
-      title: form.getAttribute('data-form-title'), answers: answers }};
+    {response_payload_js}
     var submitAction = {action_js};
     if (submitAction !== null) payload.action = submitAction;
     var submitView = {view_js};
