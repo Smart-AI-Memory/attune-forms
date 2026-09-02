@@ -643,11 +643,177 @@ def test_all_response_field_actions_render_without_plain_dispatch_script() -> No
     markdown = workspace_to_markdown(view, binding=_BINDING)
 
     assert html.count('data-workspace-action="apply_rulings"') == 1
-    assert "window.confirm(form.getAttribute('data-submit-consequence'))" in html
+    assert "window.confirm" not in html
+    assert "data-confirm-armed" in html
+    assert "Click again to confirm." in html
+    assert html.count("disarmExplicitSubmit();") == 5
+    assert "btn.setAttribute('data-original-label', btn.textContent)" in html
+    assert html.index("btn.setAttribute('data-confirm-armed', '1')") < html.index("var payload = ")
     assert "root.addEventListener('click'" not in html
     assert 'class="ae-ws-dispatch" role="status" aria-live="polite"' in html
     assert "### Apply rulings" in markdown
     assert "For an action without fields" not in markdown
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_response_field_action_uses_inline_two_click_confirmation() -> None:
+    definition = _action_response_definition()
+    definition["actions"] = definition["actions"][:1]
+    definition["actions"][0]["response_fields"] = definition["actions"][0]["response_fields"][:1]
+    html = workspace_to_widget_html(
+        workspace_from_dict(definition), instance_id="response-confirm", binding=_BINDING
+    )
+    script = re.search(r"<script>(.*?)</script>", html, re.DOTALL)
+    form_id = re.search(r'<form id="([^"]+)"', html)
+    button_id = re.search(r'<button type="button" id="([^"]+)"', html)
+    error_id = re.search(r'<div id="([^"]+)" class="ae-error"', html)
+    assert script is not None
+    assert form_id is not None
+    assert button_id is not None
+    assert error_id is not None
+
+    harness = f"""
+const assert = require('node:assert/strict');
+const buttonListeners = {{}};
+const formListeners = {{}};
+const sent = [];
+const attrs = {{}};
+const control = {{
+  type: 'select-one', value: 'promote',
+  focus: function() {{}},
+  hasAttribute: function(name) {{ return name === 'data-control'; }}
+}};
+const field = {{
+  getAttribute: function(name) {{
+    if (name === 'data-fid') return 'candidate_1';
+    if (name === 'data-collect') return 'value';
+    return null;
+  }},
+  querySelector: function(selector) {{
+    if (selector === '[data-control]') return control;
+    if (selector === '.ae-label') return {{textContent: 'Candidate 1*'}};
+    return null;
+  }},
+  querySelectorAll: function() {{ return []; }},
+  classList: {{toggle: function() {{}}, add: function() {{}}}}
+}};
+const form = {{
+  addEventListener: function(name, callback) {{ formListeners[name] = callback; }},
+  contains: function() {{ return true; }},
+  getAttribute: function(name) {{
+    if (name === 'data-form-title') return 'Fix preview';
+    if (name === 'data-submit-consequence') return 'Apply every ruling atomically.';
+    return null;
+  }},
+  querySelector: function() {{ return null; }},
+  querySelectorAll: function(selector) {{
+    if (selector === '.ae-field' || selector === '.ae-field[data-required]') return [field];
+    return [];
+  }}
+}};
+const button = {{
+  textContent: 'Apply rulings', disabled: false,
+  addEventListener: function(name, callback) {{ buttonListeners[name] = callback; }},
+  getAttribute: function(name) {{ return attrs[name] || null; }},
+  setAttribute: function(name, value) {{ attrs[name] = value; }},
+  removeAttribute: function(name) {{ delete attrs[name]; }}
+}};
+const error = {{textContent: ''}};
+const pathDialog = {{hidden: false}};
+const pathChoice = {{
+  closest: function(selector) {{
+    if (selector === '[data-path-choice]') return pathChoice;
+    if (selector === '.ae-field') return field;
+    if (selector === '.ae-path-dialog') return pathDialog;
+    return null;
+  }},
+  getAttribute: function(name) {{ return name === 'data-path-choice' ? 'chosen/path' : null; }}
+}};
+const ranked = {{children: {{length: 0}}, appendChild: function() {{}}}};
+const pool = {{appendChild: function() {{}}}};
+const count = {{textContent: ''}};
+const rankBox = {{
+  getAttribute: function(name) {{ return name === 'data-rank-n' ? '1' : null; }},
+  querySelector: function(selector) {{
+    if (selector === '.ae-rank-ranked') return ranked;
+    if (selector === '.ae-rank-pool') return pool;
+    if (selector === '.ae-rank-count') return count;
+    return null;
+  }}
+}};
+const rankRow = {{previousElementSibling: null, nextElementSibling: null}};
+const rankButton = {{
+  closest: function(selector) {{
+    if (selector === '[data-rank]') return rankButton;
+    if (selector === '.ae-rank-row') return rankRow;
+    if (selector === '.ae-rank') return rankBox;
+    return null;
+  }},
+  getAttribute: function(name) {{ return name === 'data-rank' ? 'add' : null; }}
+}};
+global.document = {{getElementById: function(id) {{
+  if (id === {json.dumps(form_id.group(1))}) return form;
+  if (id === {json.dumps(button_id.group(1))}) return button;
+  if (id === {json.dumps(error_id.group(1))}) return error;
+  return null;
+}}}};
+global.sendPrompt = function(value) {{ sent.push(value); }};
+eval({json.dumps(script.group(1))});
+
+function arm() {{
+  buttonListeners.click();
+  assert.equal(sent.length, 0);
+  assert.equal(button.textContent, 'Confirm Apply rulings');
+  assert.equal(button.getAttribute('data-confirm-armed'), '1');
+  assert.equal(error.textContent,
+    'Apply every ruling atomically. Click again to confirm.');
+}}
+function assertDisarmed() {{
+  assert.equal(button.textContent, 'Apply rulings');
+  assert.equal(button.getAttribute('data-confirm-armed'), null);
+}}
+
+arm();
+formListeners.change({{target: control}});
+assertDisarmed();
+assert.equal(error.textContent, '');
+
+arm();
+formListeners.input({{target: control}});
+assertDisarmed();
+
+arm();
+formListeners.click({{target: pathChoice}});
+assertDisarmed();
+assert.equal(control.value, 'chosen/path');
+
+control.value = 'promote';
+arm();
+formListeners.click({{target: rankButton}});
+assertDisarmed();
+
+global.sendPrompt = undefined;
+arm();
+buttonListeners.click();
+assertDisarmed();
+assert.equal(error.textContent,
+  'This surface cannot post back (sendPrompt unavailable). Use the AskUserQuestion fallback.');
+
+global.sendPrompt = function(value) {{ sent.push(value); }};
+buttonListeners.click();
+buttonListeners.click();
+assert.equal(sent.length, 1);
+assert.match(sent[0], /"action":"apply_rulings"/);
+assert.match(sent[0], /"confirmed":true/);
+assert.match(sent[0], /"candidate_1":"promote"/);
+"""
+    result = subprocess.run(
+        ["node", "-e", harness],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(
@@ -949,7 +1115,9 @@ def test_form_workspace_preserves_explicit_action_semantics() -> None:
     )
     html = workspace_to_widget_html(view, instance_id="explicit")
     assert "Build the deterministic preview." in html
-    assert "window.confirm(form.getAttribute('data-submit-consequence'))" in html
+    assert "window.confirm" not in html
+    assert "data-confirm-armed" in html
+    assert "Click again to confirm." in html
     markdown = workspace_to_markdown(view)
     assert "**Explicit confirmation required:** Build the deterministic preview." in markdown
     assert "<script>alert" not in html
