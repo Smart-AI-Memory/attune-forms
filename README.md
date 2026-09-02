@@ -15,7 +15,12 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
-## What's new in 0.12.1
+## What's new in 0.12.2
+
+- **Visible consequential submits** — action-scoped response forms now use the
+  same inline two-click confirmation pattern as field-free workspace actions.
+  Editing a response disarms the pending confirmation, and sandboxed MCP App
+  hosts no longer depend on a native `window.confirm` dialog.
 
 - **Action-scoped workspace responses** — one workspace action can collect a
   validated response mapping across widget, Markdown, headless, and MCP stdio
@@ -27,8 +32,8 @@ Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-
   DOM, keyboard traversal, constrained viewports, projection parity, submitted
   state, and separately attributed cold/warm latency phases.
 
-Version 0.12.1 corrects the published project overview; the runtime features
-were introduced in 0.12.0.
+Version 0.12.2 removes the native-dialog stall from consequential form actions;
+the action-scoped response runtime was introduced in 0.12.0.
 
 This is the provider-neutral transport layer. Individual agent products still
 choose whether to render it inline, open it as a browser artifact, or use the

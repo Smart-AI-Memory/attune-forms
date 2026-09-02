@@ -835,6 +835,49 @@ def form_to_widget_html(
     action_js = json.dumps(submit_action)
     view_js = json.dumps(submit_view)
     explicit_js = "true" if requires_explicit_choice else "false"
+    explicit_support_js = (
+        "  function disarmExplicitSubmit() {\n"
+        "    if (btn.getAttribute('data-confirm-armed') !== '1') return;\n"
+        "    btn.removeAttribute('data-confirm-armed');\n"
+        "    btn.textContent = btn.getAttribute('data-original-label');\n"
+        "    err.textContent = '';\n"
+        "  }\n"
+        if requires_explicit_choice
+        else ""
+    )
+    change_disarm_js = (
+        "    if (radio && radio.hasAttribute && radio.hasAttribute('data-control')) {\n"
+        "      disarmExplicitSubmit();\n"
+        "    }\n"
+        if requires_explicit_choice
+        else ""
+    )
+    path_disarm_js = "      disarmExplicitSubmit();\n" if requires_explicit_choice else ""
+    rank_disarm_js = "    disarmExplicitSubmit();\n" if requires_explicit_choice else ""
+    input_disarm_js = (
+        "    if (e.target.hasAttribute && e.target.hasAttribute('data-control')) {\n"
+        "      disarmExplicitSubmit();\n"
+        "    }\n"
+        if requires_explicit_choice
+        else ""
+    )
+    unavailable_disarm_js = "      disarmExplicitSubmit();\n" if requires_explicit_choice else ""
+    if requires_explicit_choice:
+        explicit_submit_js = (
+            "    if (btn.getAttribute('data-confirm-armed') !== '1') {\n"
+            "      btn.setAttribute('data-confirm-armed', '1');\n"
+            "      btn.setAttribute('data-original-label', btn.textContent);\n"
+            "      btn.textContent = 'Confirm ' + btn.textContent;\n"
+            "      err.textContent = form.getAttribute('data-submit-consequence')\n"
+            "        + ' Click again to confirm.';\n"
+            "      return;\n"
+            "    }\n"
+        )
+    else:
+        explicit_submit_js = (
+            f"    if ({explicit_js} && !window.confirm("
+            "form.getAttribute('data-submit-consequence'))) return;\n"
+        )
     response_key_js = json.dumps(submit_response_key)
     context_js = (
         json.dumps(context, ensure_ascii=True, separators=(",", ":"))
@@ -887,14 +930,14 @@ def form_to_widget_html(
   var err = document.getElementById('ae-error-{sfx}');
   var pathOpener = null;
   if (!form || !btn) return;
-  // Ranking controls: move a row between the pool and the ranked list,
+{explicit_support_js}  // Ranking controls: move a row between the pool and the ranked list,
   // or within the ranked list. Pure DOM moves — the ranked list's order
   // is the answer, read at submit time.
   // Assumption rows: reveal the replacement-text box only while "edit"
   // is the picked ruling.
   form.addEventListener('change', function(e) {{
     var radio = e.target;
-    if (!radio || !radio.hasAttribute || !radio.hasAttribute('data-assume')) return;
+{change_disarm_js}    if (!radio || !radio.hasAttribute || !radio.hasAttribute('data-assume')) return;
     var row = radio.closest ? radio.closest('[data-assume-row]') : null;
     if (row) row.classList.toggle('ae-assume-editing', radio.value === 'edit');
   }});
@@ -923,7 +966,7 @@ def form_to_widget_html(
       var input = field.querySelector('[data-control]');
       var dialog = choice.closest('.ae-path-dialog');
       if (input) input.value = choice.getAttribute('data-path-choice');
-      if (dialog) dialog.hidden = true;
+{path_disarm_js}      if (dialog) dialog.hidden = true;
       if (input) input.focus();
       return;
     }}
@@ -949,7 +992,7 @@ def form_to_widget_html(
     }} else if (act === 'down' && row.nextElementSibling) {{
       ranked.insertBefore(row.nextElementSibling, row);
     }}
-    var count = box.querySelector('.ae-rank-count');
+{rank_disarm_js}    var count = box.querySelector('.ae-rank-count');
     if (count) count.textContent = ranked.children.length;
   }});
   form.addEventListener('keydown', function(e) {{
@@ -960,7 +1003,7 @@ def form_to_widget_html(
     if (pathOpener) pathOpener.focus();
   }});
   form.addEventListener('input', function(e) {{
-    if (!e.target.hasAttribute || !e.target.hasAttribute('data-path-filter')) return;
+{input_disarm_js}    if (!e.target.hasAttribute || !e.target.hasAttribute('data-path-filter')) return;
     var query = e.target.value.toLowerCase();
     var dialog = e.target.closest('.ae-path-dialog');
     dialog.querySelectorAll('[data-path-choice]').forEach(function(choice) {{
@@ -1086,8 +1129,7 @@ def form_to_widget_html(
       return;
     }}
     err.textContent = '';
-    if ({explicit_js} && !window.confirm(form.getAttribute('data-submit-consequence'))) return;
-    {response_payload_js}
+{explicit_submit_js}    {response_payload_js}
     var submitAction = {action_js};
     if (submitAction !== null) payload.action = submitAction;
     var submitView = {view_js};
@@ -1097,7 +1139,7 @@ def form_to_widget_html(
         + 'response:\\n```json\\n' + JSON.stringify(payload) + '\\n```');
       btn.disabled = true; btn.textContent = 'Submitted \\u2713';
     }} else {{
-      err.textContent = 'This surface cannot post back (sendPrompt '
+{unavailable_disarm_js}      err.textContent = 'This surface cannot post back (sendPrompt '
         + 'unavailable). Use the AskUserQuestion fallback.';
     }}
   }});

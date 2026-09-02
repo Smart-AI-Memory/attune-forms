@@ -6,6 +6,15 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-09-02
+
+### Fixed
+
+- Consequential form and action-response submits now use an inline, visible
+  two-click confirmation instead of `window.confirm`, which can stall or remain
+  hidden in sandboxed MCP App hosts. Editing a response disarms the pending
+  confirmation before a payload can be submitted.
+
 ## [0.12.1] — 2026-09-02
 
 ### Fixed
@@ -725,7 +734,8 @@ verified master.
 - Initial extraction of the attune-ai elicitation subsystem: declarative `FormSchema`, build/collect validation, multi-surface renderers (widget HTML, AskUserQuestion batching, MCP elicitation), surface router, template layer with ask-time intake generation
 - Trusted-publishing release workflow (tag-triggered, PyPI environment)
 
-[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.11.0...v0.11.1
