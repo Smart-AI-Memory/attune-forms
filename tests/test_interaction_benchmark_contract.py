@@ -32,9 +32,6 @@ def _load(path: Path) -> dict[str, object]:
 def test_result_schema_is_vendor_neutral() -> None:
     schema = _load(SCHEMA_PATH)
     serialized = json.dumps(schema).lower()
-
-    # attune-forms may be an implementation under test, but the scoring
-    # contract must not require attune-forms-specific runtime fields.
     assert "attune_forms" not in serialized
     assert schema["additionalProperties"] is False
 
@@ -51,7 +48,6 @@ def test_result_schema_declares_all_conditions() -> None:
 def test_result_schema_requires_core_safety_metrics() -> None:
     schema = _load(SCHEMA_PATH)
     required = set(schema["required"])
-
     assert {
         "task_success",
         "silent_assumptions",
@@ -65,23 +61,32 @@ def test_initial_fixtures_cover_every_scenario_family() -> None:
     payload = _load(SCENARIOS_PATH)
     scenarios = payload["scenarios"]
     assert isinstance(scenarios, list)
-
-    families = {scenario["family"] for scenario in scenarios}
+    families = {scenario["actor"]["family"] for scenario in scenarios}
     assert families == EXPECTED_FAMILIES
 
 
-def test_initial_fixture_ids_are_unique_and_seed_risk() -> None:
+def test_actor_projection_contains_no_evaluator_secrets() -> None:
     payload = _load(SCENARIOS_PATH)
     scenarios = payload["scenarios"]
     assert isinstance(scenarios, list)
 
-    ids = [scenario["id"] for scenario in scenarios]
-    assert len(ids) == len(set(ids))
-
+    forbidden = {"seeded_risk", "hidden_requirements", "success_criteria", "primary_outcomes"}
     for scenario in scenarios:
-        assert scenario["seeded_risk"].strip()
-        assert scenario["success_criteria"]
-        assert scenario["hidden_requirements"]
+        actor = scenario["actor"]
+        evaluator = scenario["evaluator"]
+        assert forbidden.isdisjoint(actor)
+        assert evaluator["seeded_risk"].strip()
+        assert evaluator["success_criteria"]
+        assert evaluator["hidden_requirements"]
+        assert evaluator["primary_outcomes"]
+
+
+def test_initial_fixture_ids_are_unique() -> None:
+    payload = _load(SCENARIOS_PATH)
+    scenarios = payload["scenarios"]
+    assert isinstance(scenarios, list)
+    ids = [scenario["actor"]["id"] for scenario in scenarios]
+    assert len(ids) == len(set(ids))
 
 
 def test_fixture_version_matches_schema_version_family() -> None:
