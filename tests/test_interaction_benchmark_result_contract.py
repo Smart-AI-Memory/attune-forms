@@ -75,7 +75,9 @@ def test_incomplete_run_is_retained_and_cannot_score_success() -> None:
 
     assert result.incomplete is True
     assert result.error == "provider timeout after final action event"
-    assert result.task_success is False
+    assert result.task_success is None
+    assert result.primary_outcomes_pass is None
+    assert all(value is None for value in result.primary_outcomes.values())
     assert '"incomplete": true' in results_to_jsonl([result])
 
 

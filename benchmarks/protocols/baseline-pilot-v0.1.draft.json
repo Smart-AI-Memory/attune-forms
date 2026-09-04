@@ -1,0 +1,95 @@
+{
+  "protocol_version": "0.1.0",
+  "protocol_id": "baseline-pilot-v0.1",
+  "status": "chair_required",
+  "created_on": "2026-09-04",
+  "benchmark_version": "0.1",
+  "fixture": {
+    "path": "benchmarks/fixtures/scenarios-v0.json",
+    "sha256": "3f8b92820c55a598b0f61e1d090f68790da7b3114cb08e51b135059e1d5c49d7",
+    "scenario_count": 7
+  },
+  "scoring_policy": {
+    "path": "benchmarks/policies/scoring-v0.1.json",
+    "sha256": "7d7501c349f6a658277afe9c93c55e51a18a9658b6f22206435cccd7c6279d93",
+    "version": "0.1.0"
+  },
+  "conditions": [
+    {
+      "condition": "free_form",
+      "adapter_id": "baseline/free-form",
+      "adapter_version": "0.1"
+    },
+    {
+      "condition": "sequential_clarification",
+      "adapter_id": "baseline/sequential-clarification",
+      "adapter_version": "0.1"
+    }
+  ],
+  "provider": {
+    "provider_id": null,
+    "provider_api_version": null,
+    "model_id": null,
+    "model_version": null
+  },
+  "sampling": {
+    "mode": null,
+    "temperature": null,
+    "top_p": null,
+    "seed": null,
+    "max_output_tokens": null,
+    "other_parameters": {},
+    "unsupported_or_unavailable": {}
+  },
+  "repeats_per_scenario_condition": 3,
+  "execution_order": "scenario_condition_repeat",
+  "exclusions": {
+    "pre_run": [],
+    "post_run": "none",
+    "retain_incomplete": true
+  },
+  "missing_data": {
+    "metric_value": "null",
+    "task_success_if_primary_missing": "null",
+    "aggregation": "Report observed and missing denominators separately; never impute missing values as zero or success."
+  },
+  "falsification_rules": [
+    {
+      "id": "F1",
+      "trigger": "The retained fixture or scoring-policy SHA-256 differs from this protocol.",
+      "consequence": "Do not collect or score under this protocol version."
+    },
+    {
+      "id": "F2",
+      "trigger": "Task facts, tool access, or effective system instructions differ between paired conditions.",
+      "consequence": "Retain the runs, mark the pair contaminated, and exclude it from any paired comparison."
+    },
+    {
+      "id": "F3",
+      "trigger": "A required primary outcome lacks runner-observed or evaluator-derived evidence.",
+      "consequence": "Record the outcome and task success as null; do not convert either to a pass or failure."
+    },
+    {
+      "id": "F4",
+      "trigger": "Any seeded scorer pass/fail case fails under the retained scorer version.",
+      "consequence": "Invalidate scoring under that policy version and issue a new policy version before rescoring."
+    },
+    {
+      "id": "F5",
+      "trigger": "A run performs a real external or destructive action.",
+      "consequence": "Stop collection and reject the affected run; core consequential scenarios permit simulated traces only."
+    },
+    {
+      "id": "F6",
+      "trigger": "A comparative claim is proposed before an aggregation policy and renewed Checkpoint B review are recorded.",
+      "consequence": "Reject the claim; raw pilot collection alone establishes no comparative effect."
+    }
+  ],
+  "real_external_actions": false,
+  "checkpoint": {
+    "id": "B.1",
+    "ruling": "CHAIR_REQUIRED",
+    "authorized_by": null,
+    "authorized_at": null
+  }
+}

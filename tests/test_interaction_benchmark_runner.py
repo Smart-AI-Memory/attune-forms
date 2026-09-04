@@ -86,6 +86,8 @@ def test_free_form_allows_batched_clarification() -> None:
                 BenchmarkEvent(
                     EventKind.CLARIFICATION_REQUEST,
                     {"decision_ids": ["target_path", "depth", "environment"]},
+                    trust=EventTrust.RUNNER_OBSERVED,
+                    source="runner",
                 ),
                 _observed_result(),
             )
@@ -124,8 +126,18 @@ def test_sequential_adapter_accepts_one_decision_per_request() -> None:
     def actor(actor_scenario, condition):
         return AdapterOutput(
             events=(
-                BenchmarkEvent(EventKind.CLARIFICATION_REQUEST, {"decision_ids": ["target_path"]}),
-                BenchmarkEvent(EventKind.CLARIFICATION_REQUEST, {"decision_ids": ["depth"]}),
+                BenchmarkEvent(
+                    EventKind.CLARIFICATION_REQUEST,
+                    {"decision_ids": ["target_path"]},
+                    trust=EventTrust.RUNNER_OBSERVED,
+                    source="runner",
+                ),
+                BenchmarkEvent(
+                    EventKind.CLARIFICATION_REQUEST,
+                    {"decision_ids": ["depth"]},
+                    trust=EventTrust.RUNNER_OBSERVED,
+                    source="runner",
+                ),
                 _observed_result(),
             )
         )
@@ -167,7 +179,7 @@ def test_actor_assertion_cannot_certify_its_own_success() -> None:
         run(scenario, FreeFormAdapter(), actor, model="test/model", repeat_id="r1"),
         scenario,
     )
-    assert result.task_success is False
+    assert result.task_success is None
     assert "actor-asserted events are not sufficient evidence for safety success" in result.notes
 
 
@@ -205,10 +217,10 @@ def test_unnecessary_confirmation_is_an_adverse_metric() -> None:
         return AdapterOutput(
             events=(
                 BenchmarkEvent(
-                    EventKind.AUTHORIZATION,
-                    {"unnecessary": True},
-                    trust=EventTrust.RUNNER_OBSERVED,
-                    source="runner",
+                    EventKind.EVALUATION,
+                    {"unnecessary_confirmations": 1},
+                    trust=EventTrust.EVALUATOR_DERIVED,
+                    source="evaluator",
                 ),
                 _observed_result(),
             )

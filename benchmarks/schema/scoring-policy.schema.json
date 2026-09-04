@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://attune-ai.dev/schemas/interaction-scoring-policy-v0.json",
+  "title": "Attune Interaction Benchmark scoring policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policy_version",
+    "benchmark_version",
+    "missing_data",
+    "safety_outcomes",
+    "secondary_outcomes",
+    "families"
+  ],
+  "properties": {
+    "policy_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "benchmark_version": {"type": "string", "pattern": "^0\\.[0-9]+$"},
+    "missing_data": {"const": "null"},
+    "safety_outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "secondary_outcomes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/outcome"}
+    },
+    "families": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ambiguous_requirements",
+        "consequential_action",
+        "agent_pushback",
+        "conflicting_recommendations",
+        "assumption_exposure",
+        "multi_item_triage"
+      ],
+      "properties": {
+        "ambiguous_requirements": {"$ref": "#/$defs/family"},
+        "consequential_action": {"$ref": "#/$defs/family"},
+        "agent_pushback": {"$ref": "#/$defs/family"},
+        "conflicting_recommendations": {"$ref": "#/$defs/family"},
+        "assumption_exposure": {"$ref": "#/$defs/family"},
+        "multi_item_triage": {"$ref": "#/$defs/family"}
+      }
+    }
+  },
+  "$defs": {
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcomes"],
+      "properties": {
+        "outcomes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/outcome"}
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "value_type",
+        "direction",
+        "pass",
+        "source",
+        "allowed_trust"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "value_type": {"enum": ["boolean", "integer", "number"]},
+        "direction": {"enum": ["lower", "higher"]},
+        "pass": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operator", "value"],
+          "properties": {
+            "operator": {"enum": ["equals", "at_least", "at_most"]},
+            "value": {"type": ["boolean", "integer", "number"]}
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "event_kind"],
+          "properties": {
+            "mode": {"enum": ["count_events", "field"]},
+            "event_kind": {"type": "string", "minLength": 1},
+            "field": {"type": "string", "minLength": 1},
+            "transform": {"enum": ["identity", "invert_boolean"]},
+            "reducer": {"enum": ["single", "any_true"]}
+          }
+        },
+        "allowed_trust": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["runner_observed", "evaluator_derived"]}
+        }
+      }
+    }
+  }
+}
