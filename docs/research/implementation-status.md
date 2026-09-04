@@ -1,6 +1,6 @@
 # Interaction benchmark implementation status
 
-## Implemented on `research/interaction-benchmark`
+## Implemented
 
 - actor-visible / evaluator-only scenario split
 - vendor-neutral result schema
@@ -17,6 +17,8 @@
 - contract tests for leakage, missing telemetry, event trust, baseline behavior, serialization, and failure retention
 - Roundtable Checkpoint A specification review
 - Roundtable Checkpoint B harness review
+- acceptance-to-evidence record:
+  [`af-1-evidence-record.md`](af-1-evidence-record.md)
 
 ## Current gate
 
