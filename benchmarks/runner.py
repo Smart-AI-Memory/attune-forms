@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-import json
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 
 class EventKind(str, Enum):
@@ -286,7 +287,9 @@ def _failed_artifact(
 def run_suite(
     scenarios: Sequence[Scenario],
     adapters: Sequence[ConditionAdapter],
-    actor_factory: Callable[[Scenario, ConditionAdapter], Callable[[ActorScenario, str], AdapterOutput]],
+    actor_factory: Callable[
+        [Scenario, ConditionAdapter], Callable[[ActorScenario, str], AdapterOutput]
+    ],
     *,
     model: str,
     repeats: int = 1,
