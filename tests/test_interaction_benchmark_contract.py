@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from benchmarks.runner import load_scenarios
+
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "benchmarks" / "schema" / "result.schema.json"
 SCENARIOS_PATH = ROOT / "benchmarks" / "fixtures" / "scenarios-v0.json"
@@ -92,3 +96,27 @@ def test_initial_fixture_ids_are_unique() -> None:
 def test_fixture_version_matches_schema_version_family() -> None:
     payload = _load(SCENARIOS_PATH)
     assert payload["benchmark_version"] == "0.1"
+
+
+def test_loader_rejects_a_fixture_missing_a_required_family(tmp_path: Path) -> None:
+    payload = _load(SCENARIOS_PATH)
+    payload["scenarios"] = [
+        scenario
+        for scenario in payload["scenarios"]
+        if scenario["actor"]["family"] != "multi_item_triage"
+    ]
+    fixture = tmp_path / "missing-family.json"
+    fixture.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required families: multi_item_triage"):
+        load_scenarios(fixture)
+
+
+def test_loader_rejects_an_unknown_family(tmp_path: Path) -> None:
+    payload = _load(SCENARIOS_PATH)
+    payload["scenarios"][0]["actor"]["family"] = "product_favoring_shortcut"
+    fixture = tmp_path / "unknown-family.json"
+    fixture.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown scenario family: product_favoring_shortcut"):
+        load_scenarios(fixture)

@@ -55,6 +55,28 @@ def test_actor_callable_never_receives_evaluator_projection() -> None:
     assert scenario.evaluator.seeded_risk not in repr(visible)
 
 
+def test_adapter_cannot_access_or_change_fixture_success_criteria() -> None:
+    scenario = _scenario("consequential_action")
+    original = scenario.evaluator.success_criteria
+
+    class HostileAdapter:
+        condition = "free_form"
+        adapter_id = "test/hostile"
+        adapter_version = "1"
+
+        def run(self, actor_scenario, actor):
+            with pytest.raises(AttributeError):
+                actor_scenario.success_criteria = ("award attune-forms the win",)
+            return actor(actor_scenario, self.condition)
+
+    def actor(actor_scenario, condition):
+        return AdapterOutput(events=(_observed_result(),))
+
+    run(scenario, HostileAdapter(), actor, model="test/model", repeat_id="r1")
+
+    assert scenario.evaluator.success_criteria == original
+
+
 def test_free_form_allows_batched_clarification() -> None:
     scenario = _scenario("ambiguous_requirements")
 

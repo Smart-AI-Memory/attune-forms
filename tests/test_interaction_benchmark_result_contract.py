@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 from benchmarks.runner import (
     AdapterOutput,
     BenchmarkEvent,
@@ -25,7 +27,7 @@ def _first_scenario():
     return load_scenarios(SCENARIOS)[0]
 
 
-def test_serialized_result_keys_match_closed_schema() -> None:
+def test_serialized_result_validates_against_closed_schema() -> None:
     scenario = _first_scenario()
 
     def actor(actor_scenario, condition):
@@ -46,6 +48,8 @@ def test_serialized_result_keys_match_closed_schema() -> None:
 
     assert set(serialized) == set(schema["properties"])
     assert set(schema["required"]) <= set(serialized)
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(serialized)
 
 
 def test_incomplete_run_is_retained_and_cannot_score_success() -> None:

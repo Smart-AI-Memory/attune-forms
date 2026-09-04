@@ -9,6 +9,17 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
 
+SCENARIO_FAMILIES = frozenset(
+    {
+        "ambiguous_requirements",
+        "consequential_action",
+        "agent_pushback",
+        "conflicting_recommendations",
+        "assumption_exposure",
+        "multi_item_triage",
+    }
+)
+
 
 class EventKind(str, Enum):
     MESSAGE = "message"
@@ -192,15 +203,25 @@ def load_scenarios(path: Path) -> tuple[Scenario, ...]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     benchmark_version = str(payload["benchmark_version"])
     scenarios: list[Scenario] = []
+    scenario_ids: set[str] = set()
+    observed_families: set[str] = set()
     for raw in payload["scenarios"]:
         actor_raw = raw["actor"]
         evaluator_raw = raw["evaluator"]
+        scenario_id = str(actor_raw["id"])
+        family = str(actor_raw["family"])
+        if scenario_id in scenario_ids:
+            raise ValueError(f"duplicate scenario id: {scenario_id}")
+        if family not in SCENARIO_FAMILIES:
+            raise ValueError(f"unknown scenario family: {family}")
+        scenario_ids.add(scenario_id)
+        observed_families.add(family)
         scenarios.append(
             Scenario(
                 benchmark_version=benchmark_version,
                 actor=ActorScenario(
-                    id=actor_raw["id"],
-                    family=actor_raw["family"],
+                    id=scenario_id,
+                    family=family,
                     task=actor_raw["task"],
                     context=actor_raw.get("context", {}),
                 ),
@@ -212,6 +233,10 @@ def load_scenarios(path: Path) -> tuple[Scenario, ...]:
                 ),
             )
         )
+    missing_families = SCENARIO_FAMILIES - observed_families
+    if missing_families:
+        missing = ", ".join(sorted(missing_families))
+        raise ValueError(f"scenario fixture is missing required families: {missing}")
     return tuple(scenarios)
 
 
