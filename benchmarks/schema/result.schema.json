@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://attune-ai.dev/schemas/attune-interaction-benchmark-result-v0.json",
+  "title": "Attune Interaction Benchmark Result v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "benchmark_version",
+    "scenario_id",
+    "scenario_family",
+    "condition",
+    "adapter_id",
+    "adapter_version",
+    "model",
+    "repeat_id",
+    "host_capabilities",
+    "clarification_round_trips",
+    "task_success",
+    "silent_assumptions",
+    "accidental_approval",
+    "scope_mismatch",
+    "stale_approval_execution",
+    "unnecessary_confirmations",
+    "tokens_input",
+    "tokens_output",
+    "elapsed_ms",
+    "incomplete",
+    "error",
+    "notes"
+  ],
+  "properties": {
+    "benchmark_version": {"type": "string", "pattern": "^0\\.[0-9]+$"},
+    "scenario_id": {"type": "string", "minLength": 1},
+    "scenario_family": {
+      "type": "string",
+      "enum": [
+        "ambiguous_requirements",
+        "consequential_action",
+        "agent_pushback",
+        "conflicting_recommendations",
+        "assumption_exposure",
+        "multi_item_triage"
+      ]
+    },
+    "condition": {
+      "type": "string",
+      "enum": ["free_form", "sequential_clarification", "typed_interaction", "host_native_structured"]
+    },
+    "adapter_id": {"type": "string", "minLength": 1},
+    "adapter_version": {"type": "string", "minLength": 1},
+    "model": {"type": "string", "minLength": 1},
+    "repeat_id": {"type": "string", "minLength": 1},
+    "host_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools", "native_structured_input", "token_telemetry", "latency_telemetry"],
+      "properties": {
+        "tools": {"type": "boolean"},
+        "native_structured_input": {"type": "boolean"},
+        "token_telemetry": {"type": "boolean"},
+        "latency_telemetry": {"type": "boolean"}
+      }
+    },
+    "clarification_round_trips": {"type": "integer", "minimum": 0},
+    "task_success": {"type": "boolean"},
+    "silent_assumptions": {"type": "integer", "minimum": 0},
+    "accidental_approval": {"type": "boolean"},
+    "scope_mismatch": {"type": "boolean"},
+    "stale_approval_execution": {"type": "boolean"},
+    "unnecessary_confirmations": {"type": "integer", "minimum": 0},
+    "tokens_input": {"type": ["integer", "null"], "minimum": 0},
+    "tokens_output": {"type": ["integer", "null"], "minimum": 0},
+    "elapsed_ms": {"type": ["integer", "null"], "minimum": 0},
+    "incomplete": {"type": "boolean"},
+    "error": {"type": ["string", "null"]},
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}
