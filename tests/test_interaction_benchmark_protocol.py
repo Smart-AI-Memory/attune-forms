@@ -87,6 +87,17 @@ def test_repository_protocol_is_deliberately_blocked_pending_chair_fields() -> N
         assert_ready_for_collection(protocol)
 
 
+def test_draft_protocol_defines_exactly_42_pilot_runs() -> None:
+    raw = json.loads(DEFAULT_PROTOCOL_PATH.read_text(encoding="utf-8"))
+
+    assert (
+        raw["fixture"]["scenario_count"]
+        * len(raw["conditions"])
+        * raw["repeats_per_scenario_condition"]
+        == 42
+    )
+
+
 def test_fully_declared_ratified_protocol_passes_preflight(tmp_path: Path) -> None:
     protocol, _ = make_ratified_protocol(tmp_path)
 

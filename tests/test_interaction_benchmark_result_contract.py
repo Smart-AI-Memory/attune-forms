@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -22,6 +23,14 @@ ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = ROOT / "benchmarks" / "fixtures" / "scenarios-v0.json"
 SCHEMA = ROOT / "benchmarks" / "schema" / "result.schema.json"
 BENCHMARK_DOCUMENT = ROOT / "docs" / "research" / "interaction-benchmark-v0.md"
+AF2_DOCUMENTS = (
+    BENCHMARK_DOCUMENT,
+    ROOT / "docs" / "research" / "implementation-status.md",
+    ROOT / "docs" / "research" / "af-2-evidence-record.md",
+    ROOT / "docs" / "research" / "scoring-policy-v0.1.md",
+    ROOT / "docs" / "research" / "evidence-protocol-v0.1.md",
+    ROOT / "docs" / "reports" / "roundtable" / "q-interaction-benchmark-scoring-001.md",
+)
 
 
 def _first_scenario():
@@ -113,3 +122,13 @@ def test_documented_result_example_validates_against_live_schema() -> None:
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
 
     Draft202012Validator(schema).validate(json.loads(example))
+
+
+def test_af2_document_relative_links_resolve_from_each_document() -> None:
+    for document in AF2_DOCUMENTS:
+        content = document.read_text(encoding="utf-8")
+        for raw_target in re.findall(r"\[[^]]+\]\(([^)]+)\)", content):
+            if "://" in raw_target or raw_target.startswith("#"):
+                continue
+            target = raw_target.split("#", 1)[0]
+            assert (document.parent / target).is_file(), f"{document}: {raw_target}"
