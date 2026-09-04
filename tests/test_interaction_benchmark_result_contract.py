@@ -21,6 +21,7 @@ from benchmarks.runner import (
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = ROOT / "benchmarks" / "fixtures" / "scenarios-v0.json"
 SCHEMA = ROOT / "benchmarks" / "schema" / "result.schema.json"
+BENCHMARK_DOCUMENT = ROOT / "docs" / "research" / "interaction-benchmark-v0.md"
 
 
 def _first_scenario():
@@ -104,3 +105,11 @@ def test_evaluator_fields_never_appear_in_result_jsonl() -> None:
     assert scenario.evaluator.seeded_risk not in payload
     for hidden in scenario.evaluator.hidden_requirements:
         assert hidden not in payload
+
+
+def test_documented_result_example_validates_against_live_schema() -> None:
+    document = BENCHMARK_DOCUMENT.read_text(encoding="utf-8")
+    example = document.split("```json\n", 1)[1].split("\n```", 1)[0]
+    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+
+    Draft202012Validator(schema).validate(json.loads(example))

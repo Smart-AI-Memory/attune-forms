@@ -1,6 +1,6 @@
 # Attune Interaction Benchmark v0
 
-Status: research draft
+Status: research protocol; AF-2 scoring implemented; collection not authorized
 
 ## Thesis
 
@@ -12,7 +12,10 @@ The benchmark MUST remain runnable without attune-forms so that attune-forms doe
 
 ## Conditions
 
-Each scenario is executed under three interaction conditions using the same task, model family, tool permissions, context, and success criteria.
+The complete benchmark is intended to compare three interaction conditions
+using the same task, model family, tool permissions, context, and success
+criteria. The baseline pilot collects the first two conditions before the typed
+condition is implemented.
 
 1. **Free-form chat** — the agent uses ordinary conversational text and may ask questions however it chooses.
 2. **Sequential clarification** — the agent asks one explicit clarification at a time before proceeding.
@@ -159,27 +162,46 @@ The first release SHOULD emphasize reproducibility over headline statistics.
 
 ## Machine-readable result schema
 
-Each run should emit a record equivalent to:
+Each evaluated run emits a record under
+[`result.schema.json`](../../benchmarks/schema/result.schema.json). The example
+below is illustrative structure, not an observed result:
 
 ```json
 {
   "benchmark_version": "0.1",
-  "scenario_id": "consequential-delete-001",
-  "scenario_family": "consequential_action",
-  "condition": "typed_interaction",
+  "scoring_policy_version": "0.1.0",
+  "scenario_id": "ambiguous-security-audit-001",
+  "scenario_family": "ambiguous_requirements",
+  "condition": "free_form",
+  "adapter_id": "baseline/free-form",
+  "adapter_version": "0.1",
   "model": "provider/model-version",
-  "seed": null,
+  "repeat_id": "r1",
+  "host_capabilities": {
+    "tools": true,
+    "native_structured_input": false,
+    "token_telemetry": false,
+    "latency_telemetry": false
+  },
+  "primary_outcomes": {
+    "silent_assumptions": 0,
+    "clarification_round_trips": 1
+  },
+  "missing_primary_outcomes": [],
+  "primary_outcomes_pass": true,
   "clarification_round_trips": 1,
-  "human_turns": 2,
   "task_success": true,
   "silent_assumptions": 0,
-  "accidental_approval": false,
-  "scope_mismatch": false,
-  "stale_approval_execution": false,
-  "tokens_input": 0,
-  "tokens_output": 0,
-  "elapsed_ms": 0,
-  "notes": []
+  "accidental_approval": null,
+  "scope_mismatch": null,
+  "stale_approval_execution": null,
+  "unnecessary_confirmations": 0,
+  "tokens_input": null,
+  "tokens_output": null,
+  "elapsed_ms": null,
+  "incomplete": false,
+  "error": null,
+  "notes": ["token telemetry unavailable", "latency telemetry unavailable"]
 }
 ```
 
@@ -201,13 +223,13 @@ A negative result should change the product design, not be explained away.
 
 ## Initial implementation sequence
 
-1. Freeze benchmark vocabulary and result schema.
-2. Add 30 vendor-neutral scenario fixtures.
-3. Build a runner interface that can execute all conditions.
-4. Implement the free-form baseline first.
-5. Implement sequential clarification second.
-6. Implement typed interaction through attune-forms third.
-7. Publish raw records and analysis scripts.
+1. Freeze benchmark vocabulary, result schema, and the seven-scenario pilot.
+2. Implement the neutral runner, free-form baseline, and sequential baseline.
+3. Freeze executable scoring and append-only evidence controls.
+4. Ratify a provider-specific baseline protocol before observing output.
+5. Collect and evaluate the two baselines, then renew Checkpoint B.
+6. Expand toward 30 vendor-neutral scenarios and define aggregation.
+7. Implement typed interaction through attune-forms only after the baseline gate.
 8. Add human-subject evaluation only after the machine-reproducible core is stable.
 
 ## Publication rule
