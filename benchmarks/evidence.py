@@ -121,6 +121,16 @@ def _write_fsynced(path: Path, content: bytes) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
+    """Flush a directory's metadata where the platform supports it.
+
+    POSIX lets a directory be opened read-only and fsynced so a freshly
+    created entry survives a crash. Windows refuses ``os.open`` on a
+    directory with ``PermissionError`` (errno 13) and offers no directory
+    fsync at all, so the call is skipped there rather than failing the
+    bundle commit; the file contents were already fsynced individually.
+    """
+    if os.name == "nt":
+        return
     descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)

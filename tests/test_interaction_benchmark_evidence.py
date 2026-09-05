@@ -320,3 +320,16 @@ def test_evaluation_refuses_a_tampered_raw_bundle(tmp_path: Path) -> None:
             evaluator_sha256="b" * 64,
             evaluated_at=EVALUATED_AT,
         )
+
+
+def test_directory_fsync_is_skipped_on_windows(monkeypatch, tmp_path):
+    """Windows cannot open a directory handle with os.open (errno 13) and has
+    no directory fsync; the bundle commit must not fail there. Pinned after
+    the AF-2 PR's Windows lanes failed with PermissionError at this call."""
+    from benchmarks import evidence
+
+    calls: list[object] = []
+    monkeypatch.setattr(evidence.os, "name", "nt")
+    monkeypatch.setattr(evidence.os, "open", lambda *a, **k: calls.append(a))
+    evidence._fsync_directory(tmp_path)
+    assert calls == []
