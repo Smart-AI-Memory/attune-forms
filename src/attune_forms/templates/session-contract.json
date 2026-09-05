@@ -1,5 +1,10 @@
 {
-  "slots": ["project"],
+  "slots": [
+    "project"
+  ],
+  "example_slots": {
+    "project": "attune-ai"
+  },
   "title": "Session contract — {project}",
   "description": "The session-start protocol's fields. Fill before non-trivial work.",
   "fields": [

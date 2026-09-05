@@ -20,6 +20,7 @@ from attune_forms import (
     form_from_dict,
     form_from_template,
     list_templates,
+    template_example_slots,
     template_store,
 )
 
@@ -296,3 +297,73 @@ class TestConfirmationPass1:
         assert "slot name 'Who' is not a valid placeholder name" in joined
         assert "declares unused slot 'ghost' — no field uses '{ghost}'" in joined
         assert "unused slot 'Who'" not in joined
+
+
+class TestExampleSlots:
+    """R5.3: every shipped template casts with its own example_slots."""
+
+    @pytest.mark.parametrize("name", list_templates())
+    def test_every_shipped_template_casts_with_its_example_slots(self, name: str) -> None:
+        # The gate R5.3 exists for: validating the uncast template proves
+        # nothing about the form the substitution produces, so cast it.
+        examples = template_example_slots(name)
+        assert examples, f"{name} ships without example_slots"
+        form = form_from_template(name, examples)
+        assert form.questions, f"{name} cast to an empty form"
+        assert "{" not in form.title  # no placeholder survived substitution
+
+    def test_missing_example_slots_is_a_listed_problem(self, tmp_path: Path, monkeypatch) -> None:
+        _store(
+            tmp_path,
+            monkeypatch,
+            {"bare": {"slots": ["who"], "title": "Hi {who}", "fields": _FIELDS}},
+        )
+        with pytest.raises(FormValidationError) as excinfo:
+            template_example_slots("bare")
+        assert "has no 'example_slots'" in excinfo.value.problems[0]
+        # form_from_template itself still works without them (they are for the gate)
+        assert form_from_template("bare", {"who": "x"}).title == "Hi x"
+
+    def test_example_slots_must_match_the_declaration(self, tmp_path: Path, monkeypatch) -> None:
+        _store(
+            tmp_path,
+            monkeypatch,
+            {
+                "off": {
+                    "slots": ["who"],
+                    "example_slots": {"whom": "x", "who": 3},
+                    "title": "Hi {who}",
+                    "fields": _FIELDS,
+                }
+            },
+        )
+        with pytest.raises(FormValidationError) as excinfo:
+            template_example_slots("off")
+        problems = "\n".join(excinfo.value.problems)
+        assert "names undeclared slot 'whom'" in problems
+        assert "value for 'who' must be a string" in problems
+
+    def test_non_mapping_example_slots_rejected(self, tmp_path: Path, monkeypatch) -> None:
+        _store(
+            tmp_path,
+            monkeypatch,
+            {
+                "listy": {
+                    "slots": ["who"],
+                    "example_slots": ["x"],
+                    "title": "Hi {who}",
+                    "fields": _FIELDS,
+                }
+            },
+        )
+        with pytest.raises(FormValidationError, match="must be a mapping"):
+            form_from_template("listy", {"who": "x"})
+
+
+_FIELDS = [{"id": "q", "type": "boolean", "text": "Ok?"}]
+
+
+def _store(tmp_path: Path, monkeypatch, templates: dict[str, dict[str, Any]]) -> None:
+    for name, data in templates.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(template_store, "_TEMPLATE_DIR", tmp_path)
