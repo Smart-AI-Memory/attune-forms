@@ -208,7 +208,8 @@ eval(source);
   await window.sendPrompt(
     'Submitted\\n```json\\n' + JSON.stringify({{
       __elicitation_response__: true,
-      answers: {{ choice: 'repair' }}
+      answers: {{ choice: 'repair' }},
+      instance_id: 'a'.repeat(32)
     }}) + '\\n```'
   );
   const calls = posted.filter(function (item) {{ return item.id; }});
@@ -219,6 +220,7 @@ eval(source);
     'ui/message'
   ]);
   assert.equal(calls[1].params.arguments.form.title, 'Repair');
+  assert.equal(calls[1].params.arguments.instance_id, 'a'.repeat(32));
   assert.equal(
     calls[2].params.structuredContent.attune_submission.result.response_id,
     'receipt-123'
@@ -237,4 +239,24 @@ eval(source);
         capture_output=True,
         check=False,
     )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_collector_javascript_preserves_the_display_token() -> None:
+    """Run the shipped JS argument mapper, not a Python reimplementation."""
+    html = mcp_app_resource()["text"]
+    start = html.index("    function collectorArguments(")
+    end = html.index("\n    async function continueValidatedInteraction", start + 1)
+    script = (
+        "const assert = require('node:assert/strict');\n"
+        'const toolInput = {form: {title: "Repeated"}};\n'
+        + html[start:end]
+        + '\nconst token = "a".repeat(32);\n'
+        + 'const args = collectorArguments({collect_mode: "form"}, {answers: {x: "yes"}, instance_id: token});\n'
+        + "assert.equal(args.instance_id, token);\n"
+        + 'assert.deepEqual(args.answers, {x: "yes"});\n'
+        + 'assert.equal(collectorArguments({collect_mode: "form"}, {}).instance_id, "");\n'
+    )
+    result = subprocess.run(["node"], input=script, text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr

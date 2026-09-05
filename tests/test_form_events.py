@@ -510,28 +510,37 @@ class TestStageLatency:
         self._write(
             _isolated_home,
             [
-                {"event": "form_build", "form_id": "a", "source": "dict"},
-                {"event": "form_build", "form_id": "b", "source": "template:x"},
+                {"event": "form_build", "form_id": "a", "instance_id": "a" * 32, "source": "dict"},
+                {
+                    "event": "form_build",
+                    "form_id": "b",
+                    "instance_id": "b" * 32,
+                    "source": "template:x",
+                },
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T10:00:00.000000Z",
                     "duration_ms": 2.0,
                 },
                 {
                     "event": "form_rendered",
                     "form_id": "b",
+                    "instance_id": "b" * 32,
                     "ts": "2026-08-24T10:01:00.000000Z",
                     "duration_ms": 4.0,
                 },
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T10:00:10.000000Z",
                 },
                 {
                     "event": "form_submitted",
                     "form_id": "b",
+                    "instance_id": "b" * 32,
                     "ts": "2026-08-24T10:01:30.000000Z",
                 },
                 # No render for this one — counted, never joined.
@@ -557,6 +566,7 @@ class TestStageLatency:
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T10:00:00.000000Z",
                     "duration_ms": 1.0,
                 },
@@ -565,6 +575,7 @@ class TestStageLatency:
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T09:59:00.000000Z",
                 },
             ],
@@ -584,6 +595,7 @@ class TestStageLatency:
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "garbage",
                     "duration_ms": "fast",
                 }
@@ -600,7 +612,10 @@ class TestStageLatency:
 
     def test_reads_configured_home(self, tmp_path: Path, _isolated_home: Path) -> None:
         other = tmp_path / "dashboard-home"
-        self._write(other, [{"event": "form_build", "form_id": "a", "source": "dict"}])
+        self._write(
+            other,
+            [{"event": "form_build", "form_id": "a", "instance_id": "a" * 32, "source": "dict"}],
+        )
         assert stage_latency()["builds"] == 0
         assert stage_latency(home=other)["builds"] == 1
 
@@ -615,23 +630,27 @@ class TestStageLatency:
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-23T10:00:00.000000Z",
                     "duration_ms": 1.0,
                 },
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-23T10:00:05.000000Z",
                 },
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "c" * 32,
                     "ts": "2026-08-24T09:00:00.000000Z",
                     "duration_ms": 1.0,
                 },
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "c" * 32,
                     "ts": "2026-08-24T09:00:15.000000Z",
                 },
             ],
@@ -651,17 +670,20 @@ class TestStageLatency:
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T09:00:00.000000Z",
                 },
                 {
                     "event": "form_rendered",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T10:00:00.000000Z",
                     "duration_ms": 1.0,
                 },
                 {
                     "event": "form_submitted",
                     "form_id": "a",
+                    "instance_id": "a" * 32,
                     "ts": "2026-08-24T10:00:20.000000Z",
                 },
             ],
@@ -696,3 +718,176 @@ class TestDerivedFormIdNeverRaises:
             }
         )
         assert form.form_id == ""
+
+
+def test_overlapping_instances_join_exactly_once(_isolated_home: Path) -> None:
+    """Identical definitions can finish in either order, including duplicate delivery."""
+    records = []
+    for event, instance, second in [
+        ("form_rendered", "a", 0),
+        ("form_rendered", "b", 10),
+        ("form_submitted", "a", 20),
+        ("form_submitted", "a", 30),
+        ("form_submitted", "b", 100),
+    ]:
+        records.append(
+            {
+                "event": event,
+                "form_id": "same",
+                "instance_id": instance * 32,
+                "ts": f"2026-09-04T00:{second // 60:02}:{second % 60:02}.000000Z",
+            }
+        )
+    TestStageLatency()._write(_isolated_home, records)
+    assert stage_latency()["submit_seconds"] == {"p50": 20.0, "p95": 90.0, "n": 2}
+
+
+def test_legacy_events_do_not_invent_a_pair(_isolated_home: Path) -> None:
+    TestStageLatency()._write(
+        _isolated_home,
+        [
+            {"event": "form_rendered", "form_id": "same", "ts": "2026-09-04T00:00:00Z"},
+            {"event": "form_submitted", "form_id": "same", "ts": "2026-09-04T00:00:10Z"},
+        ],
+    )
+    stats = stage_latency()
+    assert stats["renders"] == stats["submissions"] == 1
+    assert stats["joined"] == 0
+    assert stats["submit_seconds"] is None
+
+
+def test_real_collect_preserves_instance_and_rejects_invalid_answers(_isolated_home: Path) -> None:
+    import asyncio
+    import re
+
+    from attune_forms.mcp_server import handle_collect_response, handle_render_widget
+
+    definition = {
+        "title": "Repeated",
+        "fields": [
+            {
+                "id": "choice",
+                "text": "Choose",
+                "type": "single_select",
+                "options": ["yes", "no"],
+                "required": True,
+            }
+        ],
+    }
+    first = asyncio.run(handle_render_widget({"form": definition}))
+    second = asyncio.run(handle_render_widget({"form": definition}))
+    ids = [
+        re.search(r'instance_id: "([a-f0-9]{32})"', result["html"]).group(1)
+        for result in (first, second)
+    ]
+    assert ids[0] != ids[1]
+    bad = asyncio.run(
+        handle_collect_response(
+            {"form": definition, "answers": {"choice": "bad"}, "instance_id": ids[0]}
+        )
+    )
+    assert bad["success"] is False
+    assert stage_latency()["submissions"] == 0
+    for instance in ids:
+        good = asyncio.run(
+            handle_collect_response(
+                {"form": definition, "answers": {"choice": "yes"}, "instance_id": instance}
+            )
+        )
+        assert good["success"] is True
+    assert stage_latency()["joined"] == 2
+
+
+def test_workspace_latency_separates_revision_and_event_family(_isolated_home: Path):
+    from attune_forms.form_events import workspace_latency
+
+    records = []
+    for event, revision, second in [
+        ("workspace_rendered", 1, 0),
+        ("workspace_accepted", 2, 10),
+        ("form_submitted", 1, 15),
+        ("workspace_accepted", 1, 20),
+        ("workspace_accepted", 1, 30),
+    ]:
+        records.append(
+            {
+                "event": event,
+                "workspace_id": "w",
+                "form_id": "w",
+                "instance_id": "a" * 32,
+                "revision": revision,
+                "ts": f"2026-09-04T00:00:{second:02}.000000Z",
+            }
+        )
+    TestStageLatency()._write(_isolated_home, records)
+    stats = workspace_latency(_isolated_home)
+    assert stats["accepted"] == 3
+    assert stats["joined"] == 1
+    assert stats["accept_seconds"] == {"p50": 20.0, "p95": 20.0, "n": 1}
+    assert stage_latency()["joined"] == 0
+
+
+def test_workspace_telemetry_rejects_invalid_metadata(_isolated_home: Path):
+    from attune_forms.form_events import log_workspace_stage, workspace_latency
+
+    for stage, token in [("clicked", "a" * 32), ("accepted", "bad")]:
+        log_workspace_stage(
+            stage, workspace_id="w", revision=1, instance_id=token, adapter_id="roundtable"
+        )
+    assert workspace_latency(_isolated_home)["accepted"] == 0
+
+
+def test_workspace_stage_log_round_trip_and_failure_isolation(_isolated_home, monkeypatch):
+    import attune_forms.form_events as events
+
+    events.log_workspace_stage(
+        "rendered",
+        workspace_id="w",
+        revision=1,
+        instance_id="a" * 32,
+        adapter_id="roundtable",
+        duration_ms=2.0,
+    )
+    events.log_workspace_stage(
+        "accepted",
+        workspace_id="w",
+        revision=1,
+        instance_id="a" * 32,
+        adapter_id="roundtable",
+        action="decline",
+    )
+    assert events.workspace_latency(_isolated_home)["joined"] == 1
+    assert events.workspace_latency(_isolated_home)["render_ms"]["p50"] == 2.0
+
+    def unavailable(record):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(events, "_append", unavailable)
+    events.log_workspace_stage(
+        "accepted", workspace_id="w", revision=1, instance_id="a" * 32, adapter_id="roundtable"
+    )
+
+
+def test_workspace_reader_does_not_join_malformed_revision(_isolated_home):
+    from attune_forms.form_events import workspace_latency
+
+    TestStageLatency()._write(
+        _isolated_home,
+        [
+            {
+                "event": "workspace_rendered",
+                "workspace_id": "w",
+                "revision": True,
+                "instance_id": "a" * 32,
+                "ts": "2026-09-04T00:00:00.000000Z",
+            },
+            {
+                "event": "workspace_accepted",
+                "workspace_id": "w",
+                "revision": True,
+                "instance_id": "a" * 32,
+                "ts": "2026-09-04T00:00:10.000000Z",
+            },
+        ],
+    )
+    assert workspace_latency(_isolated_home)["joined"] == 0

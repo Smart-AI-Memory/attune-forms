@@ -784,6 +784,7 @@ def form_to_widget_html(
         ``mcp__visualize__show_widget``.
     """
     start = time.perf_counter()
+    telemetry_instance_id = uuid.uuid4().hex
     for name, value in (("submit_action", submit_action), ("submit_view", submit_view)):
         if value is not None and not _CONTEXT_ID_RE.fullmatch(value):
             raise ValueError(f"{name} must be a stable lowercase identifier")
@@ -904,6 +905,7 @@ def form_to_widget_html(
     if submit_response_key == "answers" and not context:
         response_payload_js = (
             f"var payload = {{ {WIDGET_RESPONSE_MARKER!r}: true,\n"
+            f"      instance_id: {json.dumps(telemetry_instance_id)},\n"
             "      title: form.getAttribute('data-form-title'), answers: answers };"
         )
     else:
@@ -1146,11 +1148,11 @@ def form_to_widget_html(
 }})();
 </script>
 </form>"""
-    # form.form_id, not the DOM id above: the DOM suffix is fresh per
-    # render, while the telemetry id must match what collect re-derives.
+    # Definition identity groups forms; instance identity pairs one display with collection.
     log_form_rendered(
         form.form_id,
         duration_ms=(time.perf_counter() - start) * 1000.0,
         html_bytes=len(html.encode("utf-8")),
+        instance_id=telemetry_instance_id,
     )
     return html
