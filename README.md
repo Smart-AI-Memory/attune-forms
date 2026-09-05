@@ -15,7 +15,15 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
-## What's new in 0.12.2
+## What's new in 0.12.3
+
+- **Correlated display telemetry** — each form display carries its own instance
+  token through submission, so overlapping displays of the same form produce
+  correctly paired latency samples. Legacy submissions still work but do not
+  produce ambiguous latency samples.
+- **Workspace acceptance telemetry** — optional instance metadata and separate
+  render/acceptance events let host adapters measure validated workspace
+  transitions without recording answers or changing action authority.
 
 - **Visible consequential submits** — action-scoped response forms now use the
   same inline two-click confirmation pattern as field-free workspace actions.
@@ -32,8 +40,8 @@ Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-
   DOM, keyboard traversal, constrained viewports, projection parity, submitted
   state, and separately attributed cold/warm latency phases.
 
-Version 0.12.2 removes the native-dialog stall from consequential form actions;
-the action-scoped response runtime was introduced in 0.12.0.
+This patch corrects measurement correlation. Visible consequential submits and
+the action-scoped response runtime remain available from earlier 0.12 releases.
 
 This is the provider-neutral transport layer. Individual agent products still
 choose whether to render it inline, open it as a browser artifact, or use the
