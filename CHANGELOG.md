@@ -8,6 +8,21 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Fused template path on every form-taking MCP tool (spec R5.2).**
+  `elicitation_render_form`, `elicitation_render_widget`,
+  `elicitation_collect_response` and `elicitation_ask` accept
+  `template: <name>` + `slots: {...}` in place of `form`: the server loads
+  the stored template, casts the slots, validates and renders in ONE call,
+  so neither the form schema nor the HTML transits the agent's context.
+  Exactly one of `form` / `template` is accepted — both, neither, or
+  `slots` without `template` come back as listed problems, never a raise —
+  and a template-cast collection carries the name as
+  `FormResponse.template_id`. The `form_build.source = template:<name>`
+  stamp `form_from_template` already emits makes adoption measurable.
+  Schema and behaviour mirror attune-ai's server (D3).
+
+### Added
+
 - Stored templates carry `example_slots` — one representative value per
   declared slot — and `template_example_slots(name)` exposes them, so a
   drift test can CAST every shipped template with `form_from_template` and

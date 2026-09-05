@@ -187,6 +187,26 @@ async def _round_trip(home: Path) -> dict[str, dict]:
             r = await session.call_tool("elicitation_ask", {"form": _FORM})
             out["ask"] = _payload(r)
 
+            # R5.2 fused template path — cast + render + collect over the
+            # real transport with no form dict in the call.
+            template = {"template": "session-contract", "slots": {"project": "attune-ai"}}
+            r = await session.call_tool("elicitation_render_widget", template)
+            out["render_widget_template"] = _payload(r)
+            r = await session.call_tool(
+                "elicitation_collect_response",
+                {
+                    **template,
+                    "answers": {
+                        "mode": "Executing a planned spec",
+                        "outcome": "R5.2 shipped",
+                        "done_when": "both PRs green",
+                    },
+                },
+            )
+            out["collect_template"] = _payload(r)
+            r = await session.call_tool("elicitation_render_widget", {})
+            out["render_widget_neither"] = _payload(r)
+
             r = await session.call_tool(
                 "elicitation_render_workspace",
                 {"workspace": _WORKSPACE, "binding": _BINDING},
@@ -322,6 +342,20 @@ def test_collect_rejects_bad_answers_with_problems(round_trip):
     assert p["success"] is False
     assert any("path" in prob for prob in p["problems"])
     assert any("nonsense" in prob for prob in p["problems"])
+
+
+def test_template_path_round_trips_over_real_stdio(round_trip):
+    rendered = round_trip["render_widget_template"]
+    assert rendered["success"] is True
+    assert rendered["title"] == "Session contract — attune-ai"
+    assert rendered["field_ids"] == ["mode", "outcome", "done_when", "effort_cap"]
+    assert "__elicitation_response__" in rendered["html"]
+    collected = round_trip["collect_template"]
+    assert collected["success"] is True
+    assert collected["responses"]["mode"] == "Executing a planned spec"
+    neither = round_trip["render_widget_neither"]
+    assert neither["success"] is False
+    assert neither["problems"][0].startswith("pass exactly one of 'form'")
 
 
 def test_ask_degrades_without_elicitation_capability(round_trip):

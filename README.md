@@ -60,7 +60,10 @@ The plugin teaches the session the forms discipline (the `forms` skill)
 and serves six MCP tools — `elicitation_render_form`,
 `elicitation_render_widget`, `elicitation_collect_response`,
 `elicitation_ask`, `elicitation_render_workspace`, and
-`elicitation_collect_workspace_action` — from this package via `uvx`. Decision cards,
+`elicitation_collect_workspace_action` — from this package via `uvx`. Every
+form-taking tool also takes `template` + `slots`: a stored template is cast,
+validated, and rendered server-side in one call, so the form never transits
+the agent's context. Decision cards,
 pushback cards, progress forms, deliberation cards, triage boards,
 confirm gates, ranking lists, and assumption reviews work out of the
 box. MCP Apps hosts discover one shared `ui://` resource, render the
