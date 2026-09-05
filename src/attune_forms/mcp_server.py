@@ -11,6 +11,12 @@ convergence a pure swap and lets docs/skills transfer verbatim):
 - ``elicitation_render_workspace``— workspace dict -> widget + markdown
 - ``elicitation_collect_workspace_action`` — bound action validation
 
+Every form-taking tool accepts the form EITHER as ``form`` (a declarative
+dict composed by the agent) OR as ``template`` + ``slots`` (the fused
+template path, spec R5.2): the server loads the stored template, casts
+the slots, validates and renders in ONE call, so neither the form schema
+nor the HTML transits the agent's context. Exactly one of the two must be
+given; ``slots`` is only meaningful with ``template``.
 Launch: ``attune-forms-mcp`` (console script) or
 ``uvx --from 'attune-forms[mcp]' attune-forms-mcp`` — the exact command
 a plugin ``.mcp.json`` carries.
@@ -49,6 +55,7 @@ from attune_forms.mcp_app import (
     mcp_app_result,
     mcp_app_tool_meta,
 )
+from attune_forms.template_store import form_from_template
 from attune_forms.widget import form_to_widget_html
 from attune_forms.workspace import (
     WorkspaceActionBinding,
@@ -217,6 +224,34 @@ def _form_schema() -> dict[str, Any]:
     }
 
 
+def _template_props() -> dict[str, Any]:
+    """The fused template-path arguments every form-taking tool accepts (R5.2).
+
+    Advertised beside ``form``; the handler enforces "exactly one of
+    ``form`` / ``template``" and lists every problem, so the schema does
+    not need a ``oneOf`` (which not every MCP host renders).
+    """
+    return {
+        "template": {
+            "type": "string",
+            "description": (
+                "Name of a stored form template (e.g. 'session-contract'). "
+                "The server loads, casts the slots, validates and renders it "
+                "in this one call — pass this INSTEAD of 'form'. An unknown "
+                "name returns problems listing the available templates."
+            ),
+        },
+        "slots": {
+            "type": "object",
+            "description": (
+                "Slot values for 'template' — one string per declared "
+                "{slot_name} placeholder; missing or extra names are problems."
+            ),
+            "additionalProperties": {"type": "string"},
+        },
+    }
+
+
 def _workspace_schema() -> dict[str, Any]:
     """Closed serializable workspace grammar mirrored by workspace_from_dict."""
     item = {
@@ -364,6 +399,7 @@ def _workspace_response_schema() -> dict[str, Any]:
 def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
     """The mirrored tools (names/schemas match attune-ai\'s server)."""
     form = _form_schema()
+    template_props = _template_props()
     workspace = _workspace_schema()
     binding = _workspace_binding_schema()
     app_meta = mcp_app_tool_meta() if mcp_apps else None
@@ -374,12 +410,13 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "Validate a declarative form and return batched question "
                 "payloads (<=4 per batch) ready for the AskUserQuestion "
                 "tool. Returns {success, batches} or {success: false, "
-                "problems} so you re-fix the definition."
+                "problems} so you re-fix the definition. Pass either 'form' "
+                "or 'template' + 'slots' (a stored template, cast "
+                "server-side)."
             ),
             inputSchema={
                 "type": "object",
-                "properties": {"form": form},
-                "required": ["form"],
+                "properties": {"form": form, **template_props},
             },
         ),
         types.Tool(
@@ -389,15 +426,18 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "surface. Returns {success, html, title, field_ids} — the "
                 "widget posts answers back as a sentinel-marked JSON block "
                 "('__elicitation_response__'); validate it with "
-                "elicitation_collect_response."
+                "elicitation_collect_response. Prefer 'template' + 'slots' "
+                "over composing 'form': the server loads, casts, validates "
+                "and renders in this one call, and the form never transits "
+                "your context."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "form": form,
+                    **template_props,
                     "message": {"type": "string"},
                 },
-                "required": ["form"],
             },
             **({"_meta": app_meta} if app_meta else {}),
         ),
@@ -407,16 +447,19 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "Validate the user's answers against a declarative form. "
                 "Enforces required fields and option membership — returns "
                 "{success: false, problems} naming exactly which fields to "
-                "re-ask; never silently accepts malformed input."
+                "re-ask; never silently accepts malformed input. Name the "
+                "form the same way it was rendered: 'form', or 'template' + "
+                "'slots' (responses then carry the template as template_id)."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "form": form,
+                    **template_props,
                     "answers": {"type": "object"},
                     "instance_id": {"type": "string", "pattern": "^(?:[a-f0-9]{32})?$"},
                 },
-                "required": ["form", "answers"],
+                "required": ["answers"],
             },
         ),
         types.Tool(
@@ -425,15 +468,16 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "Render a declarative form as a NATIVE MCP elicitation "
                 "dialog and return validated answers in one call. If the "
                 "client can't elicit, returns {success: false, action: "
-                "'unsupported'} — fall back to elicitation_render_form."
+                "'unsupported'} — fall back to elicitation_render_form. "
+                "Pass either 'form' or 'template' + 'slots'."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "form": form,
+                    **template_props,
                     "message": {"type": "string"},
                 },
-                "required": ["form"],
             },
         ),
         types.Tool(
@@ -479,8 +523,28 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
 
 
 def _parse_form(args: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
+    """Resolve the form from ``form`` OR ``template`` + ``slots`` (R5.2).
+
+    The one seam every form-taking tool shares, so the fused template
+    path behaves identically across render_form / render_widget /
+    collect_response / ask. Returns ``(form, None)`` or
+    ``(None, problems_envelope)`` — every problem listed, never raises.
+    """
+    form_def, template = args.get("form"), args.get("template")
+    if (form_def is None) == (template is None):
+        return None, {
+            "success": False,
+            "problems": [
+                "pass exactly one of 'form' (a declarative form dict) or "
+                "'template' (a stored template name, with 'slots')"
+            ],
+        }
+    if template is None and args.get("slots") is not None:
+        return None, {"success": False, "problems": ["'slots' requires 'template'"]}
     try:
-        return form_from_dict(args.get("form", {})), None
+        if template is not None:
+            return form_from_template(template, args.get("slots")), None
+        return form_from_dict(form_def), None
     except FormValidationError as e:
         return None, {"success": False, "problems": e.problems}
 
@@ -544,9 +608,11 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
                 f"answers, got {type(answers).__name__}"
             ],
         }
+    form, problems = _parse_form(args)
+    if problems:
+        return problems
     try:
-        form = form_from_dict(args.get("form", {}))
-        response = collect_form_response(form, answers)
+        response = collect_form_response(form, answers, template_id=args.get("template") or "")
     except FormValidationError as e:
         return {"success": False, "problems": e.problems}
     result: dict[str, Any] = {
@@ -554,6 +620,8 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
         "responses": response.responses,
         "response_id": response.response_id,
     }
+    if args.get("template"):
+        result["template_id"] = response.template_id
     try:
         log_submission(form_id=form.form_id, instance_id=args.get("instance_id", ""))
         hint = maybe_keyboard_hint(keyboard_mode=keyboard_mode_enabled())
@@ -675,15 +743,20 @@ async def handle_ask(args: dict[str, Any]) -> dict[str, Any]:
     if action != "accept":
         return {"success": False, "action": action or "cancel", "responses": {}}
     try:
-        response = collect_form_response(form, getattr(result, "content", None) or {})
+        response = collect_form_response(
+            form, getattr(result, "content", None) or {}, template_id=args.get("template") or ""
+        )
     except FormValidationError as e:
         return {"success": False, "action": "accept", "problems": e.problems}
-    return {
+    accepted: dict[str, Any] = {
         "success": True,
         "action": "accept",
         "responses": response.responses,
         "response_id": response.response_id,
     }
+    if args.get("template"):
+        accepted["template_id"] = response.template_id
+    return accepted
 
 
 _HANDLERS = {
