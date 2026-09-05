@@ -37,6 +37,7 @@ dev = [
 
 [project.scripts]
 attune-forms-mcp = "attune_forms.mcp_server:main"
+attune-forms-preview = "attune_forms.preview:main"
 
 [project.urls]
 Homepage = "https://github.com/Smart-AI-Memory/attune-forms"

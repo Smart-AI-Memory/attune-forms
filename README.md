@@ -177,6 +177,11 @@ if select_form_surface(form) == "widget":
   into their contract digest. Optional revision/hash/nonce bindings are
   echoed for the host to authorize and consume — the UI never grants
   authority.
+- **Authoring preview** — `python -m attune_forms.preview --open` renders
+  every stored template (cast with its `example_slots`) through the
+  production widget renderer into one standalone page, light and dark,
+  with the posted payload shown on submit. Edit a template, reload, see
+  what users see.
 - **Intake templates** — `FormTemplate` + `FieldSlot` generate a
   workflow's intake form at ask-time from named candidate providers
   (`PROVIDERS`): tools describe what they need once, and the form
