@@ -142,3 +142,52 @@ def test_slots_schema_rejects_non_string_values():
     schema = {t.name: t for t in tool_definitions()}["elicitation_render_widget"].inputSchema
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({"template": "session-contract", "slots": {"project": 3}}, schema)
+
+
+def test_collect_from_template_echoes_template_id_and_form_path_does_not():
+    out = asyncio.run(handle_collect_response({**_TEMPLATE_ARGS, "answers": _ANSWERS}))
+    assert out["template_id"] == "session-contract"
+    plain = asyncio.run(handle_collect_response({"form": _FORM, "answers": {"path": "src/"}}))
+    assert plain["success"] is True and "template_id" not in plain
+
+
+def test_ask_from_template_carries_template_id(monkeypatch):
+    from types import SimpleNamespace
+
+    import attune_forms.mcp_server as server
+
+    async def elicit_form(message, schema, request_id):
+        return SimpleNamespace(action="accept", content=_ANSWERS)
+
+    ctx = SimpleNamespace(session=SimpleNamespace(elicit_form=elicit_form), request_id="rid")
+    monkeypatch.setattr(server, "_server", SimpleNamespace(request_context=ctx))
+    seen: dict = {}
+    real = server.collect_form_response
+
+    def spy(form, answers, template_id=""):
+        seen["template_id"] = template_id
+        return real(form, answers, template_id=template_id)
+
+    monkeypatch.setattr(server, "collect_form_response", spy)
+    out = asyncio.run(handle_ask(_TEMPLATE_ARGS))
+    assert out["success"] is True and out["action"] == "accept"
+    assert out["template_id"] == "session-contract"
+    assert seen["template_id"] == "session-contract"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"form": "x"},
+        {"form": []},
+        {"form": {"title": "t", "fields": [5]}},
+        {"template": 5},
+        {"template": ""},
+        {"template": "session-contract", "slots": []},
+        {"template": "session-contract", "slots": {"project": None}},
+    ],
+)
+def test_malformed_inputs_are_problems_never_raises(args):
+    out = asyncio.run(handle_render_widget(args))
+    assert out["success"] is False
+    assert out["problems"] and all(isinstance(p, str) for p in out["problems"])

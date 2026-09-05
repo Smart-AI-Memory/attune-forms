@@ -620,6 +620,8 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
         "responses": response.responses,
         "response_id": response.response_id,
     }
+    if args.get("template"):
+        result["template_id"] = response.template_id
     try:
         log_submission(form_id=form.form_id, instance_id=args.get("instance_id", ""))
         hint = maybe_keyboard_hint(keyboard_mode=keyboard_mode_enabled())
@@ -741,15 +743,20 @@ async def handle_ask(args: dict[str, Any]) -> dict[str, Any]:
     if action != "accept":
         return {"success": False, "action": action or "cancel", "responses": {}}
     try:
-        response = collect_form_response(form, getattr(result, "content", None) or {})
+        response = collect_form_response(
+            form, getattr(result, "content", None) or {}, template_id=args.get("template") or ""
+        )
     except FormValidationError as e:
         return {"success": False, "action": "accept", "problems": e.problems}
-    return {
+    accepted: dict[str, Any] = {
         "success": True,
         "action": "accept",
         "responses": response.responses,
         "response_id": response.response_id,
     }
+    if args.get("template"):
+        accepted["template_id"] = response.template_id
+    return accepted
 
 
 _HANDLERS = {
