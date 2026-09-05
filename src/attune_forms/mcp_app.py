@@ -267,7 +267,8 @@ _MCP_APP_HTML = r"""<!doctype html>
         if (!toolInput || !toolInput.form) {
           throw new Error('Host did not provide the original form input');
         }
-        return { form: toolInput.form, answers: payload.answers || {} };
+        return { form: toolInput.form, answers: payload.answers || {},
+          instance_id: payload.instance_id || "" };
       }
       if (descriptor.collect_mode === 'workspace') {
         if (!toolInput || !toolInput.workspace) {

@@ -494,6 +494,11 @@ def test_version_one_default_rendering_bytes_are_pinned() -> None:
         form_to_widget_html(form, instance_id="compat-form"),
         form_to_markdown(form),
     )
+    # Only the per-display telemetry envelope is new; preserve the original
+    # signed-base hashes for all UI/control bytes and the other surfaces.
+    rendered = tuple(
+        re.sub(r'      instance_id: "[a-f0-9]{32}",\n', "", value) for value in rendered
+    )
     assert tuple(sha256(value.encode()).hexdigest() for value in rendered) == (
         "c5d34815e48efc95b51b1f93f1639c0d57916f7f1e85261a7b7aa70714f2d736",
         "062d00bc6d2fb186498ac9927f730d3e5c0bc75c3e028d93a8076d1a45adaf42",
@@ -1208,3 +1213,34 @@ def test_workspace_instance_suffix_is_ascii_only() -> None:
     compact = workspace_to_widget_html(showcase_views()[2], instance_id="fix1")
     assert 'id="attune-workspace-fix-1"' in hyphenated
     assert 'id="attune-workspace-fix1"' in compact
+
+
+def test_workspace_token_is_metadata_and_does_not_bypass_confirmation():
+    view = workspace_from_dict(_preview_definition())
+    from attune_forms.workspace import collect_workspace_action
+
+    action = next(action for action in view.actions if action.requires_explicit_choice)
+    token = "a" * 32
+    html = workspace_to_widget_html(view, telemetry_instance_id=token)
+    assert f'"instance_id":"{token}"' in html
+    payload = {
+        "__elicitation_response__": True,
+        "title": view.title,
+        "view": view.id.value,
+        "action": action.id,
+        "confirmed": False,
+        "instance_id": token,
+    }
+    with pytest.raises(WorkspaceValidationError, match="explicit confirmation"):
+        collect_workspace_action(view, payload)
+    payload["confirmed"] = True
+    assert collect_workspace_action(view, payload).action == action.id
+    with pytest.raises(WorkspaceValidationError, match="instance_id"):
+        collect_workspace_action(view, {**payload, "instance_id": "bad"})
+
+
+def test_workspace_renderer_rejects_invalid_telemetry_token():
+    with pytest.raises(ValueError, match="telemetry_instance_id"):
+        workspace_to_widget_html(
+            workspace_from_dict(_preview_definition()), telemetry_instance_id="bad"
+        )

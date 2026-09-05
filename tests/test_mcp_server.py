@@ -602,3 +602,39 @@ def test_workspace_schemas_match_the_strict_parser_key_sets():
     action = workspace["properties"]["actions"]["items"]
     assert set(action["properties"]) == set(_ACTION_KEYS)
     assert set(_workspace_response_schema()["properties"]) == set(_ACTION_RESPONSE_KEYS)
+
+
+def test_instance_correlation_through_real_stdio(tmp_path):
+    """Transport preserves distinct displays of one definition through acceptance."""
+    import re
+
+    from attune_forms.form_events import stage_latency
+
+    async def run():
+        async with stdio_client(_server_params(tmp_path)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tokens = []
+                for _ in range(2):
+                    rendered = _payload(
+                        await session.call_tool("elicitation_render_widget", {"form": _FORM})
+                    )
+                    tokens.append(
+                        re.search(r'instance_id: "([a-f0-9]{32})"', rendered["html"]).group(1)
+                    )
+                assert tokens[0] != tokens[1]
+                for token in reversed(tokens):
+                    accepted = _payload(
+                        await session.call_tool(
+                            "elicitation_collect_response",
+                            {
+                                "form": _FORM,
+                                "answers": {"path": "src/", "depth": "quick"},
+                                "instance_id": token,
+                            },
+                        )
+                    )
+                    assert accepted["success"] is True
+
+    asyncio.run(run())
+    assert stage_latency(home=tmp_path)["joined"] == 2

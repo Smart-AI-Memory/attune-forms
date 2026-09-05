@@ -24,7 +24,9 @@ without the agent threading anything):
 - ``form_submitted`` — answers validated; carries ``form_id`` when the
   caller has one.
 
-:func:`stage_latency` reads them back as per-stage p50/p95.
+:func:`stage_latency` reads them back as per-stage p50/p95. Render and
+submission events additionally carry a unique ``instance_id``; definition
+identity alone is insufficient for pairing overlapping displays.
 
 **What this can and cannot measure.** The live call site is the pair of
 MCP elicitation handlers, where the tool the agent invoked *is* its
@@ -54,6 +56,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -204,19 +207,24 @@ def log_form_build(form_id: str, *, source: str = "dict", question_count: int = 
         pass  # never-raises contract; coercions run caller code
 
 
-def log_form_rendered(form_id: str, *, duration_ms: float, html_bytes: int) -> None:
+def log_form_rendered(
+    form_id: str, *, duration_ms: float, html_bytes: int, instance_id: str = ""
+) -> None:
     """Record that widget HTML was produced for a form.
 
     Args:
         form_id: The lifecycle join key.
         duration_ms: Wall-clock render time in milliseconds.
         html_bytes: Size of the rendered HTML in bytes.
+        instance_id: Unique render token echoed by the collector.
     """
     try:
         record = _base_record("form_rendered")
         record["form_id"] = str(form_id)[:64]
         record["duration_ms"] = round(float(duration_ms), 3)
         record["html_bytes"] = int(html_bytes)
+        if isinstance(instance_id, str) and re.fullmatch(r"[a-f0-9]{32}", instance_id):
+            record["instance_id"] = instance_id
         _append(record)
     except Exception:
         pass  # never-raises contract; coercions run caller code
@@ -236,7 +244,7 @@ _KEYBOARD_HINT = (
 )
 
 
-def log_submission(form_id: str | None = None) -> None:
+def log_submission(form_id: str | None = None, *, instance_id: str = "") -> None:
     """Record that a user submitted a form. Best-effort, never raises.
 
     Args:
@@ -244,9 +252,12 @@ def log_submission(form_id: str | None = None) -> None:
             Optional so pre-0.8 call sites (zero-arg) keep working;
             without it the submission still counts toward the keyboard
             hint but cannot join its ``form_rendered`` event.
+        instance_id: Render token echoed from the widget; not an authorization credential.
     """
     try:
         record = _base_record("form_submitted")
+        if isinstance(instance_id, str) and re.fullmatch(r"[a-f0-9]{32}", instance_id):
+            record["instance_id"] = instance_id
         if form_id:
             record["form_id"] = str(form_id)[:64]
         _append(record)
@@ -434,17 +445,62 @@ def _percentiles(values: list[float]) -> dict[str, float | int] | None:
     return {"p50": round(rank(0.50), 3), "p95": round(rank(0.95), 3), "n": len(ordered)}
 
 
+def log_workspace_stage(
+    stage: str,
+    *,
+    workspace_id: str,
+    revision: int,
+    instance_id: str,
+    adapter_id: str,
+    action: str = "",
+    duration_ms: float | None = None,
+) -> None:
+    """Record a host-observed render or canonical acceptance, never raising.
+
+    Acceptance must be called AFTER the host stores the validated successor.
+    Tokens correlate observations and convey no execution authority. These
+    records contain identifiers only, never form answers or action nonces.
+    """
+    try:
+        if stage not in {"rendered", "accepted"}:
+            return
+        if not isinstance(instance_id, str) or re.fullmatch(r"[a-f0-9]{32}", instance_id) is None:
+            return
+        record = _base_record(f"workspace_{stage}")
+        record.update(
+            workspace_id=workspace_id,
+            revision=revision,
+            instance_id=instance_id,
+            adapter_id=adapter_id,
+            action=action,
+        )
+        if duration_ms is not None:
+            record["duration_ms"] = duration_ms
+        _append(record)
+    except Exception:
+        pass  # Observability must not alter a canonical action's result.
+
+
+def workspace_latency(home: Path | None = None) -> dict[str, object]:
+    """Read render-to-canonical-acceptance waits; includes dwell, excludes paint.
+
+    Only exact workspace/revision/instance matches join. Rejections and
+    publisher events never create acceptance samples.
+    """
+    result = _stage_latency(home, workspace=True)
+    result["accepted"] = result.pop("submissions")
+    result["accept_seconds"] = result.pop("submit_seconds")
+    return result
+
+
 def stage_latency(home: Path | None = None) -> dict[str, object]:
     """Per-stage latency read-back once stage events accrue.
 
-    Joins ``form_rendered`` → ``form_submitted`` on ``form_id``,
-    pairing sequentially in log order: each submission consumes the
-    latest not-yet-matched render at-or-before it, so a form rendered
-    and answered N times yields N wait samples — the user-facing wait
-    per cycle. (``form_id`` is content-derived, so repeated casts of
-    one definition share an id; pairing per cycle rather than taking
-    lifetime firsts is what keeps repeat forms — e.g. a template cast
-    every session — measurable. Codex cross-review finding, 2026-08-24.)
+    Joins events by definition AND unique render instance, consuming each
+    instance once. Legacy events without instance ids remain counted but
+    cannot yield reliable wait samples. This measures HTML-produced to
+    validated-collection time, including human dwell; it does not measure
+    browser paint or isolate transport latency.
     Render cost comes straight from each ``form_rendered`` record's own
     ``duration_ms``, no join needed. Malformed lines, missing ids, and
     a submission with no matching render are skipped, never raised on —
@@ -461,10 +517,18 @@ def stage_latency(home: Path | None = None) -> dict[str, object]:
         and ``submit_seconds`` (each ``{"p50", "p95", "n"}`` or ``None``
         when no data).
     """
+    return _stage_latency(home)
+
+
+def _stage_latency(home: Path | None, *, workspace: bool = False) -> dict[str, object]:
+    """Aggregate exact instance joins for one disjoint event family."""
     builds = renders = submissions = 0
     sources: Counter[str] = Counter()
     render_ms: list[float] = []
-    pending: dict[str, list[datetime]] = {}
+    pending: dict[tuple[object, ...], datetime] = {}
+    seen: set[tuple[object, ...]] = set()
+    render_event = "workspace_rendered" if workspace else "form_rendered"
+    submit_event = "workspace_accepted" if workspace else "form_submitted"
     waits: list[float] = []
     try:
         with _events_path(home).open(encoding="utf-8") as fh:
@@ -476,32 +540,37 @@ def stage_latency(home: Path | None = None) -> dict[str, object]:
                 if not isinstance(record, dict):
                     continue
                 event = record.get("event")
-                form_id = record.get("form_id")
-                keyed = isinstance(form_id, str) and bool(form_id)
+                form_id = record.get("workspace_id" if workspace else "form_id")
+                instance_id = record.get("instance_id")
+                keyed = (
+                    isinstance(form_id, str)
+                    and bool(form_id)
+                    and isinstance(instance_id, str)
+                    and re.fullmatch(r"[a-f0-9]{32}", instance_id) is not None
+                )
+                revision = record.get("revision")
+                if workspace and (isinstance(revision, bool) or not isinstance(revision, int)):
+                    keyed = False
+                key = (form_id, instance_id, revision if workspace else None) if keyed else None
                 stamp = _parse_ts(record.get("ts"))
-                if event == "form_build":
+                if event == "form_build" and not workspace:
                     builds += 1
                     sources[str(record.get("source", "(unknown)"))] += 1
-                elif event == "form_rendered":
+                elif event == render_event:
                     renders += 1
                     raw = record.get("duration_ms")
                     if isinstance(raw, int | float) and not isinstance(raw, bool) and raw >= 0:
                         render_ms.append(float(raw))
-                    if keyed and stamp:
-                        pending.setdefault(form_id, []).append(stamp)
-                elif event == "form_submitted":
+                    if key is not None and stamp and key not in seen:
+                        pending[key] = stamp
+                        seen.add(key)
+                elif event == submit_event:
                     submissions += 1
-                    if keyed and stamp:
-                        # Consume the LATEST unmatched render at-or-before
-                        # this submission. A stale submission (before every
-                        # pending render) matches nothing and never blocks a
-                        # later valid pair (codex finding 2, 2026-08-24).
-                        stack = pending.get(form_id, [])
-                        candidates = [ts for ts in stack if ts <= stamp]
-                        if candidates:
-                            matched = max(candidates)
-                            stack.remove(matched)
-                            waits.append((stamp - matched).total_seconds())
+                    if key is not None and stamp:
+                        rendered_at = pending.get(key)
+                        if rendered_at is not None and stamp >= rendered_at:
+                            del pending[key]
+                            waits.append((stamp - rendered_at).total_seconds())
     except OSError:
         pass  # empty read below — zeros, not an error
     return {

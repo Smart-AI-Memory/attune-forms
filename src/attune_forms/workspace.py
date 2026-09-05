@@ -55,6 +55,7 @@ _ACTION_RESPONSE_KEYS = frozenset(
         "contract_hash",
         "confirmed",
         "responses",
+        "instance_id",
     }
 )
 
@@ -763,6 +764,14 @@ def collect_workspace_action(
     if payload.get("view") != view.id.value:
         problems.append("workspace action response view does not match the rendered view")
 
+    instance_id = payload.get("instance_id", "")
+    if not isinstance(instance_id, str) or (
+        instance_id and re.fullmatch(r"[a-f0-9]{32}", instance_id) is None
+    ):
+        problems.append(
+            "workspace action response instance_id must be empty or 32 lowercase hex chars"
+        )
+
     action_id = payload.get("action")
     action = next((candidate for candidate in view.actions if candidate.id == action_id), None)
     if not isinstance(action_id, str):
@@ -894,6 +903,7 @@ def workspace_to_widget_html(
     instance_id: str | None = None,
     *,
     binding: WorkspaceActionBinding | None = None,
+    telemetry_instance_id: str = "",
 ) -> str:
     """Render one workspace view as self-contained widget HTML.
 
@@ -901,6 +911,9 @@ def workspace_to_widget_html(
     continue through the existing form collector; consequential preview
     actions use this separate, state-bound response path.
     """
+    if telemetry_instance_id and re.fullmatch(r"[a-f0-9]{32}", telemetry_instance_id) is None:
+        raise ValueError("telemetry_instance_id must be 32 lowercase hex chars")
+    telemetry = {"instance_id": telemetry_instance_id} if telemetry_instance_id else {}
     if view.form is not None and binding is not None:
         raise ValueError("workspace action binding is not valid on a form view")
     suffix = re.sub(r"[^A-Za-z0-9]+", "-", instance_id or "").strip("-")
@@ -962,6 +975,7 @@ def workspace_to_widget_html(
                     submit_response_key="responses",
                     submit_context={
                         "confirmed": action.requires_explicit_choice,
+                        **telemetry,
                         **(binding.to_payload() if binding else {}),
                     },
                 )
@@ -986,7 +1000,7 @@ def workspace_to_widget_html(
             else ""
         )
         binding_json = json.dumps(
-            binding.to_payload() if binding else {},
+            {**(binding.to_payload() if binding else {}), **telemetry},
             ensure_ascii=True,
             separators=(",", ":"),
         )

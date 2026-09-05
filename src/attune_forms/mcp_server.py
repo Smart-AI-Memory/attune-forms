@@ -354,6 +354,7 @@ def _workspace_response_schema() -> dict[str, Any]:
             "contract_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "confirmed": {"type": "boolean"},
             "responses": {"type": "object"},
+            "instance_id": {"type": "string", "pattern": "^(?:[a-f0-9]{32})?$"},
         },
         "required": ["__elicitation_response__", "title", "view", "action", "confirmed"],
         "additionalProperties": False,
@@ -413,6 +414,7 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "properties": {
                     "form": form,
                     "answers": {"type": "object"},
+                    "instance_id": {"type": "string", "pattern": "^(?:[a-f0-9]{32})?$"},
                 },
                 "required": ["form", "answers"],
             },
@@ -553,7 +555,7 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
         "response_id": response.response_id,
     }
     try:
-        log_submission(form_id=form.form_id)
+        log_submission(form_id=form.form_id, instance_id=args.get("instance_id", ""))
         hint = maybe_keyboard_hint(keyboard_mode=keyboard_mode_enabled())
     except (OSError, ValueError) as exc:
         logger.debug("keyboard-mode hint skipped: %s", exc)
