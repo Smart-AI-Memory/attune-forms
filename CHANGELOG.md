@@ -6,6 +6,15 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Stored templates carry `example_slots` — one representative value per
+  declared slot — and `template_example_slots(name)` exposes them, so a
+  drift test can CAST every shipped template with `form_from_template` and
+  validate the form the substitution actually produces. A template without
+  them fails that test rather than shipping uncastable. (attune-ai
+  attune-forms-plugin spec R5.3, D7.)
+
 ## [0.12.3] — 2026-09-04
 
 Correct display correlation and expose acceptance events for host latency

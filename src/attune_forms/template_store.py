@@ -4,7 +4,11 @@ A recurring fork class is persisted once as a JSON template under
 ``templates/`` and later invocations load it with per-use slot values.
 Each template file is exactly the dict shape :func:`form_from_dict`
 accepts, plus a top-level ``"slots"`` list declaring the named
-substitution points (``{slot_name}`` placeholders in string fields).
+substitution points (``{slot_name}`` placeholders in string fields) and
+a top-level ``"example_slots"`` mapping — one representative value per
+declared slot — so a CI drift test can CAST every shipped template and
+validate the form the substitution actually produces (validating the
+uncast template alone proves nothing about the cast result).
 Validation stays in the one existing seam: a malformed template fails
 through :class:`FormValidationError` exactly like a hand-built dict,
 and slot problems are reported in the same every-problem-listed style.
@@ -74,6 +78,51 @@ def form_from_template(name: str, slots: dict[str, Any] | None = None) -> FormSc
             definition fails :func:`form_from_dict` validation — every
             problem listed.
     """
+    data = _load_template(name)
+    declared = data.pop("slots", [])
+    examples = data.pop("example_slots", None)
+    # Validate the type BEFORE the ``or {}`` coalesce: a falsy non-mapping
+    # (``[]``, ``MappingProxyType({})``) would otherwise coalesce to ``{}``
+    # and slip past the named message — silently accepted on a zero-slot
+    # template. Strict ``dict`` keeps the message ("mapping") honest with
+    # what we actually accept; a Mapping that is not a dict is rejected too.
+    if slots is not None and not isinstance(slots, dict):
+        raise FormValidationError([f"slot values must be a mapping, got {type(slots).__name__}"])
+    values = slots or {}
+    problems = _slot_problems(name, declared, values, data)
+    problems += _example_problems(name, declared, examples)
+    if problems:
+        raise FormValidationError(problems)
+    return form_from_dict(_substitute(data, values), source=f"template:{name}")
+
+
+def template_example_slots(name: str) -> dict[str, str]:
+    """Return a stored template's representative slot values (R5.3).
+
+    Every shipped template carries ``example_slots`` so the CI drift test
+    can cast it with :func:`form_from_template` and validate the RESULT.
+    A template without them is a definition error here, not a silent
+    ``{}`` — the point is that no template ships uncastable.
+
+    Raises:
+        FormValidationError: Unknown template, or no/invalid
+            ``example_slots`` declared — every problem listed.
+    """
+    data = _load_template(name)
+    declared = data.pop("slots", [])
+    examples = data.pop("example_slots", None)
+    if examples is None:
+        raise FormValidationError(
+            [f"template {name!r} has no 'example_slots' — every shipped template must carry them"]
+        )
+    problems = _example_problems(name, declared, examples)
+    if problems:
+        raise FormValidationError(problems)
+    return dict(examples)
+
+
+def _load_template(name: str) -> dict[str, Any]:
+    """Validate the name, read the store entry, and parse it (no substitution)."""
     if not isinstance(name, str) or not _NAME_RE.match(name):
         raise FormValidationError([f"invalid template name {name!r}"])
     available = list_templates()
@@ -88,20 +137,28 @@ def form_from_template(name: str, slots: dict[str, Any] | None = None) -> FormSc
         raise FormValidationError([f"template {name!r} is not valid JSON: {exc}"]) from exc
     if not isinstance(data, dict):
         raise FormValidationError([f"template {name!r} must be a JSON object"])
+    return data
 
-    declared = data.pop("slots", [])
-    # Validate the type BEFORE the ``or {}`` coalesce: a falsy non-mapping
-    # (``[]``, ``MappingProxyType({})``) would otherwise coalesce to ``{}``
-    # and slip past the named message — silently accepted on a zero-slot
-    # template. Strict ``dict`` keeps the message ("mapping") honest with
-    # what we actually accept; a Mapping that is not a dict is rejected too.
-    if slots is not None and not isinstance(slots, dict):
-        raise FormValidationError([f"slot values must be a mapping, got {type(slots).__name__}"])
-    values = slots or {}
-    problems = _slot_problems(name, declared, values, data)
-    if problems:
-        raise FormValidationError(problems)
-    return form_from_dict(_substitute(data, values), source=f"template:{name}")
+
+def _example_problems(name: str, declared: Any, examples: Any) -> list[str]:
+    """Validate ``example_slots`` against the slot declaration (absent is allowed here)."""
+    if examples is None:
+        return []
+    if not isinstance(examples, dict):
+        return [f"template {name!r} 'example_slots' must be a mapping of slot name to string"]
+    declared_names = set(declared) if isinstance(declared, list) else set()
+    problems: list[str] = []
+    for missing in sorted(declared_names - set(examples)):
+        problems.append(f"template {name!r} 'example_slots' lacks a value for slot '{missing}'")
+    for extra in sorted(set(examples) - declared_names):
+        problems.append(f"template {name!r} 'example_slots' names undeclared slot '{extra}'")
+    for slot, value in sorted(examples.items()):
+        if not isinstance(value, str):
+            problems.append(
+                f"template {name!r} 'example_slots' value for '{slot}' must be a string,"
+                f" got {type(value).__name__}"
+            )
+    return problems
 
 
 def _slot_problems(

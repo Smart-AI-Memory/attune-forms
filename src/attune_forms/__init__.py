@@ -120,7 +120,11 @@ from attune_forms.models import (
     triage_item_key,
 )
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
-from attune_forms.template_store import form_from_template, list_templates
+from attune_forms.template_store import (
+    form_from_template,
+    list_templates,
+    template_example_slots,
+)
 from attune_forms.tokens import SEMANTIC_TOKENS, token
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
 from attune_forms.workspace import (
@@ -199,6 +203,7 @@ __all__ = [
     "is_trivial_form",
     "keyboard_mode_enabled",
     "list_templates",
+    "template_example_slots",
     "markdown_to_answers",
     "measure_latency",
     "MCP_APPS_EXTENSION",
