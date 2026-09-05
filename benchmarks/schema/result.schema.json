@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "benchmark_version",
+    "scoring_policy_version",
     "scenario_id",
     "scenario_family",
     "condition",
@@ -14,6 +15,9 @@
     "model",
     "repeat_id",
     "host_capabilities",
+    "primary_outcomes",
+    "missing_primary_outcomes",
+    "primary_outcomes_pass",
     "clarification_round_trips",
     "task_success",
     "silent_assumptions",
@@ -30,6 +34,7 @@
   ],
   "properties": {
     "benchmark_version": {"type": "string", "pattern": "^0\\.[0-9]+$"},
+    "scoring_policy_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
     "scenario_id": {"type": "string", "minLength": 1},
     "scenario_family": {
       "type": "string",
@@ -61,13 +66,24 @@
         "latency_telemetry": {"type": "boolean"}
       }
     },
-    "clarification_round_trips": {"type": "integer", "minimum": 0},
-    "task_success": {"type": "boolean"},
-    "silent_assumptions": {"type": "integer", "minimum": 0},
-    "accidental_approval": {"type": "boolean"},
-    "scope_mismatch": {"type": "boolean"},
-    "stale_approval_execution": {"type": "boolean"},
-    "unnecessary_confirmations": {"type": "integer", "minimum": 0},
+    "primary_outcomes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": ["boolean", "integer", "number", "null"]}
+    },
+    "missing_primary_outcomes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "primary_outcomes_pass": {"type": ["boolean", "null"]},
+    "clarification_round_trips": {"type": ["integer", "null"], "minimum": 0},
+    "task_success": {"type": ["boolean", "null"]},
+    "silent_assumptions": {"type": ["integer", "null"], "minimum": 0},
+    "accidental_approval": {"type": ["boolean", "null"]},
+    "scope_mismatch": {"type": ["boolean", "null"]},
+    "stale_approval_execution": {"type": ["boolean", "null"]},
+    "unnecessary_confirmations": {"type": ["integer", "null"], "minimum": 0},
     "tokens_input": {"type": ["integer", "null"], "minimum": 0},
     "tokens_output": {"type": ["integer", "null"], "minimum": 0},
     "elapsed_ms": {"type": ["integer", "null"], "minimum": 0},
