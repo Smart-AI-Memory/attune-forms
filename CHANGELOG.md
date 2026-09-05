@@ -6,6 +6,20 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.3] — 2026-09-04
+
+Correct display correlation and expose acceptance events for host latency
+measurement while preserving legacy submissions.
+
+### Fixed
+
+- Form render/submission telemetry now joins a unique display instance instead
+  of matching repeated displays by form definition. Duplicate submissions and
+  legacy events without an instance token cannot create misleading wait samples.
+- Optional workspace instance metadata and separate render/accepted events let
+  host adapters report successful transitions without recording answers or
+  using telemetry metadata to authorize actions.
+
 ## [0.12.2] — 2026-09-02
 
 ### Fixed
@@ -734,7 +748,8 @@ verified master.
 - Initial extraction of the attune-ai elicitation subsystem: declarative `FormSchema`, build/collect validation, multi-surface renderers (widget HTML, AskUserQuestion batching, MCP elicitation), surface router, template layer with ask-time intake generation
 - Trusted-publishing release workflow (tag-triggered, PyPI environment)
 
-[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.3...HEAD
+[0.12.3]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.2...v0.12.3
 [0.12.2]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/Smart-AI-Memory/attune-forms/compare/v0.11.1...v0.12.0
