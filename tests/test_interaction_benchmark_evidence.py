@@ -322,7 +322,9 @@ def test_evaluation_refuses_a_tampered_raw_bundle(tmp_path: Path) -> None:
         )
 
 
-def test_directory_fsync_is_skipped_on_windows(monkeypatch, tmp_path):
+def test_directory_fsync_is_skipped_on_windows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Windows cannot open a directory handle with os.open (errno 13) and has
     no directory fsync; the bundle commit must not fail there. Pinned after
     the AF-2 PR's Windows lanes failed with PermissionError at this call."""
