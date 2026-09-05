@@ -6,6 +6,12 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-09-05
+
+Template-bound forms (attune-ai attune-forms-plugin spec, Phase 5): stored
+templates cast server-side through every form-taking MCP tool, an authoring
+preview over the production renderer, and a cast-every-template gate.
+
 ### Added
 
 - **Authoring preview for stored templates (spec R5.4).**
@@ -29,10 +35,7 @@ follow [SemVer](https://semver.org/).
   `FormResponse.template_id`. The `form_build.source = template:<name>`
   stamp `form_from_template` already emits makes adoption measurable.
   Schema and behaviour mirror attune-ai's server (D3).
-
-### Added
-
-- Stored templates carry `example_slots` — one representative value per
+- **`example_slots` on stored templates (spec R5.3).** Stored templates carry `example_slots` — one representative value per
   declared slot — and `template_example_slots(name)` exposes them, so a
   drift test can CAST every shipped template with `form_from_template` and
   validate the form the substitution actually produces. A template without
