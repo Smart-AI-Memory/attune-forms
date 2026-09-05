@@ -8,6 +8,15 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Authoring preview for stored templates (spec R5.4).**
+  `python -m attune_forms.preview --open` (or the `attune-forms-preview`
+  console script) casts every stored template with its `example_slots`
+  and renders each through the PRODUCTION `form_to_widget_html` into one
+  standalone page — host design tokens for light and dark, a theme
+  toggle, and a `sendPrompt` stub that shows the payload the widget posts
+  — so a template edit is seen as users will see it. Preview casts
+  suppress form telemetry, so they never count toward the
+  `form_build.source` adoption meter.
 - **Fused template path on every form-taking MCP tool (spec R5.2).**
   `elicitation_render_form`, `elicitation_render_widget`,
   `elicitation_collect_response` and `elicitation_ask` accept
