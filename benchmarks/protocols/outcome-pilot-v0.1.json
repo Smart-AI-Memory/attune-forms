@@ -1,6 +1,11 @@
 {
   "analysis": "descriptive per scenario/variant/condition with exact matched pairs; no human-outcome claim",
-  "authorization": null,
+  "authorization": {
+    "by": "Patrick Roebuck",
+    "recorded_at": "2026-09-06T23:54:39Z",
+    "response": "Approve the 72-unit pilot",
+    "scope": "72 comparative units; hard ceiling 1152 model calls; Codex CLI 0.153.4, GPT-6 Astra medium/priority; preserve failures; descriptive analysis"
+  },
   "experiment_version": "0.1.0",
   "max_model_calls": 1152,
   "max_model_turns": 16,
@@ -28,5 +33,5 @@
     "src/attune_forms/bridge.py": "db7b47cee8cc144d4149dd9007b9f8ffaf5b25184fa337aefa0a240bb0f47fed",
     "src/attune_forms/models.py": "c70f27eba641e3fc4d9dcf257a7aceb6f724aa3cd26d3d193f54c34ad0f17dcb"
   },
-  "status": "chair_required"
+  "status": "ratified"
 }
