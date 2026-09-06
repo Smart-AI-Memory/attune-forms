@@ -52,7 +52,11 @@ class CodexCliProvider:
     cli_version: str = "0.144.6"
     timeout_seconds: int = 300
     provider_id: str = field(default="openai-chatgpt-via-codex-cli", init=False)
-    provider_version: str = field(default="0.144.6", init=False)
+
+    @property
+    def provider_version(self) -> str:
+        """Report the CLI version pinned by the active protocol."""
+        return self.cli_version
 
     def command(self) -> tuple[str, ...]:
         """Return the exact credential-free command used for each completion."""

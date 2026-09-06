@@ -53,9 +53,9 @@ def test_codex_runtime_manifest_covers_exact_files_and_matches_bytes() -> None:
         entries[relative_path] = digest
 
     assert set(entries) == {
-        str(PROTOCOL_PATH.relative_to(ROOT)),
-        str(RECORD_PATH.relative_to(ROOT)),
-        str(Path(__file__).resolve().relative_to(ROOT)),
+        PROTOCOL_PATH.relative_to(ROOT).as_posix(),
+        RECORD_PATH.relative_to(ROOT).as_posix(),
+        Path(__file__).resolve().relative_to(ROOT).as_posix(),
     }
     for relative_path, expected_digest in entries.items():
         assert hashlib.sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected_digest

@@ -27,7 +27,7 @@ from benchmarks.runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.2.json"
+DEFAULT_PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.3.json"
 
 
 @dataclass(frozen=True)
@@ -135,16 +135,19 @@ def collect(
         raw_path = evidence_root / protocol.protocol_id / "runs" / planned.run_id / "raw"
         if raw_path.exists():
             manifest_sha256 = verify_manifest(raw_path)
+            retained = json.loads((raw_path / "run.json").read_text(encoding="utf-8"))
             if (raw_path / "protocol.json").read_bytes() != protocol.source_path.read_bytes():
                 raise ValueError(f"sealed run has a different protocol snapshot: {planned.run_id}")
             receipts.append(
                 {
                     "index": index,
                     "run_id": planned.run_id,
-                    "status": "already_sealed",
+                    "status": "incomplete" if retained["incomplete"] else "already_sealed",
                     "manifest_sha256": manifest_sha256,
                 }
             )
+            if retained["incomplete"]:
+                break
             continue
 
         actor = BaselineActor(provider)
@@ -181,6 +184,8 @@ def collect(
         }
         receipts.append(receipt)
         print(json.dumps(receipt, sort_keys=True), flush=True)
+        if artifact.incomplete:
+            break
     return tuple(receipts)
 
 
@@ -214,6 +219,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     provider = CodexCliProvider(
         executable=args.codex_executable,
         working_directory=args.provider_workspace,
+        cli_version=protocol.payload["sampling"]["other_parameters"]["client_version"],
     )
     validate_provider(protocol, provider)
     plan = build_plan(protocol)
@@ -245,6 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "protocol_id": protocol.protocol_id,
                 "retained_run_count": len(receipts),
                 "incomplete_run_count": incomplete,
+                "unattempted_run_count": len(plan) - len(receipts),
             },
             sort_keys=True,
         )

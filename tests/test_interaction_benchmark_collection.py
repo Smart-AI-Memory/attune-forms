@@ -87,3 +87,61 @@ def test_collection_directories_must_be_outside_repository() -> None:
         _require_external_directory(ROOT / "evidence", "evidence root")
 
     _require_external_directory(ROOT.parent / "external-evidence", "evidence root")
+
+
+def test_failure_is_sealed_and_resume_does_not_repeat_or_hide_it(monkeypatch, tmp_path):
+    from benchmarks.collect_codex_pilot import collect
+    from benchmarks.evidence import verify_manifest
+    from benchmarks.provider import ProviderExecutionError
+    from tests.test_interaction_benchmark_evidence import ENVIRONMENT
+
+    protocol = load_run_protocol(PROTOCOL_PATH, project_root=ROOT)
+    provider = CodexCliProvider(executable=tmp_path / "codex", working_directory=tmp_path)
+    calls = []
+
+    def fail(self, messages):
+        calls.append(messages)
+        raise ProviderExecutionError("runtime incompatible", {"exit_code": 1})
+
+    monkeypatch.setattr(CodexCliProvider, "complete", fail)
+    monkeypatch.setattr("benchmarks.collect_codex_pilot.runner_environment", lambda _: ENVIRONMENT)
+    first = collect(protocol, provider, tmp_path / "evidence")
+    assert len(first) == 1
+    assert first[0]["status"] == "incomplete"
+    raw = tmp_path / "evidence" / protocol.protocol_id / "runs" / first[0]["run_id"] / "raw"
+    digest = verify_manifest(raw)
+    resumed = collect(protocol, provider, tmp_path / "evidence")
+    assert resumed == first
+    assert len(calls) == 1
+    assert verify_manifest(raw) == digest
+
+
+def test_complete_cohort_resume_verifies_all_42_without_new_calls(monkeypatch, tmp_path):
+    from benchmarks.collect_codex_pilot import collect
+    from benchmarks.provider import ProviderReply
+    from tests.test_interaction_benchmark_evidence import ENVIRONMENT
+
+    protocol = load_run_protocol(PROTOCOL_PATH, project_root=ROOT)
+    provider = CodexCliProvider(executable=tmp_path / "codex", working_directory=tmp_path)
+    calls = []
+
+    def reply(self, messages):
+        calls.append(messages)
+        return ProviderReply("Please clarify the scope.", 10, 5, 1)
+
+    monkeypatch.setattr(CodexCliProvider, "complete", reply)
+    monkeypatch.setattr("benchmarks.collect_codex_pilot.runner_environment", lambda _: ENVIRONMENT)
+    first = collect(protocol, provider, tmp_path / "evidence")
+    assert len(first) == 42
+    assert all(row["status"] == "sealed" for row in first)
+    resumed = collect(protocol, provider, tmp_path / "evidence")
+    assert len(resumed) == 42
+    assert all(row["status"] == "already_sealed" for row in resumed)
+    assert len(calls) == 42
+
+
+def test_provider_version_tracks_protocol_pin(tmp_path):
+    provider = CodexCliProvider(
+        executable=tmp_path / "codex", working_directory=tmp_path, cli_version="0.153.4"
+    )
+    assert provider.provider_version == "0.153.4"
