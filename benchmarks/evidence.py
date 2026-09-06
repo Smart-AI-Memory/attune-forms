@@ -28,7 +28,7 @@ from benchmarks.runner import (
 )
 from benchmarks.scoring import ScoringPolicy, load_scoring_policy
 
-_FORMAT_VERSION = "0.1.0"
+_FORMAT_VERSION = "0.2.0"
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _FULL_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _MANIFEST_LINE = re.compile(r"^([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._-]*)$")
@@ -260,6 +260,31 @@ def _validate_environment(environment: Mapping[str, Any]) -> None:
         raise EvidenceError("raw collection requires a clean runner worktree")
 
 
+def _validate_provider_metadata(value: Any, path: str = "provider.metadata") -> None:
+    """Reject credential-shaped metadata before it enters an immutable bundle."""
+
+    forbidden_names = {
+        "api_key",
+        "auth",
+        "authorization",
+        "credential",
+        "credentials",
+        "password",
+        "secret",
+    }
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if not isinstance(key, str):
+                raise EvidenceError(f"{path} keys must be strings")
+            normalized = key.lower().replace("-", "_")
+            if normalized in forbidden_names or normalized.endswith("_token"):
+                raise EvidenceError(f"{path} contains forbidden credential-shaped key: {key}")
+            _validate_provider_metadata(nested, f"{path}.{key}")
+    elif isinstance(value, list | tuple):
+        for index, nested in enumerate(value):
+            _validate_provider_metadata(nested, f"{path}[{index}]")
+
+
 def _validate_raw_artifact(protocol: RunProtocol, artifact: RunArtifact) -> Scenario:
     assert_ready_for_collection(protocol)
     if artifact.benchmark_version != protocol.benchmark_version:
@@ -310,6 +335,7 @@ def write_raw_bundle(
     _require_timestamp(collected_at, "collected_at")
     _validate_environment(environment)
     scenario = _validate_raw_artifact(protocol, artifact)
+    _validate_provider_metadata(artifact.provider_metadata)
     _require_safe_id(protocol.protocol_id, "protocol id")
     run_id = run_id_for(artifact)
     protocol_source = protocol.source_path.read_bytes()
@@ -359,6 +385,12 @@ def write_raw_bundle(
         ),
         "events.jsonl": _jsonl_bytes([_event_record(event) for event in artifact.events]),
         "prompts.json": _json_bytes({"format_version": _FORMAT_VERSION, "messages": prompts}),
+        "provider.json": _json_bytes(
+            {
+                "format_version": _FORMAT_VERSION,
+                "metadata": dict(artifact.provider_metadata),
+            }
+        ),
         "protocol.json": protocol_source,
         "run.json": _json_bytes(run_record),
         "transcript.json": _json_bytes(
@@ -423,6 +455,9 @@ def _load_raw_artifact(raw_bundle: RawEvidenceBundle, protocol: RunProtocol) -> 
         tokens_input=run_record["tokens_input"],
         tokens_output=run_record["tokens_output"],
         elapsed_ms=run_record["elapsed_ms"],
+        provider_metadata=json.loads(
+            (raw_bundle.path / "provider.json").read_text(encoding="utf-8")
+        )["metadata"],
         incomplete=run_record["incomplete"],
         error=run_record["error"],
     )

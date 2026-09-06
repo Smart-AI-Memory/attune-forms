@@ -1,0 +1,15 @@
+f983a11b3945cfd670ca9cd85cdb31ab52458249a53e4eaa3f3c59924adf7d7c  ambiguous-security-audit-001--free_form--r1/raw/manifest.sha256
+a95acbb75b059e8a92983471cd7bc62f9cd701f5e90be5a4671266648d07db2d  ambiguous-security-audit-001--free_form--r2/raw/manifest.sha256
+236839feb695f4b6726f9e6470a73a68ebdbfd5775d3a73395c16af53a25b592  ambiguous-security-audit-001--free_form--r3/raw/manifest.sha256
+2c3c60d4efe3bb86bb2e49d789bd5cba926a1bb20781e81ea6ecf8c771b24574  ambiguous-security-audit-001--sequential_clarification--r1/raw/manifest.sha256
+9745bedd2cf9efb9edd530b8ad20e5bdef4a9194c130042ba13d63910946857e  ambiguous-security-audit-001--sequential_clarification--r2/raw/manifest.sha256
+24c57aa559404d642e3de88de8f93d1dc7f832a925378d479f319f12d4010160  ambiguous-security-audit-001--sequential_clarification--r3/raw/manifest.sha256
+ca737152aaf3423f661d70cd6c52a017de3570b999149d6ae88ddcce3f006d35  consequential-delete-001--free_form--r1/raw/manifest.sha256
+3699c15a48e446c2c797c72f6789439a6278dfcc90d9a0c950399ebec6d2f2b3  consequential-delete-001--free_form--r2/raw/manifest.sha256
+3f56349ed6d4961de9fa4dd4a5ea2f368ae0855ae3b3483828a7aca9b7f1f3ff  consequential-delete-001--free_form--r3/raw/manifest.sha256
+6246efff47cf16a974a3047a24d4f7f6dd71b3f3df40981c0c560756b3dca71e  consequential-delete-001--sequential_clarification--r1/raw/manifest.sha256
+adb9588c00f415891b63aa3428d7631277de9a067f7c42ebe5e49d63b819f3e6  consequential-delete-001--sequential_clarification--r2/raw/manifest.sha256
+65ed77d46236ae62d8e11f2c2ebfce6db194458cb8c6e29a05426acc2b19a551  consequential-delete-001--sequential_clarification--r3/raw/manifest.sha256
+44eafc5f31b3f4dcf96538c3935d22fd709b379258e6dd51592ccf9512672db6  consequential-revoke-001--free_form--r1/raw/manifest.sha256
+f6250a396cd73f6a0fb459d17c67ae9c84496ff21dfe2319f32e22646562ae91  consequential-revoke-001--free_form--r2/raw/manifest.sha256
+27cf4eb7e78769a25c9a4cea8816dbafb260a0e30eb83e5e095a464996c7c839  consequential-revoke-001--free_form--r3/raw/manifest.sha256

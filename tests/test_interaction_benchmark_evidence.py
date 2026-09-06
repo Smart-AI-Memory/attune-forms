@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -120,11 +121,14 @@ def test_raw_bundle_has_closed_hashed_layout_and_cannot_be_rewritten(tmp_path: P
         "events.jsonl",
         "manifest.sha256",
         "prompts.json",
+        "provider.json",
         "protocol.json",
         "run.json",
         "transcript.json",
     }
     assert verify_manifest(bundle.path) == bundle.manifest_sha256
+    provider_record = json.loads((bundle.path / "provider.json").read_text(encoding="utf-8"))
+    assert provider_record == {"format_version": "0.2.0", "metadata": {}}
 
     with pytest.raises(EvidenceError, match="append-only bundle already exists"):
         write_raw_bundle(
@@ -163,6 +167,25 @@ def test_raw_bundle_rejects_later_evaluator_evidence(tmp_path: Path) -> None:
             protocol,
             artifact,
             effective_prompt=_prompt(_scenario(protocol)),
+            environment=ENVIRONMENT,
+            collected_at=COLLECTED_AT,
+        )
+
+
+def test_raw_bundle_rejects_credential_shaped_provider_metadata(tmp_path: Path) -> None:
+    protocol, _ = make_ratified_protocol(tmp_path)
+    scenario, artifact = _artifact(protocol)
+    artifact = replace(
+        artifact,
+        provider_metadata={"headers": {"authorization": "secret"}},
+    )
+
+    with pytest.raises(EvidenceError, match="credential-shaped key"):
+        write_raw_bundle(
+            tmp_path / "evidence",
+            protocol,
+            artifact,
+            effective_prompt=_prompt(scenario),
             environment=ENVIRONMENT,
             collected_at=COLLECTED_AT,
         )

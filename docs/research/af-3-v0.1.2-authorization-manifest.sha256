@@ -1,0 +1,5 @@
+d9f4420881d0b8fe62834ecfdcbacd37d05e4ee6bfe12102405ff91191e38fc7  benchmarks/protocols/baseline-pilot-v0.1.2.json
+8a3f825984333eb72e7a4f7509e5b50b0a1f5f25612b1112e2e03f74c85a4e75  docs/research/checkpoint-b1-authorization-v0.1.2.md
+d1b599027603e2399539b1cd8c31b6a66f592e4e7d99a5471e4bd3233a4b2ffb  docs/research/af-3-v0.1.1-failure-record.md
+24e86802e6a80953fa2e63907a9104a68db4aec58d3e7a155c3f59a057946560  docs/research/af-3-v0.1.1-run-manifests.sha256
+fd606dd6a111615c988fec90d28de087001f9ced61bf5937cff93c11720a7199  tests/test_interaction_benchmark_corrected_protocol.py

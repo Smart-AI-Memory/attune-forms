@@ -1,6 +1,8 @@
 # Attune Interaction Benchmark v0
 
-Status: research protocol; AF-2 scoring implemented; collection not authorized
+Status: AF-3 baseline collected under approved v0.1.3; renewed Checkpoint B accepted for typed implementation/conformance
+
+See `af-3-v0.1.3-review.md` for measured results and limits.
 
 ## Thesis
 

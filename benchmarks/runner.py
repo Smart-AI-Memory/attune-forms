@@ -98,6 +98,7 @@ class AdapterOutput:
     tokens_input: int | None = None
     tokens_output: int | None = None
     elapsed_ms: int | None = None
+    provider_metadata: Mapping[str, Any] = field(default_factory=dict)
     incomplete: bool = False
     error: str | None = None
 
@@ -167,6 +168,7 @@ class RunArtifact:
     tokens_input: int | None
     tokens_output: int | None
     elapsed_ms: int | None
+    provider_metadata: Mapping[str, Any]
     incomplete: bool
     error: str | None
 
@@ -277,6 +279,7 @@ def run(
         tokens_input=output.tokens_input,
         tokens_output=output.tokens_output,
         elapsed_ms=output.elapsed_ms,
+        provider_metadata=output.provider_metadata,
         incomplete=output.incomplete,
         error=output.error,
     )
@@ -292,6 +295,10 @@ def _failed_artifact(
     exc: Exception,
 ) -> RunArtifact:
     message = f"{type(exc).__name__}: {exc}"
+    provider_metadata = getattr(exc, "metadata", {})
+    elapsed_ms = provider_metadata.get("elapsed_ms")
+    if not isinstance(elapsed_ms, int):
+        elapsed_ms = None
     return RunArtifact(
         benchmark_version=scenario.benchmark_version,
         scenario_id=scenario.actor.id,
@@ -313,10 +320,43 @@ def _failed_artifact(
         transcript=(),
         tokens_input=None,
         tokens_output=None,
-        elapsed_ms=None,
+        elapsed_ms=elapsed_ms,
+        provider_metadata=provider_metadata,
         incomplete=True,
         error=message,
     )
+
+
+def run_resilient(
+    scenario: Scenario,
+    adapter: ConditionAdapter,
+    actor: Callable[[ActorScenario, str], AdapterOutput],
+    *,
+    model: str,
+    repeat_id: str,
+    host_capabilities: HostCapabilities | None = None,
+) -> RunArtifact:
+    """Run one experimental unit and retain provider or adapter failures."""
+
+    capabilities = host_capabilities or HostCapabilities()
+    try:
+        return run(
+            scenario,
+            adapter,
+            actor,
+            model=model,
+            repeat_id=repeat_id,
+            host_capabilities=capabilities,
+        )
+    except Exception as exc:  # benchmark rows must survive provider failures
+        return _failed_artifact(
+            scenario,
+            adapter,
+            model=model,
+            repeat_id=repeat_id,
+            host_capabilities=capabilities,
+            exc=exc,
+        )
 
 
 def run_suite(
@@ -336,24 +376,14 @@ def run_suite(
         for adapter in adapters:
             for repeat in range(repeats):
                 repeat_id = f"r{repeat + 1}"
-                try:
-                    artifact = run(
-                        scenario,
-                        adapter,
-                        actor_factory(scenario, adapter),
-                        model=model,
-                        repeat_id=repeat_id,
-                        host_capabilities=capabilities,
-                    )
-                except Exception as exc:  # benchmark rows must survive provider failures
-                    artifact = _failed_artifact(
-                        scenario,
-                        adapter,
-                        model=model,
-                        repeat_id=repeat_id,
-                        host_capabilities=capabilities,
-                        exc=exc,
-                    )
+                artifact = run_resilient(
+                    scenario,
+                    adapter,
+                    actor_factory(scenario, adapter),
+                    model=model,
+                    repeat_id=repeat_id,
+                    host_capabilities=capabilities,
+                )
                 artifacts.append(artifact)
     return tuple(artifacts)
 
