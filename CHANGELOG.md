@@ -6,6 +6,32 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Renderer registry, no-escape sweep and production HEADLESS
+  workspace projection** (attune-ai host-surface-parity AF-1, D10/D12).
+  `RENDERER_REGISTRY` is the public, non-empty inventory of every
+  production projection: the standalone-form record (RICH
+  `form_to_widget_html`, PORTABLE `form_to_markdown`, HEADLESS
+  `form_to_elicitation_schema`, and the legacy `form_to_askuserquestion`
+  as a compatibility-only host-native target bound to a fixed contract id
+  and shape digest) and the generic-workspace record (RICH, PORTABLE, and
+  the new `workspace_to_headless` — one deterministic JSON-safe mapping
+  carrying the complete view, the full form schema when present, the
+  binding, and the response contract; never an action-id list).
+  `sweep_production_renderers` scans the package for every callable that
+  accepts a form or workspace view and returns one of the closed
+  `projection_output_types`, plus every `form_to_*` / `workspace_to_*`
+  name, and requires each to be exactly one registry target, exported,
+  or on the small rationale-bearing allowlist; unresolved annotations
+  and stale allowlist entries fail closed. `record_digest`,
+  `registry_digest` and `implementation_digest` (cycle-safe closure of
+  package-local symbols) let the consuming gate lock a released
+  artifact. `canonical_fixtures` ships the fixtures in the wheel, with a
+  closed one-rule normalization set (the widget's per-render telemetry
+  token). AF-1 exposes no route-active host-native target. Version
+  advanced to 0.14.0; publishing remains a separate release action.
+
 ## [0.13.0] — 2026-09-05
 
 Template-bound forms (attune-ai attune-forms-plugin spec, Phase 5): stored

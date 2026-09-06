@@ -57,6 +57,16 @@ from attune_forms.bridge import (
     select_form_surface,
     set_keyboard_mode,
 )
+from attune_forms.canonical_fixtures import (
+    NORMALIZATION_RULES,
+    NormalizationRule,
+    canonical_binding,
+    canonical_form,
+    canonical_form_answers,
+    canonical_workspace_response,
+    canonical_workspace_view,
+    fixture_digest,
+)
 from attune_forms.conformance import (
     HEADLESS_JSON,
     NATIVE_DIALOG_CONSTRAINED,
@@ -87,6 +97,7 @@ from attune_forms.conformance import (
 )
 from attune_forms.elicitation_schema import form_to_elicitation_schema
 from attune_forms.form_events import log_surface_decision
+from attune_forms.headless import HEADLESS_SCHEMA_VERSION, workspace_to_headless
 from attune_forms.intake_template import (
     PROVIDERS,
     TEMPLATES,
@@ -120,6 +131,22 @@ from attune_forms.models import (
     triage_item_key,
 )
 from attune_forms.reference_form import EXAMPLE_ANSWERS, REFERENCE_FORM
+from attune_forms.renderer_registry import (
+    RENDERER_REGISTRY,
+    SWEEP_ALLOWLIST,
+    AllowlistEntry,
+    RegistryError,
+    RendererRecord,
+    RendererTarget,
+    SweepReport,
+    implementation_digest,
+    iter_targets,
+    projection_output_types,
+    record_digest,
+    registry_digest,
+    sweep_production_renderers,
+    validate_registry,
+)
 from attune_forms.template_store import (
     form_from_template,
     list_templates,
@@ -237,6 +264,30 @@ __all__ = [
     "workspace_action_contract",
     "workspace_from_dict",
     "workspace_to_markdown",
+    "NORMALIZATION_RULES",
+    "NormalizationRule",
+    "canonical_binding",
+    "canonical_form",
+    "canonical_form_answers",
+    "canonical_workspace_response",
+    "canonical_workspace_view",
+    "fixture_digest",
+    "HEADLESS_SCHEMA_VERSION",
+    "workspace_to_headless",
+    "RENDERER_REGISTRY",
+    "SWEEP_ALLOWLIST",
+    "AllowlistEntry",
+    "RegistryError",
+    "RendererRecord",
+    "RendererTarget",
+    "SweepReport",
+    "implementation_digest",
+    "iter_targets",
+    "projection_output_types",
+    "record_digest",
+    "registry_digest",
+    "sweep_production_renderers",
+    "validate_registry",
     "workspace_to_widget_html",
     "ASSUMPTION_RULINGS",
     "ranking_slot_count",
