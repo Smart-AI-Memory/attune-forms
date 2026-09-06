@@ -27,7 +27,7 @@ from benchmarks.runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.1.json"
+DEFAULT_PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.2.json"
 
 
 @dataclass(frozen=True)

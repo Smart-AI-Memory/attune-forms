@@ -17,7 +17,7 @@ from benchmarks.protocol import load_run_protocol
 from benchmarks.provider import CodexCliProvider
 
 ROOT = Path(__file__).resolve().parents[1]
-PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.1.json"
+PROTOCOL_PATH = ROOT / "benchmarks" / "protocols" / "baseline-pilot-v0.1.2.json"
 
 
 def test_ratified_plan_has_exact_protocol_order() -> None:

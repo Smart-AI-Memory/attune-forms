@@ -59,6 +59,8 @@ class CodexCliProvider:
 
         return (
             str(self.executable),
+            "--ask-for-approval",
+            "never",
             "exec",
             "--json",
             "--ephemeral",
@@ -68,8 +70,6 @@ class CodexCliProvider:
             "--skip-git-repo-check",
             "--sandbox",
             "read-only",
-            "--ask-for-approval",
-            "never",
             "--model",
             self.model,
             "-c",
@@ -140,6 +140,16 @@ class CodexCliProvider:
         expected = f"codex-cli {self.cli_version}"
         if version.returncode != 0 or expected not in version.stdout:
             raise ValueError(f"expected {expected!r}; observed {version.stdout.strip()!r}")
+        parser_probe = subprocess.run(
+            (*self.command()[:-1], "--help"),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
+        )
+        if parser_probe.returncode != 0:
+            detail = parser_probe.stderr.strip() or parser_probe.stdout.strip()
+            raise ValueError(f"Codex rejected the pinned command: {detail}")
 
     @staticmethod
     def _parse_events(stdout: str) -> tuple[list[dict[str, Any]], str, dict[str, int]]:

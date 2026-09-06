@@ -1,6 +1,6 @@
 # AF-3 Codex CLI provider implementation record
 
-Status: implementation record; authorized collection not yet begun
+Status: pre-collection record corrected after retained v0.1.1 parser failure
 
 Recorded: 2026-09-06 (America/New_York)
 
@@ -23,15 +23,15 @@ argument sequence, with the executable and neutral workspace recorded as
 absolute paths:
 
 ```text
-codex exec
-  --json
+codex
+  --ask-for-approval never
+  exec --json
   --ephemeral
   --ignore-user-config
   --ignore-rules
   --strict-config
   --skip-git-repo-check
   --sandbox read-only
-  --ask-for-approval never
   --model gpt-6-astra
   -c model_reasoning_effort="medium"
   -c service_tier="priority"
@@ -42,7 +42,9 @@ codex exec
 
 Before each invocation, the provider requires the executable to be a regular
 file, the neutral workspace to exist and be empty, and `codex --version` to
-report `codex-cli 0.144.6`. The CLI receives the prompt on standard input. No
+report `codex-cli 0.144.6`. It also substitutes `--help` for the standard-input
+prompt and requires the installed CLI to parse the otherwise exact command.
+The CLI receives the live prompt on standard input. No
 credential or credential value is placed in the command, prompt, environment
 record, or provider record by this implementation.
 
@@ -105,8 +107,23 @@ paths are never overwritten.
 
 The focused provider, collector, evidence, runner, and protocol suites reported
 `45 passed`. The complete repository suite reported `1130 passed`. Ruff,
-Black, and `git diff --check` passed. A signed collector commit will be recorded
-before the first provider call.
+Black, and `git diff --check` passed before signed commit `c9bae60`.
+
+## Correction after v0.1.1 collection
+
+Commit `c9bae60` placed the global `--ask-for-approval never` option after the
+`exec` subcommand. Codex CLI 0.144.6 rejected that position with exit status 2
+before emitting a JSONL event. The collector retained all 42 attempts as
+incomplete bundles under `baseline-pilot-v0.1.1`; it did not overwrite or omit
+them. The uniform retained error was `ProviderExecutionError: Codex CLI exited
+with status 2`, and each retained stderr records the unexpected argument.
+
+The correction moves that option before `exec` and adds the no-network parser
+preflight described above. The installed CLI accepted the corrected parser
+preflight. Patrick Roebuck then authorized proceeding, and successor protocol
+`baseline-pilot-v0.1.2` records that authorization. The fixture, conditions,
+provider/model declaration, sampling declaration, repeats, order, exclusions,
+missing-data handling, and falsification rules are unchanged.
 
 ## Evidentiary limits
 

@@ -80,12 +80,13 @@ def test_codex_cli_command_pins_the_ratified_execution_contract(tmp_path: Path) 
     command = provider.command()
 
     assert command[0] == str(executable)
+    assert command[1:4] == ("--ask-for-approval", "never", "exec")
     assert "--ephemeral" in command
     assert "--ignore-user-config" in command
     assert "--ignore-rules" in command
     assert "--strict-config" in command
     assert ("--sandbox", "read-only") == command[command.index("--sandbox") :][:2]
-    assert ("--ask-for-approval", "never") == command[command.index("--ask-for-approval") :][:2]
+    assert command.index("--ask-for-approval") < command.index("exec")
     assert "project_doc_max_bytes=0" in command
     assert command[-1] == "-"
 
@@ -133,6 +134,24 @@ def test_codex_local_contract_requires_pinned_cli_version(monkeypatch, tmp_path:
     provider = CodexCliProvider(executable=executable, working_directory=workspace)
 
     with pytest.raises(ValueError, match="codex-cli 0.144.6"):
+        provider.complete(({"role": "user", "content": "Task."},))
+
+
+def test_codex_local_contract_rejects_unparseable_command(monkeypatch, tmp_path: Path) -> None:
+    executable = tmp_path / "codex"
+    executable.touch()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    def fake_run(command, **kwargs):
+        if command == (str(executable), "--version"):
+            return subprocess.CompletedProcess(command, 0, "codex-cli 0.144.6\n", "")
+        return subprocess.CompletedProcess(command, 2, "", "unexpected argument")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    provider = CodexCliProvider(executable=executable, working_directory=workspace)
+
+    with pytest.raises(ValueError, match="rejected the pinned command"):
         provider.complete(({"role": "user", "content": "Task."},))
 
 
@@ -185,6 +204,8 @@ def test_codex_complete_retains_raw_event_stream(monkeypatch, tmp_path: Path) ->
         calls.append((command, kwargs))
         if command == (str(executable), "--version"):
             return subprocess.CompletedProcess(command, 0, "codex-cli 0.144.6\n", "")
+        if command[-1] == "--help":
+            return subprocess.CompletedProcess(command, 0, "Run Codex non-interactively", "")
         stdout = "\n".join(
             (
                 json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
@@ -218,7 +239,7 @@ def test_codex_complete_retains_raw_event_stream(monkeypatch, tmp_path: Path) ->
     assert reply.tokens_output == 8
     assert reply.metadata["stderr"] == "provider stderr"
     assert reply.metadata["stdout_events"][-1]["type"] == "turn.completed"
-    assert calls[1][1]["input"] == reply.metadata["compiled_prompt"]
+    assert calls[2][1]["input"] == reply.metadata["compiled_prompt"]
 
 
 def test_codex_nonzero_exit_raises_with_retainable_metadata(monkeypatch, tmp_path: Path) -> None:
@@ -230,6 +251,8 @@ def test_codex_nonzero_exit_raises_with_retainable_metadata(monkeypatch, tmp_pat
     def fake_run(command, **kwargs):
         if command == (str(executable), "--version"):
             return subprocess.CompletedProcess(command, 0, "codex-cli 0.144.6\n", "")
+        if command[-1] == "--help":
+            return subprocess.CompletedProcess(command, 0, "Run Codex non-interactively", "")
         return subprocess.CompletedProcess(command, 9, "partial stdout", "provider failed")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -252,6 +275,8 @@ def test_codex_timeout_normalizes_byte_streams(monkeypatch, tmp_path: Path) -> N
     def fake_run(command, **kwargs):
         if command == (str(executable), "--version"):
             return subprocess.CompletedProcess(command, 0, "codex-cli 0.144.6\n", "")
+        if command[-1] == "--help":
+            return subprocess.CompletedProcess(command, 0, "Run Codex non-interactively", "")
         raise subprocess.TimeoutExpired(command, 1, output=b"partial", stderr=b"late")
 
     monkeypatch.setattr(subprocess, "run", fake_run)

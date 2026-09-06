@@ -1,6 +1,6 @@
 # AF-3 — exact Codex CLI provider and authorized baseline pilot
 
-Status: provider implementation complete; collection authorized and pending
+Status: v0.1.1 attempts retained incomplete; corrected v0.1.2 collection authorized
 
 Outcome: Implement a pinned, evidence-retaining Codex CLI `TextProvider`, then
 collect exactly 42 raw runs under ratified protocol `baseline-pilot-v0.1.1`.
@@ -28,9 +28,9 @@ Done when:
     <objective>Prove protocol matching, exact order, clean-runner enforcement, and resumable verification.</objective>
     <acceptance>The focused tests and complete repository suite pass before collection.</acceptance>
   </task>
-  <task id="AF3-4" title="Collect authorized pilot" status="pending">
+  <task id="AF3-4" title="Collect authorized pilot" status="in_progress">
     <objective>Execute and seal seven scenarios by two conditions by three repeats.</objective>
-    <acceptance>Forty-two immutable raw-run manifests verify, including retained incomplete runs.</acceptance>
+    <acceptance>Forty-two v0.1.1 parser failures remain retained; forty-two corrected v0.1.2 raw-run manifests verify, including any incomplete runs.</acceptance>
   </task>
   <task id="AF3-5" title="Preserve remotely" status="pending">
     <objective>Push the signed branch and open a draft pull request.</objective>
