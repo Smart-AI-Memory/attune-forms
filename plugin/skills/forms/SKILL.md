@@ -214,6 +214,16 @@ wearing a new construct.
    a validated result is offered back to model context. If the embedded view
    names a missing submission or continuation capability, continue with the
    native or text path below — do not treat the rendered click as authority.
+   **Known non-painting host (2026-09-06):** the Claude desktop app's Code
+   tab negotiates the MCP Apps capability but never paints the card — the
+   tool result returns, nothing renders, and the user sees no form. There,
+   render the form on the host's own visualize widget tool (`show_widget`,
+   using its elicit grammar: pills and cards, no `<script>`/`<style>`
+   blocks) and keep `elicitation_collect_response` for validation, passing
+   the original render's `instance_id`. Never say a card "is rendered
+   above" from the tool result alone: the receipt is the user's answer
+   arriving through the surface you rendered on, not the render call
+   returning.
 2. **Legacy widget host** (the client renders returned HTML): show the
    returned `html`. The form posts answers back as a JSON block marked
    `__elicitation_response__` — parse it and validate with

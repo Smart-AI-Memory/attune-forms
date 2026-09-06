@@ -16,3 +16,5 @@ repos:
       - id: trailing-whitespace
       - id: check-yaml
       - id: check-toml
+      - id: check-merge-conflict
+        args: ['--assume-in-merge']  # fire on every commit, not only mid-merge (retro 2026-09-06 R7)
