@@ -96,6 +96,29 @@ hosts degrade to plain questions where possible and render as portable
 markdown on text-only hosts — with typed replies
 parsed back into the same validator.
 
+**In Codex** (CLI or the desktop app) — register the same MCP server,
+then install the skill so the session learns the forms discipline:
+
+```bash
+codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]' attune-forms-mcp
+mkdir -p ~/.codex/skills/forms && curl -fsSL https://raw.githubusercontent.com/Smart-AI-Memory/attune-forms/main/plugin/skills/forms/SKILL.md -o ~/.codex/skills/forms/SKILL.md
+```
+
+**In any other MCP client** (Antigravity, Gemini CLI, Cursor, …) — add
+the server to the client's MCP config. This JSON is the plugin's own
+`.mcp.json`, verbatim:
+
+```json
+{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]", "attune-forms-mcp"]}}}
+```
+
+Agents that read the `.agents/skills/` convention (Antigravity, Codex
+inside a checkout) find the same skill at `.agents/skills/forms/SKILL.md`
+— a byte-for-byte mirror of the plugin skill, drift-guarded. Every host
+gets the same six tools and the same validator; only the surface tier
+differs (rich `ui://` where the host renders MCP Apps, plain questions or
+portable markdown elsewhere).
+
 **As a Python library:**
 
 ```bash

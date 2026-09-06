@@ -31,6 +31,14 @@ follow [SemVer](https://semver.org/).
   closed one-rule normalization set (the widget's per-render telemetry
   token). AF-1 exposes no route-active host-native target. Version
   advanced to 0.14.0; publishing remains a separate release action.
+- **Non-Claude host install paths** (attune-ai host-surface-parity D10,
+  2026-09-06). The README documents `codex mcp add …` plus the Codex
+  skill install and the generic MCP-client JSON (the plugin's own
+  `.mcp.json`, verbatim). `.agents/skills/forms/SKILL.md` mirrors the
+  plugin skill byte-for-byte for agents that read the `.agents/`
+  convention (Antigravity, Codex inside a checkout); the mirror and the
+  README's install lines are drift-guarded by
+  `tests/test_agents_skill_mirror.py`.
 
 ## [0.13.0] — 2026-09-05
 
