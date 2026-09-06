@@ -6,6 +6,13 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-09-06
+
+The renderer-registry line (attune-ai host-surface-parity AF-1): every
+production projection inventoried, a no-escape sweep, a production HEADLESS
+workspace projection, digests for a consuming gate, and non-Claude host
+install paths.
+
 ### Added
 
 - **Renderer registry, no-escape sweep and production HEADLESS
