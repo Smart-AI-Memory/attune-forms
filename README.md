@@ -15,6 +15,26 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
+## What's new in 0.14.0
+
+- **Renderer registry and no-escape sweep** — `RENDERER_REGISTRY` is the
+  public inventory of every production projection of a form or workspace
+  view (RICH, PORTABLE, HEADLESS, and the legacy AskUserQuestion renderer as
+  a compatibility-only host-native target with a pinned contract id and
+  shape digest). `sweep_production_renderers()` proves no projection-shaped
+  callable escapes it; unresolved annotations fail closed.
+- **Production HEADLESS workspace projection** —
+  `workspace_to_headless(view, binding)` returns one deterministic JSON-safe
+  mapping: the complete view, the full form schema when present, the
+  binding, and the response contract a host posts back through
+  `collect_workspace_action`. Never an action-id list.
+- **Digests and shipped fixtures** — `record_digest`, `registry_digest`,
+  `implementation_digest` and `canonical_fixtures` let a consuming gate lock
+  a released artifact and re-execute every record's fixture from the wheel.
+
+This minor adds the registry line (attune-ai host-surface-parity AF-1);
+everything from 0.13 remains available unchanged.
+
 ## What's new in 0.13.0
 
 - **Templates cast server-side** — every form-taking MCP tool
@@ -203,6 +223,21 @@ import attune_forms.intake_template as it
 it.WORKFLOW_SCHEMA_RESOLVER = my_schema_resolver   # name -> input schema
 it.TEMPLATE_LOADERS.append(my_registration_loader)  # imports template modules
 ```
+
+## Renderer registry
+
+`RENDERER_REGISTRY` names every production projection of a form or a
+workspace view — RICH, PORTABLE, HEADLESS, and any host-native target —
+and `sweep_production_renderers()` proves nothing escapes it: every
+callable that takes a `FormSchema` or `WorkspaceView` and returns one of
+the closed `projection_output_types` must be exactly one registry
+target, exported, or on the small rationale-bearing allowlist.
+`workspace_to_headless(view, binding)` is the workspace family's
+production HEADLESS projection: the complete view plus the response
+contract a host posts back through `collect_workspace_action`.
+`record_digest`, `registry_digest` and `implementation_digest` let a
+consuming gate lock a released artifact; `canonical_fixtures` ships the
+fixtures every record executes.
 
 ## Interaction conformance
 
