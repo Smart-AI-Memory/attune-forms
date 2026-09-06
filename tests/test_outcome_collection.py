@@ -16,7 +16,7 @@ from benchmarks.outcome_report import summarize_traces
 def protocol_file(tmp_path, status="ratified"):
     names = [
         "benchmarks/fixtures/scenarios-v0.json",
-        "benchmarks/fixtures/outcome-scenarios-v0.1.json",
+        "benchmarks/fixtures/outcome-scenarios-v0.2.json",
         "benchmarks/outcome_loop.py",
         "benchmarks/outcome_judge.py",
         "benchmarks/collect_outcomes.py",

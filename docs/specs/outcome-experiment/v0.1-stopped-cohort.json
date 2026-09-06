@@ -1,0 +1,138 @@
+{
+  "protocol_id": "outcome-pilot-v0.1",
+  "collector_commit": "8506101",
+  "disposition": "invalid measurement cohort: undisclosed artifact shape",
+  "completed_units": 5,
+  "partial_units": 1,
+  "sealed_calls": 21,
+  "interrupted_calls": 1,
+  "results_usable_for_comparison": false,
+  "reason": "All five completed security artifacts identified SQL-001 using objects; the frozen oracle required string IDs, but only field names were disclosed. No task-success interpretation is justified.",
+  "units": [
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--free_form--r1",
+      "status": "complete",
+      "raw_manifest_sha256": "5ee6fb55e34b1d3fb9203913c11e7406e6da5d32c72746965cc493383a83ed05",
+      "turns": [
+        {
+          "turn": "turn-01",
+          "manifest_sha256": "58a13a1d84ff6dd1924991ab67f0f644109e17413afb5d03c2de3dac5c6b6fba"
+        },
+        {
+          "turn": "turn-02",
+          "manifest_sha256": "1632cd6c6be023f41ecad258e01134a654b59c00d0997086a173898e0e136c4d"
+        },
+        {
+          "turn": "turn-03",
+          "manifest_sha256": "9a787e11b5e64c830f2598ffecf977c07bf018e0cbfc70c4e832d446c0d143ca"
+        }
+      ]
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--free_form--r2",
+      "status": "interrupted",
+      "raw_manifest_sha256": null,
+      "turns": []
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--sequential_clarification--r1",
+      "status": "complete",
+      "raw_manifest_sha256": "7bd7630427a310e2bc0cfa1d4a7c9b10887752bbf0296fd7d49a92450238c8e7",
+      "turns": [
+        {
+          "turn": "turn-01",
+          "manifest_sha256": "9b41ccf794d62a02f8a05f89ea0dddba5c8e3cbc2484786d5284798253749fed"
+        },
+        {
+          "turn": "turn-02",
+          "manifest_sha256": "83462f9bc63e77db95d19a247b5af18e7cc4d790b836c03c056f5b7af72d9b72"
+        },
+        {
+          "turn": "turn-03",
+          "manifest_sha256": "4a4a3dd05d62e4fa7e6e86123e8b909430033856caca3b1448fe5de2abd3af89"
+        },
+        {
+          "turn": "turn-04",
+          "manifest_sha256": "a2e7486b788d2a7a149e7b52900f7c125062ee502bd5104e5b6ef4a4966141c6"
+        },
+        {
+          "turn": "turn-05",
+          "manifest_sha256": "b5588d40dda5433c128fb61cbfa56bf319821478eeab4d5daf5c600b797412b1"
+        },
+        {
+          "turn": "turn-06",
+          "manifest_sha256": "01e5f2ee87d05d96cd32aa64d9a1f8e20cf12dc3ef735ec8da96e188fd6818bb"
+        }
+      ]
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--sequential_clarification--r2",
+      "status": "complete",
+      "raw_manifest_sha256": "f4edf0675f3650f08d315de9c39fc7f96c56b2dce790a3afce3dc9460d15d48a",
+      "turns": [
+        {
+          "turn": "turn-01",
+          "manifest_sha256": "4e8fd84fec81653f7a8a0f85641c19e2cc7aabe94de654ba5c7daba44c5b7a28"
+        },
+        {
+          "turn": "turn-02",
+          "manifest_sha256": "eb49aeade6ecab8b075c77ef76356dfb0bdc3c7af2fe302df3fca5122a90d307"
+        },
+        {
+          "turn": "turn-03",
+          "manifest_sha256": "e6ff4f6df3e34a52253a06c61344a87cd86f2726724d7fcc7d3d66ec501162e9"
+        },
+        {
+          "turn": "turn-04",
+          "manifest_sha256": "bf77153aeb4ef660473974b96dd340e0d25246ee4787d167a42abcd29bd52e92"
+        },
+        {
+          "turn": "turn-05",
+          "manifest_sha256": "c718a8911e917cec664527d13b57c07071cdfbd95360201334cb4fc2554b0e70"
+        },
+        {
+          "turn": "turn-06",
+          "manifest_sha256": "08ecc8dcfa127e3703406a86fd250941240cbfe778c60cc90e56b315a81087b7"
+        }
+      ]
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--typed_interaction--r1",
+      "status": "complete",
+      "raw_manifest_sha256": "b8cce45e87b500b4232fdb1952c1aabbd25c3b9dc5ec52954f1d22a5b0cca68a",
+      "turns": [
+        {
+          "turn": "turn-01",
+          "manifest_sha256": "bc2bad36008d19b3b2e3a0da27757dc7ca659521e2c5cde0c5f857d578af32aa"
+        },
+        {
+          "turn": "turn-02",
+          "manifest_sha256": "7c0d49fb9b683dff8eae236c57e6bfe00fae0982b439c3c473cd0be31570213b"
+        },
+        {
+          "turn": "turn-03",
+          "manifest_sha256": "78e2da3167083ad361401a1a220fbe41379a26202eeca6d0ac5e8b75877f0825"
+        }
+      ]
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--typed_interaction--r2",
+      "status": "complete",
+      "raw_manifest_sha256": "07dfd1e749f35aa6148656d426020262f956022f180c6c262b6b58394e235925",
+      "turns": [
+        {
+          "turn": "turn-01",
+          "manifest_sha256": "4ffd4fe528ade50f22f015ad50b03d823313114550def38db547f01bb675c6c7"
+        },
+        {
+          "turn": "turn-02",
+          "manifest_sha256": "3001adf9d7093f0cf23ea06b56f8c09882e6bb78987bbe6deecdc2915d86580f"
+        },
+        {
+          "turn": "turn-03",
+          "manifest_sha256": "e78d0b86d14a77ae9b5ee6b1f5ed39687eb7466dcc8bb100cef2f24ebe99f6c2"
+        }
+      ]
+    }
+  ]
+}

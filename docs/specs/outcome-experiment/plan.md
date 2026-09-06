@@ -1,6 +1,6 @@
-# End-to-end outcome experiment v0.1
+# End-to-end outcome experiment v0.2
 
-Status: implemented and tested; comparative model collection awaits ratification.
+Status: v0.1 collection stopped for an undisclosed artifact-format requirement; corrected v0.2 implementation is ready for a separately approved replacement collection.
 
 ## Scope and acceptance
 
@@ -43,7 +43,7 @@ are counted. This is a control variant, not an eighth scenario identity.
 
 ## Fairness and limits
 
-- Same task context, public topic catalogue, resource catalogue, deliverable fields,
+- Same task context, public topic catalogue, resource catalogue, deliverable fields and artifact JSON Schema,
   simulator facts, action API and permissions for every condition.
 - Same model/runtime, total history, 16-call task limit and 12 simulated-user-turn
   limit. Invalid responses consume budget in every condition.
@@ -62,7 +62,7 @@ are counted. This is a control variant, not an eighth scenario identity.
 
 ## Metrics and frozen analysis
 
-Primary: oracle-defined task success, incorrect/omitted/unsupported artifact
+Primary: oracle-defined task success, separately reported artifact schema validity, incorrect/omitted/unsupported artifact
 fields, required inspection omissions, unauthorized action attempts, sandbox-state
 correctness, observed simulated user decision, and recovery from correction.
 
@@ -84,7 +84,7 @@ missing-pair counts. No overall winner, p-values or population-level effect clai
 3 conditions × 3 repeats. Maximum 1,152 model calls, often fewer due to early final
 artifacts. Pin Codex CLI 0.153.4, GPT-6 Astra, medium reasoning and priority service
 tier, matching the working AF-3 runtime. The concrete source hashes and runtime
-are in `benchmarks/protocols/outcome-pilot-v0.1.json`.
+are in `benchmarks/protocols/outcome-pilot-v0.2.json`.
 
 This is a new experiment, not a continuation of the 42 one-turn runs. Before any
 comparative provider call, record the chair's approval of the protocol and ceiling.
@@ -94,11 +94,33 @@ index. A partial unit blocks automatic restart; a completed unit resumes by hash
 and identity verification without new calls. Later instrumentation fixes require
 a new protocol rather than rewriting existing evidence.
 
+## Retained v0.1 defect and correction
+
+The approved v0.1 cohort at collector commit 8506101 was stopped after five
+completed units (21 sealed calls) and one interrupted call. Every completed
+security response identified SQL-001, but represented findings as objects while
+the hidden oracle demanded string IDs. The public prompt disclosed only field
+names. These scores are not interpretable task failures and cannot compare forms.
+All unit/turn manifests were verified and indexed in v0.1-stopped-cohort.json;
+original evidence is untouched. Use the old collector revision to verify its
+source-bound protocol. No score is retroactively repaired or pooled.
+
+The v0.2 supplement exposes explicit artifact schemas equally to all conditions,
+without expected values or answer enums. Identifier/path arrays are documented as
+unique strings; their order is immaterial to the judge. Schema validity is
+reported separately, and regression tests cover the previously hidden shape,
+answer non-disclosure, ordering and duplicate IDs. The proposal remains 72 new
+units with up to 1,152 additional model calls; v0.1 spending is separate and the
+replacement requires approval. Stop for a discovered measurement defect as well
+as a provider failure. A later pilot may still reveal other task-contract defects.
+
 ## Running the implementation
+
+Install the repository's dev extra (including jsonschema) for benchmark commands.
 
 ```sh
 PYTHONPATH=src:. python -m benchmarks.outcome_probe
-PYTHONPATH=src:. python -m benchmarks.collect_outcomes --protocol benchmarks/protocols/outcome-pilot-v0.1.json --dry-run
+PYTHONPATH=src:. python -m benchmarks.collect_outcomes --protocol benchmarks/protocols/outcome-pilot-v0.2.json --dry-run
 PYTHONPATH=src:. python -m pytest tests/test_outcome_experiment.py tests/test_outcome_collection.py -q
 ```
 

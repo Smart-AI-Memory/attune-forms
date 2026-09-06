@@ -252,3 +252,46 @@ def test_plan_is_balanced_without_expanding_the_seven_scenario_identities():
             assert sorted(positions) == [1, 2, 3]
     with pytest.raises(ValueError):
         build_plan(1)
+
+
+@pytest.mark.parametrize("case", load_cases(), ids=lambda c: c["id"])
+def test_public_artifact_contract_is_explicit_and_does_not_expose_answers(case):
+    from jsonschema import Draft202012Validator
+
+    public = TaskSimulator(case, "underspecified").public_context()
+    schema = public["artifact_schema"]
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(case["expected"])
+    assert set(schema["required"]) == set(public["deliverable_fields"])
+    assert schema["additionalProperties"] is False
+    assert '"const"' not in json.dumps(schema) and '"enum"' not in json.dumps(schema)
+    changed = deepcopy(case)
+    changed["expected"] = {"secret-answer": "SHOULD-NOT-BE-EXPOSED"}
+    assert TaskSimulator(changed, "underspecified").public_context() == public
+
+
+def test_security_finding_shape_is_disclosed_before_any_question():
+    case = load_cases()[0]
+    public = TaskSimulator(case, "underspecified").public_context()
+    assert public["artifact_schema"]["properties"]["findings"]["items"] == {"type": "string"}
+    artifact = {
+        **case["expected"],
+        "findings": [{"id": "SQL-001", "description": "Correct finding"}],
+    }
+    trace = run_task(
+        case,
+        "free_form",
+        Replies({"action": "inspect", "target": "src"}, {"action": "final", "artifact": artifact}),
+    )
+    assert trace["outcomes"]["artifact_schema_valid"] is False
+    assert not trace["outcomes"]["task_success"]
+
+
+def test_evidence_order_does_not_change_success_but_duplicates_do():
+    case = load_cases()[4]
+    trace = run_task(case, "free_form", ScriptedOracle(case, "free_form"))
+    trace["artifact"]["evidence"].reverse()
+    assert judge(case, trace)["task_success"]
+    trace["artifact"]["evidence"].append("review-A")
+    assert not judge(case, trace)["task_success"]
+    assert not judge(case, trace)["artifact_schema_valid"]

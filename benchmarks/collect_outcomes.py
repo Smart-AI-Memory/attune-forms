@@ -35,7 +35,7 @@ def verify_protocol(path: Path, *, collection: bool) -> dict:
             raise ValueError(f"frozen source differs: {relative}")
     required = {
         "benchmarks/fixtures/scenarios-v0.json",
-        "benchmarks/fixtures/outcome-scenarios-v0.1.json",
+        "benchmarks/fixtures/outcome-scenarios-v0.2.json",
         "benchmarks/outcome_loop.py",
         "benchmarks/outcome_judge.py",
         "benchmarks/collect_outcomes.py",

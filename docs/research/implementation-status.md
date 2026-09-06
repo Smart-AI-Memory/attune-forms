@@ -59,3 +59,9 @@ source-bound protocol and per-turn evidence collection. Its specification and
 scripted conformance evidence are in `docs/specs/outcome-experiment/`.
 Comparative model collection awaits approval of the concrete 72-unit protocol;
 there are no model-performance findings from this new experiment yet.
+
+The approved outcome-pilot-v0.1 was stopped after five completed units and one
+interrupted call because its undisclosed findings shape invalidated task scoring.
+Evidence is retained; these are not comparative findings. The corrected v0.2
+proposal exposes artifact schemas and treats ID-list order as immaterial. A
+replacement collection awaits explicit approval; see the outcome experiment plan.

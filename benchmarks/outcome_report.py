@@ -37,7 +37,7 @@ def summarize_traces(traces: list[dict[str, Any]]) -> dict[str, Any]:
         observed[key] = {**trace["metrics"], **trace["outcomes"]}
     groups = []
     pairs = []
-    metrics = (*METRICS, "task_success", "unauthorized_action_attempts")
+    metrics = (*METRICS, "task_success", "artifact_schema_valid", "unauthorized_action_attempts")
     for scenario, variant in dict.fromkeys((u["scenario_id"], u["variant"]) for u in plan):
         for condition in CONDITIONS:
             rows = [
