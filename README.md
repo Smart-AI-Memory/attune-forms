@@ -15,33 +15,36 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
-## What's new in 0.12.3
+## What's new in 0.13.0
 
-- **Correlated display telemetry** — each form display carries its own instance
-  token through submission, so overlapping displays of the same form produce
-  correctly paired latency samples. Legacy submissions still work but do not
-  produce ambiguous latency samples.
-- **Workspace acceptance telemetry** — optional instance metadata and separate
-  render/acceptance events let host adapters measure validated workspace
-  transitions without recording answers or changing action authority.
+- **Templates cast server-side** — every form-taking MCP tool
+  (`elicitation_render_form`, `elicitation_render_widget`,
+  `elicitation_collect_response`, `elicitation_ask`) takes `template` +
+  `slots` in place of `form`. The server loads the stored template, fills the
+  slots, validates, and renders in one call, so the form definition never
+  transits the agent's context. Template-cast collections carry the template
+  name as `template_id`.
+- **Authoring preview** — `python -m attune_forms.preview --open` (or
+  `attune-forms-preview`) renders every stored template through the
+  production widget renderer into one standalone page, light and dark, with
+  the posted payload shown on submit. Edit a template, reload, see what users
+  see. Preview casts never count toward form telemetry.
+- **Cast-every-template gate** — stored templates carry `example_slots`, and
+  a drift test casts each one and validates the result, so no template ships
+  uncastable.
 
-- **Visible consequential submits** — action-scoped response forms now use the
-  same inline two-click confirmation pattern as field-free workspace actions.
-  Editing a response disarms the pending confirmation, and sandboxed MCP App
-  hosts no longer depend on a native `window.confirm` dialog.
-
-- **Action-scoped workspace responses** — one workspace action can collect a
-  validated response mapping across widget, Markdown, headless, and MCP stdio
-  surfaces.
-- **Atomic multi-item decisions** — revision-bound action contracts support
-  compact batches such as Roundtable's `3 + 3 + 1` promotion rulings without
-  moving command authority into the renderer.
+- **Correlated display and workspace acceptance telemetry** (0.12.3) — each
+  display carries its own instance token through submission; separate
+  render/acceptance events let hosts measure validated transitions.
+- **Visible consequential submits and action-scoped workspace responses**
+  (0.12.x) — inline two-click confirmation, one action collecting a validated
+  response mapping across widget, Markdown, headless, and MCP stdio surfaces.
 - **Interaction conformance evidence** — the packaged harness checks structural
   DOM, keyboard traversal, constrained viewports, projection parity, submitted
   state, and separately attributed cold/warm latency phases.
 
-This patch corrects measurement correlation. Visible consequential submits and
-the action-scoped response runtime remain available from earlier 0.12 releases.
+This minor adds the template-bound form path; everything from the 0.12 line
+remains available unchanged.
 
 This is the provider-neutral transport layer. Individual agent products still
 choose whether to render it inline, open it as a browser artifact, or use the
