@@ -1,39 +1,21 @@
-# AF-3 — exact Codex CLI provider and authorized baseline pilot
+# AF-3 — completed baseline and typed-condition implementation
 
-Status: v0.1.1 attempts retained incomplete; corrected v0.1.2 collection authorized
+Status: baseline completed; renewed Checkpoint B accepted; typed conformance implemented
 
-Outcome: Implement a pinned, evidence-retaining Codex CLI `TextProvider`, then
-collect exactly 42 raw runs under ratified protocol `baseline-pilot-v0.1.1`.
+The original v0.1.1/v0.1.2 attempts are preserved and superseded for new
+collection by the explicitly approved v0.1.3 cohort. See
+`docs/research/af-3-v0.1.3-review.md` and
+`docs/research/checkpoint-b-typed-implementation.md` for the results, limits
+and current chair ruling. Historical artifact manifests refer to the source
+revisions named in their records, not this updated completion plan.
 
-Done when:
+Completed:
 
-- the provider command, prompt compilation, runtime checks, telemetry parsing,
-  and failure retention are executable and tested;
-- every run is made from the signed, clean collector commit in protocol order;
-- each success or failure is immediately sealed in its append-only raw bundle;
-- all 42 run manifests verify and a repository record identifies their digests;
-- no evaluation, aggregation, comparative claim, or typed adapter is introduced;
-- `codex/af-3-codex-pilot` is pushed and represented by a draft pull request.
+- compatible pinned Codex adapter, clean signed collector, failure-stop/resume tests;
+- 42 complete raw units and 42 sealed derived evaluations; all manifests verified;
+- approved descriptive aggregation with missing-data and trust limits explicit;
+- typed actor and host-injected adapter using package form/response validation;
+- canonical package round trip and 22 conformance tests, including all 7 scenarios.
 
-<tasks>
-  <task id="AF3-1" title="Implement exact provider" status="done">
-    <objective>Compile role-separated messages and invoke the pinned Codex CLI runtime.</objective>
-    <acceptance>The full credential-free command and effective prompt are retained for every invocation.</acceptance>
-  </task>
-  <task id="AF3-2" title="Retain provider evidence" status="done">
-    <objective>Seal JSONL events, stderr, exit status, elapsed time, and usage without credentials.</objective>
-    <acceptance>Successes and failures remain JSON-serializable and append-only.</acceptance>
-  </task>
-  <task id="AF3-3" title="Verify collector" status="done">
-    <objective>Prove protocol matching, exact order, clean-runner enforcement, and resumable verification.</objective>
-    <acceptance>The focused tests and complete repository suite pass before collection.</acceptance>
-  </task>
-  <task id="AF3-4" title="Collect authorized pilot" status="in_progress">
-    <objective>Execute and seal seven scenarios by two conditions by three repeats.</objective>
-    <acceptance>Forty-two v0.1.1 parser failures remain retained; forty-two corrected v0.1.2 raw-run manifests verify, including any incomplete runs.</acceptance>
-  </task>
-  <task id="AF3-5" title="Preserve remotely" status="pending">
-    <objective>Push the signed branch and open a draft pull request.</objective>
-    <acceptance>The remote record contains the implementation and a digest index for the external raw evidence.</acceptance>
-  </task>
-</tasks>
+Delivery: draft PR #88; final cross-platform CI must pass before promotion.
+No comparative collection, human-outcome claim, or merge is authorized by this plan.

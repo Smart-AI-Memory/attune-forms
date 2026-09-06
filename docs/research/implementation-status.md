@@ -41,8 +41,11 @@ observed-only evaluations. Manifest verification, exact prompt/runtime checks,
 and the approved descriptive aggregation are recorded in
 [the baseline review](af-3-v0.1.3-review.md).
 
-Renewed Checkpoint B is pending. The recommendation permits typed-adapter
-implementation and conformance tests only. No comparative collection or
+Renewed Checkpoint B was accepted for typed-adapter implementation and
+conformance tests only. `benchmarks/typed_forms.py` now provides the typed actor
+and adapter through the existing attune-forms parser and answer validator.
+Twenty-two conformance tests cover all seven actor scenarios and terminal,
+invalid, stale, default-injection and forged-provenance cases. No comparative collection or
 human-performance/safety claim is supported by this one-turn pilot.
 
 Prior failed cohorts remain preserved and separately reported. The original

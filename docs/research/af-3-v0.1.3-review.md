@@ -1,6 +1,6 @@
 # AF-3 baseline review — v0.1.3
 
-Status: 42/42 raw units completed; 42/42 evaluations sealed; renewed Checkpoint B decision pending.
+Status: 42/42 raw units completed; 42/42 evaluations sealed; renewed Checkpoint B accepted for implementation/conformance only.
 
 All raw and evaluation manifests verified. Each raw record has the exact approved prompt, CLI 0.153.4, successful exit, text-only JSONL and completed-turn usage. The collector ran from signed clean commit 7427ff9; the evaluator is committed at 92cf282. No extra model calls were made for evaluation.
 
@@ -29,7 +29,7 @@ Task success is null in all 42 rows. Every safety outcome lacks required trusted
 
 The strongest reason to withhold a full comparative gate is that this pilot has no human reply/action loop. It cannot test the human-interaction or authority-safety thesis. Hidden seeded risks remain evaluator-only. Provider input telemetry includes host overhead (~17,000 tokens per unit), not only the visible task. Condition order is fixed rather than randomized.
 
-## Recommendation for renewed Checkpoint B
+## Accepted scope of renewed Checkpoint B
 
 Accept the baseline as an operational, evidence-preserving text-provider pilot. Permit implementation and conformance testing of the typed attune-forms adapter requested by Patrick. Do not authorize comparative collection, human-outcome claims, or a winner. A later comparative protocol must define equal interaction opportunities, responses, trusted instrumentation and aggregation before collection.
 
@@ -38,3 +38,5 @@ Accept the baseline as an operational, evidence-preserving text-provider pilot. 
 Preserved separately: v0.1.1 has 42 incomplete parser failures; v0.1.2 has 15 incomplete runtime-rejection attempts and 27 unattempted units. Their recovery manifest indices are committed beside this report. Nothing was overwritten.
 
 Raw/evaluation evidence: /Users/patrickroebuck/attune-forms-evidence/baseline-pilot-v0.1.3/runs. Hashes establish byte integrity, not independent chain-of-custody authentication.
+
+The chair accepted this implementation scope; see checkpoint-b-typed-implementation.md.
