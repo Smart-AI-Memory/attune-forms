@@ -1,0 +1,32 @@
+{
+  "analysis": "descriptive per scenario/variant/condition with exact matched pairs; no human-outcome claim",
+  "authorization": null,
+  "experiment_version": "0.1.0",
+  "max_model_calls": 1152,
+  "max_model_turns": 16,
+  "max_user_turns": 12,
+  "planned_units": 72,
+  "protocol_id": "outcome-pilot-v0.1",
+  "provider_failure": "stop cohort; retain and never replace partial or failed units",
+  "repeats": 3,
+  "runtime": {
+    "cli_version": "0.153.4",
+    "model": "gpt-6-astra",
+    "reasoning_effort": "medium",
+    "service_tier": "priority"
+  },
+  "source_sha256": {
+    "benchmarks/aggregation.py": "b389abb6a78b6fbca4156d6a8974a1c6a793ec5044f1863a337c8fd704949d53",
+    "benchmarks/collect_outcomes.py": "e75d78ed326412078f1da48bb169c0c27440355d8cff7c0e06b12daef50a0220",
+    "benchmarks/fixtures/outcome-scenarios-v0.1.json": "90ac3a9b9d40b8e5879e09dc3471284eecc8d583530a8525f09d42a9ea2ce38e",
+    "benchmarks/fixtures/scenarios-v0.json": "3f8b92820c55a598b0f61e1d090f68790da7b3114cb08e51b135059e1d5c49d7",
+    "benchmarks/outcome_judge.py": "1efeeeb4d4a20bad6556a294efb1ca1c7012296d0938e18d5654b7830a06d321",
+    "benchmarks/outcome_loop.py": "bb98d6d77180c24a63708842e33ccce4922c20f6b311a71ec32b9c05a67b896f",
+    "benchmarks/outcome_report.py": "44bb9bff5be236654c4b65726f4c4d218baac0e716e922c983db9550a062e607",
+    "benchmarks/provider.py": "bed2a61b7c174d64904a5a5c0b7d61d49542a36d7038095330ee088022054fff",
+    "docs/specs/outcome-experiment/plan.md": "32ab91adf4f3df3137cd918639ee82a7e28fc46f93c226173d226da8811a4d27",
+    "src/attune_forms/bridge.py": "db7b47cee8cc144d4149dd9007b9f8ffaf5b25184fa337aefa0a240bb0f47fed",
+    "src/attune_forms/models.py": "c70f27eba641e3fc4d9dcf257a7aceb6f724aa3cd26d3d193f54c34ad0f17dcb"
+  },
+  "status": "chair_required"
+}

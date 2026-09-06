@@ -50,3 +50,12 @@ human-performance/safety claim is supported by this one-turn pilot.
 
 Prior failed cohorts remain preserved and separately reported. The original
 AF-2 "collection blocked" status was superseded by the recorded B.1 rulings.
+
+## Next outcome experiment
+
+The user-authorized end-to-end simulator is implemented in
+`benchmarks/outcome_loop.py`, with an independent oracle, fully specified control,
+source-bound protocol and per-turn evidence collection. Its specification and
+scripted conformance evidence are in `docs/specs/outcome-experiment/`.
+Comparative model collection awaits approval of the concrete 72-unit protocol;
+there are no model-performance findings from this new experiment yet.
