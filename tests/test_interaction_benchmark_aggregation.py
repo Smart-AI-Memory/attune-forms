@@ -80,7 +80,7 @@ def test_duplicate_unplanned_and_mixed_identity_rows_are_rejected():
         aggregate([original, other], scenario_ids=["s1"])
 
 
-def test_evaluation_round_trip_preserves_raw_and_missing_primary(monkeypatch, tmp_path):
+def test_evaluation_round_trip_preserves_raw_and_missing_primary(monkeypatch, tmp_path, capsys):
     from benchmarks.collect_codex_pilot import collect
     from benchmarks.evaluate_codex_pilot import ROOT, evaluate_cohort
     from benchmarks.evidence import verify_manifest
@@ -114,6 +114,22 @@ def test_evaluation_round_trip_preserves_raw_and_missing_primary(monkeypatch, tm
     )
     assert before == {str(p): verify_manifest(p) for p in raw}
     assert evaluate_cohort(protocol, tmp_path) == result
+    import json
+
+    from benchmarks.evaluate_codex_pilot import main
+
+    capsys.readouterr()
+    monkeypatch.setattr(
+        "sys.argv",
+        ["evaluate", "--protocol", str(protocol.source_path), "--evidence-root", str(tmp_path)],
+    )
+    main()
+    assert json.loads(capsys.readouterr().out) == result
+    extra = tmp_path / protocol.protocol_id / "runs" / "unplanned"
+    extra.mkdir()
+    with pytest.raises(ValueError, match="cohort differs"):
+        evaluate_cohort(protocol, tmp_path)
+    extra.rmdir()
     (raw[0] / "transcript.json").write_text("{}")
     with pytest.raises(ValueError):
         evaluate_cohort(protocol, tmp_path)

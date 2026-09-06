@@ -36,24 +36,14 @@
 
 ## Current gate
 
-Checkpoint B.1 is **CHAIR_REQUIRED / COLLECTION BLOCKED**.
+AF-3 successor baseline-pilot-v0.1.3 has 42 complete raw units and 42 sealed
+observed-only evaluations. Manifest verification, exact prompt/runtime checks,
+and the approved descriptive aggregation are recorded in
+[the baseline review](af-3-v0.1.3-review.md).
 
-No provider run has been made under the AF-2 protocol. No typed attune-forms
-adapter may be added yet. Unit tests establish software behavior, not
-comparative human-agent evidence.
+Renewed Checkpoint B is pending. The recommendation permits typed-adapter
+implementation and conformance tests only. No comparative collection or
+human-performance/safety claim is supported by this one-turn pilot.
 
-The unblock path is:
-
-1. record a provider, provider API version, model, model version, and every
-   sampling control or explicit unavailability reason;
-2. obtain the chair's Checkpoint B.1 authorization in the protocol before any
-   provider call;
-3. connect that provider to the neutral `TextProvider` seam;
-4. collect 42 append-only raw bundles: seven pilot scenarios, two baseline
-   conditions, and three repeats;
-5. append evaluator-derived events and policy-versioned JSONL results without
-   changing raw evidence;
-6. ratify aggregation rules and reconvene Checkpoint B on the retained records;
-7. only then implement the typed attune-forms condition.
-
-Negative or inconvenient baseline results are retained. The benchmark is not permitted to optimize for an attune-forms win.
+Prior failed cohorts remain preserved and separately reported. The original
+AF-2 "collection blocked" status was superseded by the recorded B.1 rulings.
