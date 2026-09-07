@@ -459,3 +459,81 @@ def test_batch_is_deterministic_frozen_and_json_safe() -> None:
         for t in b.option_bindings
     )
     assert QuestionType.RANKING.value in FACET.inadmissible_types
+
+
+@pytest.mark.parametrize("label", ["[No preference]", "[no   PREFERENCE]"])
+def test_unanswered_marker_cannot_be_selected_as_an_option(label: str) -> None:
+    form = _form(_select(options=[label, "Yes"]))
+    verdict = host_question_admissibility(form, PROFILE)
+    assert not verdict.admissible
+    assert any("unanswered marker" in problem for problem in verdict.problems)
+    assert form_to_host_question(form, PROFILE) is None
+    no_marker = _with_facet(unanswered_marker=None)
+    assert host_question_admissibility(form, no_marker).admissible
+
+
+@pytest.mark.parametrize("label", ["a,b", "a, b", 'say "hi"'])
+def test_unverified_multiselect_escaping_falls_back_before_rendering(label: str) -> None:
+    form = _form(_select(type="multi_select", options=[label, "plain"]))
+    assert not host_question_admissibility(form, PROFILE).admissible
+    assert form_to_host_question(form, PROFILE) is None
+    verified = _with_facet(
+        multi_select_encoding=dataclasses.replace(
+            FACET.multi_select_encoding, escaping_verified=True
+        )
+    )
+    assert host_question_admissibility(form, verified).admissible
+    batch = form_to_host_question(form, verified)
+    assert batch.answer_bindings[0].option_bindings[0] == (label, label, label)
+    # Scalar single-select and list codecs need no delimiter decoding.
+    assert host_question_admissibility(_form(_select(options=[label, "plain"])), PROFILE).admissible
+    listed = _with_facet(multi_select_encoding=MultiSelectEncoding())
+    assert host_question_admissibility(form, listed).admissible
+
+
+def test_multiselect_without_escaping_cannot_claim_ambiguous_labels_are_safe() -> None:
+    profile = _with_facet(
+        multi_select_encoding=MultiSelectEncoding(
+            kind="comma_delimited", delimiter=",", escaping_verified=True
+        )
+    )
+    assert not host_question_admissibility(
+        _form(_select(type="multi_select", options=["a,b", "c"])), profile
+    ).admissible
+    changed = dataclasses.replace(FACET.multi_select_encoding, escaping_verified=True)
+    assert digest(dataclasses.asdict(changed)) != digest(
+        dataclasses.asdict(FACET.multi_select_encoding)
+    )
+
+
+def test_header_fallback_must_fit_even_a_one_character_bound() -> None:
+    profile = _with_facet(max_header_chars=1)
+    form = _form(_select("long_name"))
+    verdict = host_question_admissibility(form, profile)
+    assert not verdict.admissible
+    assert any("header 'Q1' exceeds 1" in p for p in verdict.problems)
+    assert form_to_host_question(form, profile) is None
+    assert (
+        form_to_host_question(_form(_select("a")), profile).payload["questions"][0]["header"] == "A"
+    )
+
+
+def test_batch_payload_is_a_defensive_transport_copy() -> None:
+    batch = form_to_host_question(canonical_host_question_form(), PROFILE)
+    original = batch.payload
+    copy = batch.payload
+    copy["questions"][0]["question"] = "changed"
+    copy["questions"][0]["options"][0]["label"] = "changed"
+    copy["questions"].pop()
+    assert batch.payload == original
+    assert batch.answer_bindings[0].emitted_text == original["questions"][0]["question"]
+    rebuilt = type(batch)(
+        original, batch.answer_bindings, batch.profile_id, batch.response_correlation
+    )
+    original["questions"].clear()
+    assert rebuilt == batch
+
+
+def test_escaping_verification_requires_a_boolean() -> None:
+    with pytest.raises(ValueError, match="escaping_verified must be a boolean"):
+        MultiSelectEncoding(escaping_verified="false")

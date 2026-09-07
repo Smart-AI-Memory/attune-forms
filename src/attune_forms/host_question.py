@@ -98,6 +98,9 @@ class MultiSelectEncoding:
     delimiter or a quote. ``canonical_reencode`` requires a decoder to
     accept a raw string only when re-encoding the decoded atoms reproduces
     it byte for byte.
+    ``escaping_verified`` records whether the host has demonstrated the
+    declared escaping. Until then, delimiter/quote labels are inadmissible
+    for scalar multi-select responses. Fixture encoding is not verification.
     """
 
     kind: str = "list"
@@ -105,8 +108,11 @@ class MultiSelectEncoding:
     atom: str = "emitted_label"
     escaping: str = "none"
     canonical_reencode: bool = False
+    escaping_verified: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.escaping_verified, bool):
+            raise ValueError("escaping_verified must be a boolean")
         _check_vocab("encoding kind", self.kind, ENCODING_KINDS)
         _check_vocab("atom kind", self.atom, ATOM_KINDS)
         _check_vocab("escaping", self.escaping, ESCAPINGS)
@@ -224,7 +230,9 @@ def _normalize(text: str, algorithm: str) -> str:
 #: and a multi-select answer returns the chosen labels joined by a bare
 #: comma. The comma-space delimiter the parity design text assumed was not
 #: observed. Quoting of an atom that itself contains the delimiter is
-#: declared, not yet observed. The option-label bound is profile policy
+#: declared, not yet observed; labels requiring it are inadmissible.
+#: The attempt cap and deadline are consumer policy, not measured host limits.
+#: The option-label bound is profile policy
 #: (the tool asks for concise labels), not a measured host limit. Ranking
 #: is inadmissible by ruling (attune-ai D16): the control has no ordering
 #: affordance and the per-slot expansion cannot remove already-picked
@@ -281,7 +289,7 @@ class QuestionAnswerBinding:
     option_bindings: tuple[tuple[str, str, str], ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class HostQuestionBatch:
     """One host call: the visible ``payload`` plus retained bindings.
 
@@ -289,10 +297,28 @@ class HostQuestionBatch:
     with the server adapter that will correlate the raw response.
     """
 
-    payload: dict[str, Any]
+    _payload_json: str = field(repr=False)
     answer_bindings: tuple[QuestionAnswerBinding, ...]
     profile_id: str
     response_correlation: str
+
+    def __init__(
+        self,
+        payload: dict[str, Any],
+        answer_bindings: tuple[QuestionAnswerBinding, ...],
+        profile_id: str,
+        response_correlation: str,
+    ) -> None:
+        """Snapshot the payload so caller mutations cannot change retained state."""
+        object.__setattr__(self, "_payload_json", json.dumps(payload, sort_keys=True))
+        object.__setattr__(self, "answer_bindings", tuple(answer_bindings))
+        object.__setattr__(self, "profile_id", profile_id)
+        object.__setattr__(self, "response_correlation", response_correlation)
+
+    @property
+    def payload(self) -> dict[str, Any]:
+        """A fresh JSON-safe transport copy of the immutable payload snapshot."""
+        return json.loads(self._payload_json)
 
 
 @dataclass(frozen=True)
@@ -318,7 +344,7 @@ def _header(question_id: str, ordinal: int, bound: int | None) -> str:
     """A short heading derived from the id; the ordinal label when it would overflow.
 
     Never truncates: a heading that does not fit the profile bound is
-    replaced whole by ``Q<ordinal>``, which always fits.
+    replaced whole by ``Q<ordinal>``; admissibility checks that replacement too.
     """
     text = " ".join(re.split(r"[_\-.]+", question_id)).strip()
     text = text[:1].upper() + text[1:]
@@ -370,12 +396,26 @@ def _emit_question(
         if bound is not None and len(emitted) > bound:
             problems.append(f"{qid!r}: emitted label {emitted!r} exceeds {bound} characters")
         normalized = facet.normalize_option_label(emitted)
+        marker = facet.unanswered_marker
+        if marker is not None and normalized == facet.normalize_option_label(marker):
+            problems.append(f"{qid!r}: option {emitted!r} collides with the unanswered marker")
+        codec = facet.multi_select_encoding
+        if (
+            multi
+            and codec.kind == "comma_delimited"
+            and (codec.delimiter in emitted or '"' in emitted)
+            and (codec.escaping == "none" or not codec.escaping_verified)
+        ):
+            problems.append(f"{qid!r}: option {emitted!r} requires verified host escaping")
         if normalized == other:
             problems.append(f"{qid!r}: option {emitted!r} collides with the reserved Other label")
         if normalized in seen:
             problems.append(f"{qid!r}: options {seen[normalized]!r} and {emitted!r} collide")
         seen.setdefault(normalized, emitted)
         bindings.append((emitted, emitted, option))
+    header = _header(qid, ordinal, facet.max_header_chars)
+    if facet.max_header_chars is not None and len(header) > facet.max_header_chars:
+        problems.append(f"{qid!r}: header {header!r} exceeds {facet.max_header_chars} characters")
     if problems:
         return None, problems
 
@@ -389,7 +429,7 @@ def _emit_question(
         question_id=qid,
         ordinal=ordinal,
         text=text,
-        header=_header(qid, ordinal, facet.max_header_chars),
+        header=header,
         multi_select=multi,
         options=tuple(bindings),
         descriptions=descriptions,
