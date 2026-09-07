@@ -1,0 +1,39 @@
+{
+  "analysis": "descriptive per scenario/variant/condition with exact matched pairs; no human-outcome claim",
+  "authorization": {
+    "by": "Patrick Roebuck",
+    "recorded_at": "2026-09-07T00:16:06Z",
+    "response": "do your recommendation.",
+    "scope": "Audit the scorer, then run the corrected 72-unit replacement pilot; hard ceiling 1152 additional model calls; same runtime and descriptive analysis"
+  },
+  "experiment_version": "0.2.0",
+  "max_model_calls": 1152,
+  "max_model_turns": 16,
+  "max_user_turns": 12,
+  "planned_units": 72,
+  "protocol_id": "outcome-pilot-v0.2",
+  "provider_failure": "stop cohort; retain and never replace partial or failed units",
+  "repeats": 3,
+  "runtime": {
+    "cli_version": "0.153.4",
+    "model": "gpt-6-astra",
+    "reasoning_effort": "medium",
+    "service_tier": "priority"
+  },
+  "source_sha256": {
+    "benchmarks/aggregation.py": "b389abb6a78b6fbca4156d6a8974a1c6a793ec5044f1863a337c8fd704949d53",
+    "benchmarks/collect_outcomes.py": "76977af0f841fb9ad1aec7cc39bbb87ae6db82391bd8b3836273e92f899be051",
+    "benchmarks/fixtures/outcome-scenarios-v0.2.json": "161180e9c47e920c7acd8d1bf50426b67103c69ce25b6d0567183eacfe8fd856",
+    "benchmarks/fixtures/scenarios-v0.json": "3f8b92820c55a598b0f61e1d090f68790da7b3114cb08e51b135059e1d5c49d7",
+    "benchmarks/outcome_judge.py": "669583867f25abc30e7dc7ba4b005a15a1b715ef563e6dcec3ac30e79df85ecf",
+    "benchmarks/outcome_loop.py": "a1e355c1692be998b6782d38b28a5eed88e2f5fb002a72f2179bf5a8df0d9547",
+    "benchmarks/outcome_report.py": "69a996365472c9bd7d1e0db99ffc0055f9d79308daa8af07bb86c10e8b182b2a",
+    "benchmarks/provider.py": "bed2a61b7c174d64904a5a5c0b7d61d49542a36d7038095330ee088022054fff",
+    "docs/specs/outcome-experiment/plan.md": "b92d7f3d3d7b105404d5824b82029c69d5549ceee2abc969bd25a53918597838",
+    "src/attune_forms/bridge.py": "db7b47cee8cc144d4149dd9007b9f8ffaf5b25184fa337aefa0a240bb0f47fed",
+    "src/attune_forms/models.py": "c70f27eba641e3fc4d9dcf257a7aceb6f724aa3cd26d3d193f54c34ad0f17dcb",
+    "tests/test_outcome_scorer_audit.py": "84a9d4fcd64f2e9813fedbe27ea4d2b013e39577611f57e2288943ca555af97a"
+  },
+  "status": "ratified",
+  "supersedes": "outcome-pilot-v0.1 (retained invalid measurement cohort)"
+}
