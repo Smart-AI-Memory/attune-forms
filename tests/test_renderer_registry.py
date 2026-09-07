@@ -20,12 +20,14 @@ import attune_forms
 from attune_forms import canonical_fixtures as cf
 from attune_forms import renderer_registry as rr
 from attune_forms.bridge import collect_form_response, form_to_askuserquestion
+from attune_forms.conformance import CLAUDE_ASKUSERQUESTION, installed_profile
 from attune_forms.elicitation_schema import form_to_elicitation_schema
 from attune_forms.headless import (
     HEADLESS_SCHEMA_VERSION,
     RESPONSE_CONTRACT_KEYS,
     workspace_to_headless,
 )
+from attune_forms.host_question import HostQuestionBatch
 from attune_forms.markdown_ingestion import markdown_to_answers
 from attune_forms.markdown_surface import form_to_markdown
 from attune_forms.widget import WIDGET_RESPONSE_MARKER, form_to_widget_html
@@ -66,6 +68,7 @@ def test_target_ids_are_unique_and_stable() -> None:
         "form.portable",
         "form.headless",
         "form.askuserquestion",
+        "form.host_question",
         "workspace.rich",
         "workspace.portable",
         "workspace.headless",
@@ -83,15 +86,39 @@ def test_records_map_the_design_surfaces() -> None:
         WORKSPACE.target("host_native")
 
 
-def test_af1_ships_no_route_active_host_native_target() -> None:
+def test_af2_ships_one_route_active_host_native_target_beside_the_compat_target() -> None:
     host_native = [t for t in rr.iter_targets() if t.surface == "host_native"]
-    assert [t.target_id for t in host_native] == ["form.askuserquestion"]
-    (ask,) = host_native
+    assert [t.target_id for t in host_native] == ["form.askuserquestion", "form.host_question"]
+    ask, host = host_native
     assert ask.status == "compatibility_only"
     assert ask.evidence_mode == "compatibility_projection"
-    assert ask.profile_id == ""
+    assert ask.profile_id == "" and ask.fixture == ""
     assert ask.compatibility_contract_id == rr.ASKUSERQUESTION_CONTRACT_ID
-    assert not any(t.status == "route_active" for t in rr.iter_targets())
+    assert host.status == "route_active"
+    assert host.evidence_mode == "route_roundtrip"
+    assert host.profile_id == CLAUDE_ASKUSERQUESTION.id == "claude-askuserquestion"
+    assert host.compatibility_contract_id == "" and host.compatibility_shape_digest == ""
+    assert host.fixture == "attune_forms.canonical_fixtures.canonical_host_question_form"
+    profile = installed_profile(host.profile_id)
+    assert profile is CLAUDE_ASKUSERQUESTION and profile.host_question is not None
+    assert [t.target_id for t in rr.iter_targets() if t.status == "route_active"] == [
+        "form.host_question"
+    ]
+
+
+def test_validate_registry_rejects_a_route_active_target_without_an_installed_facet() -> None:
+    host = next(t for t in FORM.targets if t.target_id == "form.host_question")
+    others = tuple(t for t in FORM.targets if t is not host)
+    with pytest.raises(rr.RegistryError, match="'ghost' is not an installed interaction profile"):
+        rr.validate_registry(
+            _records_with(FORM, others + (dataclasses.replace(host, profile_id="ghost"),))
+        )
+    with pytest.raises(rr.RegistryError, match="'portable-markdown' has no host-question facet"):
+        rr.validate_registry(
+            _records_with(
+                FORM, others + (dataclasses.replace(host, profile_id="portable-markdown"),)
+            )
+        )
 
 
 def _records_with(record: rr.RendererRecord, targets: tuple[rr.RendererTarget, ...]):
@@ -471,17 +498,22 @@ def test_fixtures_ship_in_the_package_and_execute_through_every_target() -> None
         "form.rich": {"instance_id": cf.CANONICAL_INSTANCE_ID},
         "workspace.rich": {"instance_id": cf.CANONICAL_INSTANCE_ID},
     }
-    for record, fixture in ((FORM, form), (WORKSPACE, view)):
+    for record in (FORM, WORKSPACE):
         for target in record.targets:
-            first = target.resolve()(fixture, **kwargs.get(target.target_id, {}))
-            second = target.resolve()(fixture, **kwargs.get(target.target_id, {}))
+            first = rr.render_fixture(record, target, **kwargs.get(target.target_id, {}))
+            second = rr.render_fixture(record, target, **kwargs.get(target.target_id, {}))
             if isinstance(first, str):
                 assert cf.normalize(first) == cf.normalize(
                     second
                 ), f"{target.target_id} is not deterministic after closed normalization"
             else:
                 assert first == second, f"{target.target_id} is not deterministic"
+                if dataclasses.is_dataclass(first):
+                    assert first is not None
+                    first = dataclasses.asdict(first)
                 json.dumps(first)  # JSON-safe
+    host = next(t for t in FORM.targets if t.target_id == "form.host_question")
+    assert isinstance(rr.render_fixture(FORM, host), HostQuestionBatch)
 
 
 def test_normalization_rules_are_closed_and_fixture_digest_is_stable() -> None:
@@ -600,6 +632,45 @@ def test_headless_response_contract_round_trips_the_real_collector_like_the_widg
 
 
 # --- AskUserQuestion compatibility fixture ----------------------------------
+
+
+def test_host_question_fixture_round_trips_through_its_bindings_to_the_common_collector() -> None:
+    """AF-2: a raw host response derived only from the batch's bindings and the
+    profile's declared codec reaches the same validated ``FormResponse`` as
+    the canonical option ids do — with the recommended suffix resolved
+    through the binding, never stripped."""
+    form = cf.canonical_host_question_form()
+    profile = CLAUDE_ASKUSERQUESTION
+    host = next(t for t in FORM.targets if t.target_id == "form.host_question")
+    batch = rr.render_fixture(FORM, host)
+    assert isinstance(batch, HostQuestionBatch)
+    raw = cf.canonical_host_question_response(batch, profile)
+    assert set(raw) == {b.emitted_text for b in batch.answer_bindings}
+    assert raw["Which approach?"].endswith("(Recommended)")
+    assert raw["Which lanes?"] == "docs,tests"
+
+    # Test-side decode: the package ships no decoder (attune-ai Task 2 does).
+    facet = profile.host_question
+    delimiter = facet.multi_select_encoding.delimiter
+    answers: dict[str, object] = {}
+    for binding in batch.answer_bindings:
+        by_atom = {atom: option_id for _, atom, option_id in binding.option_bindings}
+        value = raw[binding.emitted_text]
+        question = batch.payload["questions"][binding.ordinal - 1]
+        if question["multiSelect"]:
+            atoms = value.split(delimiter)
+            assert delimiter.join(atoms) == value  # canonical re-encode holds
+            answers[binding.question_id] = [by_atom[a] for a in atoms]
+        else:
+            answers[binding.question_id] = by_atom[value]
+
+    via_host = collect_form_response(form, answers)
+    via_ids = collect_form_response(form, cf.canonical_host_question_answers())
+    assert via_host.responses == via_ids.responses
+    assert via_host.responses["approach"] == "Verify first"
+    assert via_host.responses["lanes"] == ["docs", "tests"]
+    schema = form_to_elicitation_schema(form)
+    assert set(schema["properties"]) == set(via_host.responses)
 
 
 def test_askuserquestion_shape_digest_is_pinned_to_the_canonical_output() -> None:

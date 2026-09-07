@@ -18,6 +18,7 @@ from enum import Enum
 from html.parser import HTMLParser
 from typing import Any
 
+from attune_forms.host_question import ASKUSERQUESTION_HOST_QUESTION, HostQuestionProfile
 from attune_forms.workspace import (
     WorkspaceView,
     workspace_to_markdown,
@@ -172,6 +173,10 @@ class InteractionProfile:
     required_latency_phases: tuple[LatencyPhase, ...]
     latency_budgets: tuple[LatencyBudget, ...] = field(default_factory=tuple)
     unavailable_receipts: tuple[UnavailableReceipt, ...] = field(default_factory=tuple)
+    #: The structured-question facet (AF-2). Present only on profiles whose
+    #: host exposes a built-in question control; the profile ``id`` is its
+    #: sole identity.
+    host_question: HostQuestionProfile | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -250,6 +255,13 @@ class InteractionProfile:
                 raise ValueError("postback capability requires the acknowledgement phase")
         elif self.required_latency_phases or self.latency_budgets:
             raise ValueError("latency phases and budgets require the latency receipt")
+        if self.host_question is not None:
+            if not isinstance(self.host_question, HostQuestionProfile):
+                raise TypeError("profile host_question must be HostQuestionProfile or None")
+            if not self.capabilities.forms:
+                raise ValueError("host-question facet requires forms capability")
+            if self.host_question.multi_select != self.capabilities.multi_select:
+                raise ValueError("host-question multi_select must match multi_select capability")
 
 
 @dataclass(frozen=True)
@@ -1227,3 +1239,37 @@ HEADLESS_JSON = InteractionProfile(
     required_latency_phases=_PHASES,
     latency_budgets=_BUDGETS,
 )
+
+#: Claude Code's built-in ``AskUserQuestion`` (AF-2). The one installed
+#: profile with a host-question facet; the registry's route-active
+#: host-native target names this ``id``. Its fallback projections when a
+#: form is inadmissible are PORTABLE and HEADLESS.
+CLAUDE_ASKUSERQUESTION = InteractionProfile(
+    id="claude-askuserquestion",
+    capabilities=HostCapabilities(forms=True, multi_select=True, postback=True),
+    navigation=NavigationCapabilities(keyboard=True, pointer=True),
+    retention=RetentionCapabilities(prior_output_retained=True, submitted_view_collapsible=True),
+    viewport=None,
+    required_receipts=(ConformanceReceipt.PARITY, ConformanceReceipt.LATENCY),
+    projection_surfaces=(ProjectionSurface.PORTABLE, ProjectionSurface.HEADLESS),
+    required_latency_phases=_PHASES,
+    latency_budgets=_BUDGETS,
+    host_question=ASKUSERQUESTION_HOST_QUESTION,
+)
+
+#: Every installed interaction profile, in ratification order.
+INTERACTION_PROFILES: tuple[InteractionProfile, ...] = (
+    RICH_WIDGET_STANDARD,
+    NATIVE_DIALOG_CONSTRAINED,
+    PORTABLE_MARKDOWN,
+    HEADLESS_JSON,
+    CLAUDE_ASKUSERQUESTION,
+)
+
+
+def installed_profile(profile_id: str) -> InteractionProfile | None:
+    """The installed interaction profile with ``profile_id``, or ``None``."""
+    for profile in INTERACTION_PROFILES:
+        if profile.id == profile_id:
+            return profile
+    return None

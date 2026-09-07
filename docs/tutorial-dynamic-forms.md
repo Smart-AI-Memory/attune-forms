@@ -214,7 +214,7 @@ from attune_forms import (
     form_to_elicitation_schema, form_to_markdown,
 )
 
-print(select_form_surface(form))               # 'widget' — or 'ask' where no widget can render
+print(select_form_surface(form))               # 'ask' — the host control is the default; 'widget' when the form needs it
 ```
 
 **Widget** — a self-contained interactive HTML form (scoped CSS, a submit script, no external assets) for hosts that render rich content. It posts a sentinel-marked JSON payload back through the host's prompt channel; the agent parses it and validates.

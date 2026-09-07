@@ -1,14 +1,15 @@
-"""Tests for the D21 surface router and its inputs.
+"""Tests for the surface router and its inputs.
 
-Covers ``select_form_surface`` (the widget-by-default product router),
-``is_trivial_form`` (the narrow mechanical exemption),
-``keyboard_mode_enabled`` (the per-project opt-out), and
-``form_response_summary`` (the collapse path).
+Covers ``select_form_surface`` (the host-native-by-default product
+router since attune-ai host-surface-parity D15/D16), ``is_trivial_form``
+(the mechanical triviality predicate), ``keyboard_mode_enabled`` (the
+per-project opt-out), and ``form_response_summary`` (the collapse path).
 
-The regression these guard: the default used to be "cheapest surface
-that fits", so a multi-dimension all-select form routed to
-``AskUserQuestion``. D21 flipped it. ``test_multi_dimension_form_*``
-below fails if that flip is ever reverted.
+History: the original default was "cheapest surface that fits"; D21
+flipped it to the widget; D15/D16 flipped it again to the host's own
+question control for every form the installed host-question profile
+admits, with the widget reserved for forms it cannot carry. The
+``test_*_routes_to_*`` tests below pin the current default.
 
 Copyright 2026 Smart-AI-Memory
 Licensed under Apache 2.0
@@ -53,24 +54,53 @@ def _isolate_telemetry_and_env(tmp_path, monkeypatch):
 
 
 # --------------------------------------------------------------------
-# select_form_surface — the flipped default
+# select_form_surface — the host-native default (D15/D16)
 # --------------------------------------------------------------------
 
 
-def test_multi_dimension_form_defaults_to_widget() -> None:
-    """The D21 flip: >1 all-select field is no longer an AskUserQuestion form.
+def test_multi_dimension_expressible_form_routes_to_the_host_control() -> None:
+    """D15/D16: a form the host-question profile admits is asked natively.
 
-    This is the exact class the old ``needs_widget``-owned routing sent
-    to buttons. If this returns ``"ask"``, the flip was reverted.
+    Two selects fit one AskUserQuestion call, so the router says ``"ask"``
+    even though the widget would render them too. If this returns
+    ``"widget"``, the host-native default was reverted.
     """
-    form = _form([_select(id="a"), _select(id="b")])
-    assert needs_widget(form) is False  # still AskUserQuestion-expressible
-    assert select_form_surface(form) == "widget"  # ...but no longer routed there
+    form = _form([_select(id="a", text="Which a?"), _select(id="b", text="Which b?")])
+    assert needs_widget(form) is False
+    assert select_form_surface(form) == "ask"
 
 
-def test_single_select_over_three_options_routes_to_widget() -> None:
-    form = _form([_select(options=["w", "x", "y", "z"])])
+def test_two_questions_with_identical_text_cannot_be_correlated_and_take_the_widget() -> None:
+    """The host keys answers by emitted question text, so identical texts are
+    ambiguous; the router sends them to the widget rather than guess."""
+    form = _form([_select(id="a"), _select(id="b")])  # both "Which?"
     assert select_form_surface(form) == "widget"
+
+
+def test_four_options_route_to_the_host_control_and_five_to_the_widget() -> None:
+    assert select_form_surface(_form([_select(options=["w", "x", "y", "z"])])) == "ask"
+    assert select_form_surface(_form([_select(options=["v", "w", "x", "y", "z"])])) == "widget"
+
+
+def test_ranking_and_over_cap_triage_route_to_the_widget() -> None:
+    ranking = _form(
+        [{"id": "r", "type": "ranking", "text": "Order", "options": ["a", "b", "c", "d"]}]
+    )
+    assert select_form_surface(ranking) == "widget"
+    items = [{"id": f"i{k}", "label": f"Item {k}"} for k in range(5)]
+    triage = _form(
+        [
+            {
+                "id": "t",
+                "type": "triage",
+                "text": "Rule",
+                "triage_items": items,
+                "dispositions": ["apply", "defer"],
+            }
+        ]
+    )
+    assert select_form_surface(triage) == "widget"
+    assert select_form_surface(_form([{"id": "n", "type": "text_input", "text": "?"}])) == "widget"
 
 
 def test_trivial_boolean_routes_to_ask() -> None:
@@ -97,12 +127,11 @@ def test_no_portable_control_outranks_keyboard_mode() -> None:
 
 
 @pytest.mark.parametrize("construct", ["decision", "pushback", "progress"])
-def test_constructs_are_lossy_not_impossible(construct: str) -> None:
-    """Constructs default to the widget but yield to an explicit opt-out.
-
-    Unlike number/date/textarea they *do* have an AskUserQuestion
-    fallback (recommendation-first single-select), so keyboard mode may
-    take it.
+def test_constructs_route_to_the_host_control(construct: str) -> None:
+    """Decision-shaped constructs are expressible (recommendation-first
+    single-select), so under D16 they take the host control by default
+    and under keyboard mode alike; only number/date/textarea are
+    impossible there.
     """
     field = {
         "id": "d",
@@ -120,7 +149,7 @@ def test_constructs_are_lossy_not_impossible(construct: str) -> None:
             {"label": "y", "status": "blocked"},
         ]
     form = _form([field])
-    assert select_form_surface(form) == "widget"
+    assert select_form_surface(form) == "ask"
     assert select_form_surface(form, keyboard_mode=True) == "ask"
 
 
@@ -217,12 +246,12 @@ def test_routing_decisions_are_logged_and_readable() -> None:
     """Non-mocked round trip: route -> persist -> read back the mix."""
     from attune_forms.form_events import surface_mix
 
-    rich = _form([_select(id="a"), _select(id="b")])
-    trivial = _form([{"id": "q", "type": "boolean", "text": "Proceed?"}])
+    rich = _form([{"id": "n", "type": "number", "text": "How many?"}])
+    native = _form([_select(id="a", text="Which a?"), _select(id="b", text="Which b?")])
 
     select_form_surface(rich)
     select_form_surface(rich)
-    select_form_surface(trivial)
+    select_form_surface(native)
 
     assert surface_mix() == {"widget": 2, "ask": 1}
 

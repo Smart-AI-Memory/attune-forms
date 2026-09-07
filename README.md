@@ -180,8 +180,14 @@ form = form_from_dict({
     ],
 })
 if select_form_surface(form) == "widget":
-    html = form_to_widget_html(form)  # render on your widget surface
+    html = form_to_widget_html(form)  # the host control cannot carry this form
 ```
+
+The host's own question control is the default: `select_form_surface`
+returns `"ask"` for every form the installed host-question profile
+admits (`host_question_admissibility`), and `form_to_host_question`
+renders that batch for a server adapter with the answer bindings it needs
+to map raw host answers back to option ids.
 
 ## One schema, every surface
 
@@ -193,7 +199,9 @@ if select_form_surface(form) == "widget":
   missing app-to-server or app-to-chat capabilities show an explicit
   manual-continuation state rather than a dead control.
 - **Renderers** — `form_to_widget_html` (self-contained interactive
-  widget with postback), `form_to_askuserquestion` (batched payloads),
+  widget with postback), `form_to_host_question` (one host question
+  batch with retained answer bindings, for the installed host profile),
+  `form_to_askuserquestion` (legacy batched payloads),
   `form_to_elicitation_schema` (native MCP elicitation), and
   `form_to_markdown` (portable markdown for text-only hosts, with a
   JSON answer skeleton as the reply format).
@@ -201,9 +209,11 @@ if select_form_surface(form) == "widget":
   skeleton or line shorthand deterministically (unknown ids and stray
   lines become named problems, never guesses);
   `problems_to_markdown` re-asks exactly the fields that failed.
-- **Surface routing** — `select_form_surface` picks widget vs fallback;
-  a keyboard-mode opt-out is persisted per project. The form degrades —
-  it never breaks. Authority note: in the shipped plugin the router is
+- **Surface routing** — `select_form_surface` picks the host's native
+  control for every form its profile admits and the widget only for
+  forms it cannot carry (number/date/textarea, over-cap questions or
+  options, a ranking); a keyboard-mode opt-out is persisted per project.
+  The form degrades — it never breaks. Authority note: in the shipped plugin the router is
   *advisory* — the agent's choice of MCP tool IS the surface decision,
   guided by the skill's prose ladder, and the router runs after the
   fact so telemetry can record agreement. Library consumers routing

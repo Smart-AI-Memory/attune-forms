@@ -24,6 +24,7 @@ from typing import Any
 
 from attune_forms.bridge import form_from_dict
 from attune_forms.headless import workspace_to_headless
+from attune_forms.host_question import HostQuestionBatch
 from attune_forms.models import FormSchema
 from attune_forms.widget import WIDGET_RESPONSE_MARKER
 from attune_forms.workspace import (
@@ -120,6 +121,95 @@ def canonical_form() -> FormSchema:
 def canonical_form_answers() -> dict[str, Any]:
     """A raw answer set every form renderer's collector accepts."""
     return dict(CANONICAL_FORM_ANSWERS)
+
+
+#: The route-active host-question target's fixture (AF-2): four questions
+#: the AskUserQuestion profile admits — a decision with a recommendation
+#: and per-option notes, a three-way select, a boolean, and a multi-select.
+#: No free-text field: that is the construct the control cannot carry.
+CANONICAL_HOST_QUESTION_FORM_DEFINITION: dict[str, Any] = {
+    "title": "Canonical host question form",
+    "description": "Registry fixture: every control the host question profile admits.",
+    "form_id": "canonical-host-question-form",
+    "fields": [
+        {
+            "id": "approach",
+            "type": "decision",
+            "text": "Which approach?",
+            "recommended": "Verify first",
+            "rationale": "The receipt beats the promise.",
+            "options": ["Build first", "Verify first"],
+            "option_notes": {"Verify first": "cheap", "Build first": "fast"},
+        },
+        {
+            "id": "depth",
+            "type": "single_select",
+            "text": "How deep?",
+            "options": ["quick", "standard", "thorough"],
+        },
+        {
+            "id": "proceed",
+            "type": "boolean",
+            "text": "Proceed now?",
+        },
+        {
+            "id": "lanes",
+            "type": "multi_select",
+            "text": "Which lanes?",
+            "options": ["tests", "docs", "release"],
+        },
+    ],
+}
+
+CANONICAL_HOST_QUESTION_ANSWERS: dict[str, Any] = {
+    "approach": "Verify first",
+    "depth": "standard",
+    "proceed": "Yes",
+    "lanes": ["docs", "tests"],
+}
+
+
+def canonical_host_question_form() -> FormSchema:
+    """The host-question target's fixture."""
+    return form_from_dict(CANONICAL_HOST_QUESTION_FORM_DEFINITION)
+
+
+def canonical_host_question_answers() -> dict[str, Any]:
+    """Canonical option ids per question, as the common collector expects."""
+    return {
+        k: (list(v) if isinstance(v, list) else v)
+        for k, v in CANONICAL_HOST_QUESTION_ANSWERS.items()
+    }
+
+
+def canonical_host_question_response(
+    batch: HostQuestionBatch, profile: Any, answers: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Build the raw response a host would return for ``batch``.
+
+    Derived only from the batch's bindings and the profile's declared
+    correlation and multi-select encoding, so the fixture proves the
+    bindings are sufficient to reach every canonical answer. ``answers``
+    are canonical option ids (default: the canonical answers); each is
+    translated to its bound response atom. An answer, not a projection.
+    """
+    facet = profile.host_question
+    chosen = answers if answers is not None else canonical_host_question_answers()
+    raw: dict[str, Any] = {}
+    for binding in batch.answer_bindings:
+        atoms = {option_id: atom for _, atom, option_id in binding.option_bindings}
+        value = chosen[binding.question_id]
+        if isinstance(value, list):
+            encoded: Any = facet.multi_select_encoding.encode([atoms[v] for v in value])
+        else:
+            encoded = atoms[value]
+        if facet.response_correlation == "question_id":
+            raw[binding.question_id] = encoded
+        elif facet.response_correlation == "ordinal":
+            raw[str(binding.ordinal)] = encoded
+        else:
+            raw[binding.emitted_text] = encoded
+    return raw
 
 
 def canonical_workspace_view() -> WorkspaceView:
@@ -228,6 +318,8 @@ def fixture_digest() -> str:
         {
             "form": CANONICAL_FORM_DEFINITION,
             "answers": CANONICAL_FORM_ANSWERS,
+            "host_question_form": CANONICAL_HOST_QUESTION_FORM_DEFINITION,
+            "host_question_answers": CANONICAL_HOST_QUESTION_ANSWERS,
             "workspace": workspace_to_headless(canonical_workspace_view()),
             "binding": canonical_binding().to_payload(),
             "normalization": [rule.__dict__ for rule in NORMALIZATION_RULES],
@@ -238,12 +330,17 @@ def fixture_digest() -> str:
 __all__ = [
     "CANONICAL_FORM_ANSWERS",
     "CANONICAL_FORM_DEFINITION",
+    "CANONICAL_HOST_QUESTION_ANSWERS",
+    "CANONICAL_HOST_QUESTION_FORM_DEFINITION",
     "CANONICAL_INSTANCE_ID",
     "NORMALIZATION_RULES",
     "NormalizationRule",
     "canonical_binding",
     "canonical_form",
     "canonical_form_answers",
+    "canonical_host_question_answers",
+    "canonical_host_question_form",
+    "canonical_host_question_response",
     "canonical_json",
     "canonical_workspace_response",
     "canonical_workspace_view",

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from attune_forms.form_events import log_form_build, log_surface_decision
+from attune_forms.host_question import ASKUSERQUESTION_HOST_QUESTION, host_question_admissibility
 from attune_forms.models import (
     ASSUMPTION_RULINGS,
     ASSUMPTION_TEXT_SUFFIX,
@@ -1290,10 +1291,16 @@ def select_form_surface(
 ) -> str:
     """Choose the surface to render ``form`` on. Returns ``"widget"`` or ``"ask"``.
 
-    The product-level router (D21). The rich widget is the **default**;
-    ``AskUserQuestion`` is the explicit fallback. Latency is not an
-    input — the axis is how much of the option space the user can see
-    at once, not how many tool calls it costs.
+    The product-level router. Since attune-ai host-surface-parity D15/D16
+    the host's own question control is the **default**: ``"ask"`` for
+    every form the installed host-question profile admits (see
+    :func:`~attune_forms.host_question.host_question_admissibility`), and
+    ``"widget"`` only for forms it cannot carry without loss — a control
+    with no host equivalent (``number`` / ``date`` / ``textarea``), more
+    emitted questions or options than the profile allows, a ranking, or
+    an ambiguity the profile cannot correlate. ``"ask"`` covers the host
+    control and plain conversation alike; the markdown fallback is
+    outside this router's range.
 
     .. note::
        Authority (architecture review F9, 2026-08-20): in the shipped
@@ -1316,11 +1323,12 @@ def select_form_surface(
        have no ``AskUserQuestion`` equivalent, so the widget is forced.
        This outranks ``keyboard_mode`` so the opt-out can never
        silently drop a field.
-    3. **Keyboard mode** — the user's opt-out (D17). Applies only to
-       forms ``AskUserQuestion`` can actually express, which by this
-       point is all that remain.
-    4. **Triviality** — see :func:`is_trivial_form`.
-    5. Otherwise the widget, which is the default.
+    3. **Keyboard mode** — the user's opt-out (D17): ``"ask"`` for
+       everything the previous rule let through.
+    4. **Host admissibility** — a form the host-question profile does
+       not admit (over the question or option caps, a ranking, an
+       uncorrelatable duplicate question) takes the widget.
+    5. Otherwise ``"ask"``: the host's native control is the default.
 
     Args:
         form: The form to route.
@@ -1366,9 +1374,9 @@ def _route(
         return "widget", "no_portable_control"
     if keyboard_mode:
         return "ask", "keyboard_mode"
-    if is_trivial_form(form):
-        return "ask", "trivial_form"
-    return "widget", "default"
+    if not host_question_admissibility(form, ASKUSERQUESTION_HOST_QUESTION).admissible:
+        return "widget", "host_inadmissible"
+    return "ask", "host_native_default"
 
 
 #: Values read as "on" / "off" for :func:`keyboard_mode_enabled`.
