@@ -15,6 +15,38 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
+## What's new in 0.15.0
+
+- **Host-question profile facet** — `InteractionProfile.host_question`
+  describes a host's built-in question control as data: question, option
+  and header limits, multi-select, the reserved Other label and where free
+  text arrives, cancellation, validation feedback with a finite attempt cap
+  and deadline, closed text normalizations, the raw multi-select response
+  encoding, the recommended-label suffix and the host's unanswered marker.
+  `CLAUDE_ASKUSERQUESTION` is the installed profile for Claude Code's
+  `AskUserQuestion`, from a live desktop trial; `installed_profile(id)`
+  looks profiles up.
+- **Pure admissibility and renderer** — `host_question_admissibility(form,
+  profile)` says before any render whether a form fits the control without
+  truncation or ambiguity, naming every reason it does not;
+  `form_to_host_question(form, profile)` returns a frozen
+  `HostQuestionBatch`: the host-visible payload plus immutable
+  `QuestionAnswerBinding`s a server adapter retains to map raw answers back
+  to option ids. No raw-host decoder ships; the consuming adapter owns
+  correlation, cancellation, feedback and receipts.
+- **Route-active registry target** — `form.host_question` sits beside the
+  unchanged compatibility-only `form.askuserquestion`; a route-active
+  target must resolve to an installed profile carrying the facet;
+  `render_fixture()` and `scripts/af2_clean_wheel_probe.py` execute the
+  canonical host-question fixture from a wheel.
+- **Host-native router default** — `select_form_surface` now returns
+  `"ask"` for every form the installed host profile admits and `"widget"`
+  only for forms it cannot carry (number/date/textarea, over-cap questions
+  or options, a ranking, an uncorrelatable duplicate question).
+
+This minor adds the host-question line (attune-ai host-surface-parity
+AF-2, D15–D17); everything from 0.14 remains available unchanged.
+
 ## What's new in 0.14.0
 
 - **Renderer registry and no-escape sweep** — `RENDERER_REGISTRY` is the

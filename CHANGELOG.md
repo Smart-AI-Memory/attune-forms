@@ -6,6 +6,8 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-09-07
+
 The host-question line (attune-ai host-surface-parity AF-2): a host's
 built-in question control described as an installed profile facet, a pure
 admissibility predicate and renderer with retained answer bindings, one
