@@ -1269,7 +1269,7 @@ INTERACTION_PROFILES: tuple[InteractionProfile, ...] = (
 
 def installed_profile(profile_id: str) -> InteractionProfile | None:
     """The installed interaction profile with ``profile_id``, or ``None``."""
-    for profile in INTERACTION_PROFILES:
-        if profile.id == profile_id:
-            return profile
-    return None
+    ids = [profile.id for profile in INTERACTION_PROFILES]
+    if any(not identity.strip() for identity in ids) or len(ids) != len(set(ids)):
+        raise ValueError("installed interaction profile IDs must be nonempty and unique")
+    return next((profile for profile in INTERACTION_PROFILES if profile.id == profile_id), None)

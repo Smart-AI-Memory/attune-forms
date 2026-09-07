@@ -634,11 +634,13 @@ def test_headless_response_contract_round_trips_the_real_collector_like_the_widg
 # --- AskUserQuestion compatibility fixture ----------------------------------
 
 
-def test_host_question_fixture_round_trips_through_its_bindings_to_the_common_collector() -> None:
-    """AF-2: a raw host response derived only from the batch's bindings and the
-    profile's declared codec reaches the same validated ``FormResponse`` as
-    the canonical option ids do — with the recommended suffix resolved
-    through the binding, never stripped."""
+def test_synthetic_host_question_fixture_maps_to_canonical_answers() -> None:
+    """Synthetic fixture consistency only, not a host-response receipt.
+
+    This test-local split handles only the canonical delimiter-free labels.
+    It proves neither host decoding/correlation nor trusted completion; Task 2
+    owns those boundaries and their codec/validator receipts.
+    """
     form = cf.canonical_host_question_form()
     profile = CLAUDE_ASKUSERQUESTION
     host = next(t for t in FORM.targets if t.target_id == "form.host_question")
@@ -714,3 +716,19 @@ def test_widget_and_markdown_form_projections_are_deterministic_under_the_canoni
     assert cf.normalize(html) == cf.normalize(again)
     assert cf.CANONICAL_INSTANCE_ID in html
     assert form_to_markdown(form) == form_to_markdown(form)
+
+
+def test_duplicate_installed_profile_ids_fail_closed(monkeypatch) -> None:
+    import attune_forms.conformance as conformance
+
+    duplicate = dataclasses.replace(
+        CLAUDE_ASKUSERQUESTION,
+        host_question=dataclasses.replace(CLAUDE_ASKUSERQUESTION.host_question, max_questions=1),
+    )
+    monkeypatch.setattr(
+        conformance, "INTERACTION_PROFILES", conformance.INTERACTION_PROFILES + (duplicate,)
+    )
+    with pytest.raises(ValueError, match="nonempty and unique"):
+        conformance.installed_profile(CLAUDE_ASKUSERQUESTION.id)
+    with pytest.raises(ValueError, match="nonempty and unique"):
+        rr.validate_registry()
