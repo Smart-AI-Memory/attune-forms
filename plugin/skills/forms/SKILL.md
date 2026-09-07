@@ -207,6 +207,18 @@ wearing a new construct.
 
 ## Choosing a surface
 
+**Default (attune-ai D15/D16): the host's own question control.** On a
+host with a built-in question tool, ask there for every form the
+installed host-question profile admits — the library's
+`host_question_admissibility` names why a form does not fit (a free-text
+field, more than four questions or options, a ranking, two questions
+with the same text), and `form_to_host_question` renders the admissible
+batch with the answer bindings a server adapter needs. Reach for the
+widget only for forms the control cannot carry. On Claude hosts, call
+`AskUserQuestion` directly for ordinary requests (the `elicit` skill's
+host default); the ladder below is the explicitly requested Attune-form
+path.
+
 1. **MCP Apps host**: call `elicitation_render_widget` (or
    `elicitation_render_workspace`). After capability negotiation the host
    discovers the linked `ui://attune-forms/dynamic-surface/v1` resource and

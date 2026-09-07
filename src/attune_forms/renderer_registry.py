@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from attune_forms.canonical_fixtures import digest
+from attune_forms.conformance import installed_profile
 
 PACKAGE = "attune_forms"
 PACKAGE_ROOT = Path(__file__).resolve().parent
@@ -41,6 +42,7 @@ projection_output_types: tuple[str, ...] = (
     "str",
     "dict[str, Any]",
     "list[list[dict[str, Any]]]",
+    "HostQuestionBatch",
 )
 
 SURFACES = ("rich", "portable", "headless", "host_native")
@@ -78,6 +80,10 @@ class RendererTarget:
     profile_id: str = ""
     compatibility_contract_id: str = ""
     compatibility_shape_digest: str = ""
+    #: A target-specific canonical fixture (dotted path); empty inherits the
+    #: record's. A route-active host target needs a fixture its profile
+    #: admits, which the family fixture need not be.
+    fixture: str = ""
 
     @property
     def qualname(self) -> str:
@@ -138,6 +144,16 @@ RENDERER_REGISTRY: tuple[RendererRecord, ...] = (
                 compatibility_contract_id=ASKUSERQUESTION_CONTRACT_ID,
                 compatibility_shape_digest=ASKUSERQUESTION_SHAPE_DIGEST,
             ),
+            _t(
+                "form.host_question",
+                "host_native",
+                "host_question",
+                "form_to_host_question",
+                status="route_active",
+                evidence_mode="route_roundtrip",
+                profile_id="claude-askuserquestion",
+                fixture=f"{PACKAGE}.canonical_fixtures.canonical_host_question_form",
+            ),
         ),
     ),
     RendererRecord(
@@ -187,6 +203,26 @@ def iter_targets(
     """Every target of every record, in registry order."""
     for record in records:
         yield from record.targets
+
+
+def _resolve_dotted(path: str) -> Callable[..., Any]:
+    module, name = path.rsplit(".", 1)
+    return getattr(importlib.import_module(module), name)
+
+
+def render_fixture(record: RendererRecord, target: RendererTarget, **overrides: Any) -> Any:
+    """Execute ``target`` on its canonical fixture the way a clean-wheel probe does.
+
+    The fixture is the target's own when it declares one, else the
+    record's. A route-active host target receives its installed
+    interaction profile as ``profile``. ``overrides`` are passed through
+    (the widget renderers take a fixed ``instance_id``).
+    """
+    fixture = _resolve_dotted(target.fixture or record.fixture)()
+    kwargs: dict[str, Any] = dict(overrides)
+    if target.status == "route_active" and "profile" not in kwargs:
+        kwargs["profile"] = installed_profile(target.profile_id)
+    return target.resolve()(fixture, **kwargs)
 
 
 def validate_registry(records: tuple[RendererRecord, ...] = RENDERER_REGISTRY) -> None:
@@ -240,6 +276,16 @@ def _target_problems(
     if t.status == "route_active":
         if not t.profile_id:
             problems.append(f"{t.target_id}: route_active target must name its profile_id")
+        else:
+            profile = installed_profile(t.profile_id)
+            if profile is None:
+                problems.append(
+                    f"{t.target_id}: profile {t.profile_id!r} is not an installed interaction profile"
+                )
+            elif profile.host_question is None:
+                problems.append(
+                    f"{t.target_id}: installed profile {t.profile_id!r} has no host-question facet"
+                )
         if t.profile_id in route_active:
             problems.append(
                 f"{record.record_id}: more than one route_active target for profile {t.profile_id!r}"
@@ -524,6 +570,7 @@ __all__ = [
     "projection_output_types",
     "record_digest",
     "registry_digest",
+    "render_fixture",
     "sweep_production_renderers",
     "validate_registry",
 ]

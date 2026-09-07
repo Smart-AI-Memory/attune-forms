@@ -7,12 +7,15 @@ from dataclasses import fields, replace
 import pytest
 
 from attune_forms import (
+    CLAUDE_ASKUSERQUESTION,
     HEADLESS_JSON,
+    INTERACTION_PROFILES,
     NATIVE_DIALOG_CONSTRAINED,
     PORTABLE_MARKDOWN,
     RICH_WIDGET_STANDARD,
     ConformanceReceipt,
     ConformanceStatus,
+    HostCapabilities,
     InteractionProfile,
     LatencyBudget,
     LatencyMode,
@@ -26,6 +29,7 @@ from attune_forms import (
     WorkspaceFixture,
     WorkspaceView,
     WorkspaceViewId,
+    installed_profile,
     measure_latency,
     run_workspace_conformance,
     summarize_latency,
@@ -86,17 +90,22 @@ def test_ratified_profiles_are_capability_only_and_contain_no_authority_fields()
         NATIVE_DIALOG_CONSTRAINED,
         PORTABLE_MARKDOWN,
         HEADLESS_JSON,
+        CLAUDE_ASKUSERQUESTION,
     )
+    assert profiles == INTERACTION_PROFILES
     assert {profile.id for profile in profiles} == {
         "rich-widget-standard",
         "native-dialog-constrained",
         "portable-markdown",
         "headless-json",
+        "claude-askuserquestion",
     }
+    assert [p for p in profiles if p.host_question is not None] == [CLAUDE_ASKUSERQUESTION]
     serialized_names = {
         field.name
         for profile in profiles
         for model in (profile, profile.capabilities, profile.navigation, profile.retention)
+        + ((profile.host_question,) if profile.host_question is not None else ())
         for field in fields(model)
     }
     forbidden = {
@@ -108,6 +117,23 @@ def test_ratified_profiles_are_capability_only_and_contain_no_authority_fields()
         "legal_actions",
     }
     assert serialized_names.isdisjoint(forbidden)
+
+
+def test_host_question_facet_requires_forms_and_a_consistent_multi_select_capability() -> None:
+    facet = CLAUDE_ASKUSERQUESTION.host_question
+    with pytest.raises(ValueError, match="requires forms capability"):
+        replace(CLAUDE_ASKUSERQUESTION, capabilities=HostCapabilities(postback=True))
+    with pytest.raises(ValueError, match="multi_select must match"):
+        replace(
+            CLAUDE_ASKUSERQUESTION,
+            capabilities=HostCapabilities(forms=True, postback=True),
+            host_question=facet,
+        )
+    with pytest.raises(TypeError, match="HostQuestionProfile or None"):
+        replace(CLAUDE_ASKUSERQUESTION, host_question="askuserquestion")  # type: ignore[arg-type]
+    assert installed_profile(CLAUDE_ASKUSERQUESTION.id) is CLAUDE_ASKUSERQUESTION
+    assert installed_profile(PORTABLE_MARKDOWN.id).host_question is None
+    assert installed_profile("") is None
 
 
 def test_original_seven_action_native_shape_fails_constrained_viewport() -> None:

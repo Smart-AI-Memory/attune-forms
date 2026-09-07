@@ -6,6 +6,67 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+The host-question line (attune-ai host-surface-parity AF-2): a host's
+built-in question control described as an installed profile facet, a pure
+admissibility predicate and renderer with retained answer bindings, one
+route-active host-native registry target, and the router's default flipped
+to the host's own control (attune-ai D15/D16).
+
+### Added
+
+- **`HostQuestionProfile` facet on `InteractionProfile`** (`host_question`,
+  optional). Declares question/option/header limits, multi-select, the
+  reserved Other label and where free text arrives, cancellation,
+  validation-feedback delivery with a finite attempt cap and response
+  deadline, closed text-normalization algorithms, the raw multi-select
+  response encoding (`MultiSelectEncoding`), the recommended-label suffix,
+  the host's unanswered marker, and profile-declared inadmissible types.
+  The containing profile `id` is the sole identity. `serialize()` is the
+  digest input; every field changes it.
+- **`CLAUDE_ASKUSERQUESTION`**, the installed profile for Claude Code's
+  built-in `AskUserQuestion`, from the 2026-09-07 desktop live trial: four
+  questions, two to four options, a 12-character header, multi-select
+  returned as labels joined by a bare comma, Escape cancels, a skipped
+  question returns `[No preference]`, ranking inadmissible by ruling.
+  `INTERACTION_PROFILES` and `installed_profile()` look profiles up by id.
+- **`host_question_admissibility(form, profile)`** and
+  **`form_to_host_question(form, profile)`** in `attune_forms.host_question`:
+  the pure pre-render predicate and the renderer returning a frozen
+  `HostQuestionBatch` (host-visible `payload` plus immutable
+  `QuestionAnswerBinding`s: stable question id, emitted ordinal, exact
+  emitted text, ordered emitted-label/response-atom/option-id triples).
+  Recommended options partition first with the suffix as part of the
+  bound atom; help text and inference provenance fold into the emitted
+  question text; headers derive from ids and fall back to `Q<n>` rather
+  than truncate; within-question and reserved-Other collisions, duplicate
+  emitted text under emitted-text correlation, controls with no host
+  equivalent, and over-cap forms are named problems, never truncations.
+  A direct call on an inadmissible form returns `None`. No raw-host
+  decoder ships; correlation, Other/cancellation decoding, feedback,
+  retries and receipts belong to the consuming server adapter.
+- **Registry**: the route-active `form.host_question` target
+  (`route_roundtrip`, profile `claude-askuserquestion`) beside the
+  unchanged compatibility-only `form.askuserquestion`; `HostQuestionBatch`
+  joins the closed projection-output vocabulary; a route-active target
+  must resolve to an installed profile carrying the facet; `RendererTarget`
+  gains an optional per-target `fixture`; `render_fixture()` executes a
+  target on its fixture the way a clean-wheel probe does.
+- **Canonical fixtures**: `canonical_host_question_form()`,
+  `canonical_host_question_answers()` and
+  `canonical_host_question_response()` (a raw host response built only
+  from the bindings and the declared codec), all bound by `fixture_digest`.
+
+### Changed
+
+- **`select_form_surface` default is now the host's own control.** After
+  the capability floor, the no-portable-control rule and keyboard mode,
+  a form the installed host-question profile admits routes to `"ask"`
+  (reason `host_native_default`); a form it cannot carry (over the
+  question or option caps, a ranking, an uncorrelatable duplicate
+  question, a free-text field) routes to `"widget"` (reason
+  `host_inadmissible`). Triviality no longer routes; `is_trivial_form`
+  stays exported. `needs_widget` is unchanged.
+
 ## [0.14.0] — 2026-09-06
 
 The renderer-registry line (attune-ai host-surface-parity AF-1): every
