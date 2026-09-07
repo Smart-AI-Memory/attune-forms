@@ -1,6 +1,6 @@
 # End-to-end outcome experiment v0.2
 
-Status: v0.1 collection stopped for an undisclosed artifact-format requirement; corrected v0.2 implementation is ready for a separately approved replacement collection.
+Status: v0.1 collection stopped for an undisclosed artifact-format requirement; corrected v0.2 replacement collection authorized by Patrick after a pre-collection scorer audit.
 
 ## Scope and acceptance
 
@@ -111,7 +111,7 @@ unique strings; their order is immaterial to the judge. Schema validity is
 reported separately, and regression tests cover the previously hidden shape,
 answer non-disclosure, ordering and duplicate IDs. The proposal remains 72 new
 units with up to 1,152 additional model calls; v0.1 spending is separate and the
-replacement requires approval. Stop for a discovered measurement defect as well
+replacement was authorized on 2026-09-07 with “do your recommendation” after the recommendation to audit first and then collect. Stop for a discovered measurement defect as well
 as a provider failure. A later pilot may still reveal other task-contract defects.
 
 ## Running the implementation
@@ -131,3 +131,15 @@ retained records. These commands never imply that scripted controls are LLM data
 
 A later human study needs actual participants, task assignment, consent and an
 instrument for effort/abandonment. The simulator pilot cannot settle those claims.
+
+## Pre-collection audit
+
+Twenty-six audit cases use hand-authored answers independent of ScriptedOracle
+and the fixture expected-answer dictionary. They cover all seven scenarios,
+condition-label invariance, omitted/wrong/invented fields, unauthorized attempts,
+unchanged state, and correction recovery. This is an independent construction of
+checks by the implementing assistant, not a separate human or model reviewer.
+The audit found and fixed an undisclosed ordering requirement for decision
+alternatives before any v0.2 collection. Alternatives and evidence may be reordered;
+duplicate or missing alternatives still fail. Scope and collection ceiling remain
+72 units / 1,152 additional model calls.

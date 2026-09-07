@@ -18,15 +18,14 @@ for source-bound verification of that cohort; never resume or overwrite it.
 
 The v0.2 correction exposes artifact schemas without expected answers, scores
 schema validity separately, and ignores ID-list ordering while rejecting duplicate
-IDs. The proposal remains 72 new units / at most 1,152 additional model calls. A
-new approval is required for the replacement collection; no v0.2 call has run.
+IDs. The proposal remains 72 new units / at most 1,152 additional model calls. Patrick authorized the audit followed by the replacement collection on 2026-09-07. The 26-case audit found and fixed decision-alternative ordering before collection.
 
 Verification: 54 focused tests and the full repository suite pass. Scripted
 positive controls cover all 24 combinations; they are conformance, not model
 performance evidence. See the versioned scripted receipt and plan for details.
 
-Next: obtain approval for benchmarks/protocols/outcome-pilot-v0.2.json, then record
-it in a signed clean revision and collect using the isolated CLI 0.153.4. Keep
+Next: collect the ratified benchmarks/protocols/outcome-pilot-v0.2.json using
+the isolated CLI 0.153.4, then verify all raw/turn manifests and report outcomes. Keep
 original AF-3 and outcome-v0.1 evidence at
 /Users/patrickroebuck/attune-forms-evidence unchanged. Windows CI must pass before
 review completion. No merge has been authorized for PR #89.

@@ -149,7 +149,8 @@ class TaskSimulator:
             read = {e["target"] for e in self.events if e["kind"] == "inspection"}
             if (
                 not policy
-                or action.get("options") != policy["options"]
+                or not isinstance(action.get("options"), list)
+                or sorted(action["options"]) != sorted(policy["options"])
                 or not set(self.case["required_reads"]) <= read
             ):
                 raise ValueError("decision needs the available alternatives and inspected evidence")
