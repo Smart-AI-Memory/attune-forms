@@ -8,6 +8,32 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **A docs-versus-code gate for documented call SEQUENCES**
+  (`tests/test_docs_flows.py`). `test_docs_drift.py` already gates the
+  vocabulary — construct counts, real tool names, real function names —
+  and it works. It is structurally blind to the defect class that
+  actually shipped: on 2026-09-08 three defects reached `main` in one
+  day, each passing a 1,433-test suite at 97% coverage, because every
+  NAME in the instructions was real and only the SEQUENCE was wrong. The
+  tests exercised the working path while the docs described a different
+  one, so nothing failed.
+
+  A `<!-- flow: slug -->` anchor in the skill now marks a call sequence a
+  reader is told to follow, and a `@flow(slug)` test makes those calls
+  exactly as written. Neither side moves alone: an anchor with no test,
+  a test with no anchor, and an anchor set that drifts from the
+  `.agents` mirror each fail. Eight flows are bound — host-question
+  render, inadmissibility, collect, retry, cancel, widget postback,
+  markdown round trip, and the offending-fields re-ask.
+
+  Verified against the pre-fix code rather than asserted: replayed at
+  `6fb61e1` the retry and cancellation flows both fail; at `8c5e9d4` the
+  cancellation flow fails. The retry flow also pins the liveness
+  property that the field the skill names is the one that ADVANCES the
+  budget, which is the third defect — naming `attempt` instead of
+  `next_attempt` left it at 1 forever and the bounded re-ask was not
+  bounded.
+
 - **The MCP surface reaches the route-active host-question target.**
   `form.host_question` was registered and ratified in 0.15.0 but not
   reachable: `elicitation_render_form` rendered through the
