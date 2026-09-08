@@ -62,8 +62,21 @@ STABLE: tuple[str, ...] = (
     "ProviderContext",  # v0.1.0
     "QuestionType",  # v0.1.0
     "TemplateError",  # v0.1.0
+    "WorkspaceAction",  # v0.9.0
+    "WorkspaceActionBinding",  # v0.9.1
+    "WorkspaceActionIntent",  # v0.9.0
+    "WorkspaceActionResponse",  # v0.9.1
+    "WorkspaceBlock",  # v0.9.0
+    "WorkspaceBlockKind",  # v0.9.0
+    "WorkspaceItem",  # v0.9.0
+    "WorkspaceSection",  # v0.9.0
+    "WorkspaceTone",  # v0.9.0
+    "WorkspaceValidationError",  # v0.9.1
+    "WorkspaceView",  # v0.9.0
+    "WorkspaceViewId",  # v0.9.0
     "build_form",  # v0.1.0
     "collect_form_response",  # v0.1.0
+    "collect_workspace_action",  # v0.9.1
     "form_from_dict",  # v0.1.0
     "form_from_template",  # v0.1.0
     "form_response_summary",  # v0.1.0
@@ -82,6 +95,10 @@ STABLE: tuple[str, ...] = (
     "token",  # v0.9.0
     "triage_item_key",  # v0.5.0
     "validate_template",  # v0.1.0
+    "workspace_action_contract",  # v0.12.0
+    "workspace_from_dict",  # v0.9.1
+    "workspace_to_markdown",  # v0.9.0
+    "workspace_to_widget_html",  # v0.9.0
 )
 
 #: Names that are supported but still settling. See the module docstring.
@@ -142,19 +159,7 @@ PROVISIONAL: tuple[str, ...] = (
     "UnavailableReceipt",  # v0.12.0
     "ViewportClass",  # v0.12.0
     "WIDGET_RESPONSE_MARKER",  # v0.1.0
-    "WorkspaceAction",  # v0.9.0
-    "WorkspaceActionBinding",  # v0.9.1
-    "WorkspaceActionIntent",  # v0.9.0
-    "WorkspaceActionResponse",  # v0.9.1
-    "WorkspaceBlock",  # v0.9.0
-    "WorkspaceBlockKind",  # v0.9.0
     "WorkspaceFixture",  # v0.12.0
-    "WorkspaceItem",  # v0.9.0
-    "WorkspaceSection",  # v0.9.0
-    "WorkspaceTone",  # v0.9.0
-    "WorkspaceValidationError",  # v0.9.1
-    "WorkspaceView",  # v0.9.0
-    "WorkspaceViewId",  # v0.9.0
     "canonical_binding",  # v0.14.0
     "canonical_form",  # v0.14.0
     "canonical_form_answers",  # v0.14.0
@@ -164,7 +169,6 @@ PROVISIONAL: tuple[str, ...] = (
     "canonical_workspace_response",  # v0.14.0
     "canonical_workspace_view",  # v0.14.0
     "client_supports_mcp_apps",  # v0.10.0
-    "collect_workspace_action",  # v0.9.1
     "decode_host_question_response",  # UNRELEASED
     "fixture_digest",  # v0.14.0
     "form_to_host_question",  # v0.15.0
@@ -172,7 +176,6 @@ PROVISIONAL: tuple[str, ...] = (
     "host_question_turn",  # UNRELEASED
     "implementation_digest",  # v0.14.0
     "installed_profile",  # v0.15.0
-    "is_trivial_form",  # v0.1.0
     "iter_targets",  # v0.14.0
     "log_surface_decision",  # v0.1.0
     "mcp_app_resource",  # v0.10.0
@@ -190,11 +193,7 @@ PROVISIONAL: tuple[str, ...] = (
     "sweep_production_renderers",  # v0.14.0
     "template_example_slots",  # v0.13.0
     "validate_registry",  # v0.14.0
-    "workspace_action_contract",  # v0.12.0
-    "workspace_from_dict",  # v0.9.1
     "workspace_to_headless",  # v0.14.0
-    "workspace_to_markdown",  # v0.9.0
-    "workspace_to_widget_html",  # v0.9.0
 )
 
 #: Names scheduled for removal.
@@ -211,6 +210,19 @@ DEPRECATED: tuple[Deprecation, ...] = (
             "answer bindings. The registry already marks it "
             "compatibility_only; this schedules the removal while it is still "
             "a minor-version change."
+        ),
+    ),
+    Deprecation(
+        name="is_trivial_form",
+        since="0.16.0",
+        not_before="0.18.0",
+        replacement="select_form_surface",
+        reason=(
+            "0.15.0 stopped routing on triviality, so this answers a "
+            "question nothing asks any more. It stayed exported to avoid "
+            "breaking a caller mid-release. Deprecating it now costs a "
+            "minor; promoting it instead would commit a major to removing "
+            "a function the router no longer consults."
         ),
     ),
 )
@@ -300,6 +312,39 @@ def stability_report(exports: frozenset[str] | None = None) -> StabilityReport:
     )
 
 
+def _release_tuple(text: str) -> tuple[int, ...] | None:
+    """``"0.16.0"`` -> ``(0, 16, 0)``; ``None`` when it is not a release number."""
+    # A local or pre-release segment means this is not a plain release
+    # number. Stripping it and comparing the head would silently read
+    # the "0+unknown" fallback as version 0, which is younger than every
+    # deprecation and would quietly disarm the gate.
+    if "+" in text or "-" in text:
+        return None
+    parts = text.split(".")
+    if not parts or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def deprecation_is_due(entry: Deprecation, current_version: str) -> bool | None:
+    """Whether ``entry.since`` has been reached, so its warning must be live.
+
+    ``None`` when either version is not a plain release number and the
+    comparison would be a guess. A due deprecation that does not warn is
+    the policy violating itself; ``tests/test_stability.py`` gates it.
+    """
+    since = _release_tuple(entry.since)
+    current = _release_tuple(current_version)
+    if since is None or current is None:
+        return None
+    # Pad to equal length so "0.16" and "0.16.0" compare equal rather
+    # than the shorter tuple sorting first.
+    width = max(len(since), len(current))
+    since += (0,) * (width - len(since))
+    current += (0,) * (width - len(current))
+    return current >= since
+
+
 def stable_surface_digest() -> str:
     """SHA-256 of the stable names, so a release can prove they did not move.
 
@@ -318,6 +363,7 @@ __all__ = [
     "Deprecation",
     "StabilityReport",
     "classify",
+    "deprecation_is_due",
     "stability_report",
     "stable_surface_digest",
 ]

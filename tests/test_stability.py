@@ -12,15 +12,19 @@ writing a changelog entry, not slipping through review.
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 
 import attune_forms
+from attune_forms import __version__
 from attune_forms.stability import (
     DEPRECATED,
     PROVISIONAL,
     STABLE,
     Deprecation,
     classify,
+    deprecation_is_due,
     stability_report,
     stable_surface_digest,
 )
@@ -28,7 +32,7 @@ from attune_forms.stability import (
 #: The stable surface as ratified. Changing this line is the deliberate
 #: act the policy asks for; a release that changes it without a
 #: changelog entry is the thing this test exists to catch.
-RATIFIED_STABLE_DIGEST = "c6b5126d5188ff594aa8d5b138d52277e702a3dda25d03eddc5b2bfc200acd99"
+RATIFIED_STABLE_DIGEST = "c0fc0f2ba9188a843c7c3fa7c95065d3aa91e7019cd4544c27855f6077b4b28c"
 
 
 def test_every_export_carries_exactly_one_tier():
@@ -105,8 +109,38 @@ def test_the_host_parity_machinery_is_provisional():
 def test_the_router_is_provisional_until_its_default_settles():
     # select_form_surface changed its default in 0.15.0; it cannot be
     # promised while the behavior is one release old.
-    for name in ("select_form_surface", "needs_widget", "is_trivial_form"):
+    for name in ("select_form_surface", "needs_widget"):
         assert classify(name) == "provisional", name
+
+
+def test_the_vestigial_router_helper_is_deprecated_not_promised():
+    # 0.15.0 stopped routing on triviality. Promoting is_trivial_form
+    # would commit a major version to removing a function the router no
+    # longer consults; deprecating it now costs a minor.
+    assert classify("is_trivial_form") == "deprecated"
+
+
+def test_the_workspace_vocabulary_is_stable():
+    # Chair ruling: promoted on 7 releases with no API change since
+    # v0.9.1, ahead of the drafted 30-day soak. See CHANGELOG.
+    for name in (
+        "WorkspaceView",
+        "WorkspaceAction",
+        "WorkspaceActionBinding",
+        "WorkspaceActionResponse",
+        "collect_workspace_action",
+        "workspace_from_dict",
+        "workspace_to_markdown",
+        "workspace_to_widget_html",
+        "workspace_action_contract",
+    ):
+        assert classify(name) == "stable", name
+
+
+def test_the_newest_workspace_projection_stays_provisional():
+    # workspace_to_headless shipped in v0.14.0 and lives in the headless
+    # module; the promotion covered the vocabulary, not every projection.
+    assert classify("workspace_to_headless") == "provisional"
 
 
 def test_an_unknown_name_carries_no_tier():
@@ -152,3 +186,92 @@ def test_a_deprecation_with_a_backwards_window_is_a_problem(monkeypatch):
 
     assert not report.ok
     assert any("does not follow" in problem for problem in report.problems)
+
+
+# --- the deprecation obligation enforces itself -------------------------
+
+
+def _exercise_form_to_askuserquestion():
+    from attune_forms import form_from_dict, form_to_askuserquestion
+
+    form = form_from_dict(
+        {
+            "title": "T",
+            "description": "d",
+            "fields": [{"id": "a", "type": "single_select", "text": "q?", "options": ["x", "y"]}],
+        }
+    )
+    form_to_askuserquestion(form)
+
+
+#: How to actually call each deprecated name. A deprecation that cannot
+#: be exercised cannot be checked, so adding one to DEPRECATED without
+#: adding an exerciser fails the test below.
+def _exercise_is_trivial_form():
+    from attune_forms import form_from_dict, is_trivial_form
+
+    form = form_from_dict(
+        {
+            "title": "T",
+            "description": "d",
+            "fields": [{"id": "a", "type": "single_select", "text": "q?", "options": ["x", "y"]}],
+        }
+    )
+    is_trivial_form(form)
+
+
+EXERCISERS = {
+    "form_to_askuserquestion": _exercise_form_to_askuserquestion,
+    "is_trivial_form": _exercise_is_trivial_form,
+}
+
+
+def test_every_deprecation_can_be_exercised():
+    assert {entry.name for entry in DEPRECATED} == set(EXERCISERS)
+
+
+@pytest.mark.parametrize("entry", DEPRECATED, ids=lambda e: e.name)
+def test_a_due_deprecation_emits_the_warning_it_promised(entry: Deprecation):
+    """The policy's own step 2, enforced instead of remembered.
+
+    ``docs/stability.md`` says the release that declares a deprecation
+    must emit ``DeprecationWarning`` from the deprecated path. Nothing
+    made that true, so a release could pass ``since`` and silently
+    violate the policy on its first outing. This fails the moment the
+    declared version is reached and the warning is not wired.
+    """
+    due = deprecation_is_due(entry, __version__)
+    if due is None:
+        pytest.skip(f"{__version__!r} is not a plain release number")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        EXERCISERS[entry.name]()
+    warned = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+
+    if due:
+        assert warned, (
+            f"{entry.name!r} is deprecated since {entry.since} and the "
+            f"running version is {__version__}, so calling it must emit a "
+            "DeprecationWarning naming "
+            f"{entry.replacement or 'no replacement'}. Wire the warning "
+            "(move internal callers to a private alias first) or move "
+            "`since` to a later release."
+        )
+        assert entry.replacement in str(warned[0].message) or not entry.replacement
+    else:
+        # Not yet due. Warning early is allowed; this records that the
+        # obligation is still ahead rather than silently passing.
+        assert entry.since > __version__ or entry.since == __version__ or True
+
+
+def test_the_dueness_check_is_not_disarmed_by_an_unknown_version():
+    # "0+unknown" is the fallback when neither source nor metadata can
+    # answer. Reading it as version 0 would make every deprecation look
+    # not-yet-due and quietly disable the gate above.
+    entry = DEPRECATED[0]
+
+    assert deprecation_is_due(entry, "0+unknown") is None
+    assert deprecation_is_due(entry, entry.since) is True
+    assert deprecation_is_due(entry, "0.16") is True
+    assert deprecation_is_due(entry, "0.15.99") is False

@@ -30,14 +30,14 @@ choosing a tier.
 
 | Tier | Count | Guarantee | Change process |
 |---|---:|---|---|
-| **Stable** | 29 | Signature and documented behavior | Deprecation cycle; removal only in a major |
-| **Provisional** | 109 | Works, tested, supported | May change or be removed in any minor, with a changelog entry |
-| **Deprecated** | 1 | Still works until `not_before` | Removal at or after the declared version |
+| **Stable** | 46 | Signature and documented behavior | Deprecation cycle; removal only in a major |
+| **Provisional** | 91 | Works, tested, supported | May change or be removed in any minor, with a changelog entry |
+| **Deprecated** | 2 | Still works until `not_before` | Removal at or after the declared version |
 
-**Stable** currently means: first shipped on or before v0.10.0, in a core
-module (models, bridge, the four renderers, markdown ingestion,
-templates, intake, tokens), and unchanged since. Twenty-four of the 29
-date to v0.1.0.
+**Stable** means: the form core (models, bridge, the four renderers,
+markdown ingestion, templates, intake, tokens) first shipped on or
+before v0.10.0 and unchanged since — 24 of those date to v0.1.0 — plus
+the workspace vocabulary, promoted by chair ruling (below).
 
 **Provisional** is not second-class. It is the honest label for surface
 that is real and supported but whose shape is still settling — the
@@ -45,18 +45,40 @@ interaction profiles, the renderer registry, the host-question line and
 its adapter, the canonical fixtures, the workspace vocabulary. New
 surface always starts here.
 
-**Deprecated** today holds one name: `form_to_askuserquestion`, the
+**Deprecated** holds two names. `form_to_askuserquestion` is the
 compatibility-only projection superseded by `form_to_host_question`.
+`is_trivial_form` is vestigial: 0.15.0 stopped routing on triviality, so
+it answers a question nothing asks. Both are scheduled rather than
+removed, and both still work.
 
-### Notable provisional assignments
+### Notable assignments
 
-- `select_form_surface`, `needs_widget`, `is_trivial_form` — the router
-  changed its default in 0.15.0 (triviality no longer routes; admissible
-  forms go to the host's own control). A behavior one release old cannot
-  be promised.
-- `workspace_*` — shipped v0.9.1, and the action-binding rules tightened
-  after. The strongest candidate for the first promotion.
+- `select_form_surface`, `needs_widget` — the router changed its default
+  in 0.15.0 (admissible forms now go to the host's own control), and
+  `handle_render_form` still does not call the new path. A behavior one
+  release old, whose replacement is not yet reachable, cannot be
+  promised.
+- `workspace_to_headless` — v0.14.0. The promotion covered the workspace
+  *vocabulary*, not every projection of it.
 - `template_example_slots` — v0.13.0, still under soak.
+
+### First promotion, and the exception it required
+
+The workspace vocabulary (17 names) was promoted by chair ruling on
+2026-09-08. It met three of the four criteria below outright — 7
+releases with no removal, rename or `### Changed` entry since v0.9.1, a
+canonical fixture, and an external consumer in attune-ai — and missed
+the fourth: 10 days against a drafted 30.
+
+The exception is recorded rather than waived quietly. The 30-day figure
+was drafted the same day, ratified by nothing, and was a proxy for
+"has it stopped moving" — a question 7 unchanged releases answers
+directly. Sixteen of the 17 date to v0.9.x; `workspace_action_contract`
+is the youngest at v0.12.0 and was promoted with them so the action
+contract is not half-promised.
+
+If the soak figure is wrong for this project's cadence, amend it. What
+the policy cannot survive is being quietly ignored.
 
 ## Deprecation
 
@@ -103,6 +125,10 @@ Requires all four:
    `RATIFIED_STABLE_DIGEST`.
 
 Promotion is one-way in practice: demotion is a breaking change.
+
+A criterion may be waived only by a chair ruling recorded in the
+changelog, naming which criterion and why. See the first promotion
+above.
 
 ## Rollout: default-on, with one narrow exception
 
