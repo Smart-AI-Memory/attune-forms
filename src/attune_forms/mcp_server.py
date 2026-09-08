@@ -36,6 +36,7 @@ from mcp.server import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
 
+from attune_forms._version import __version__
 from attune_forms.bridge import (
     FormValidationError,
     collect_form_response,
@@ -68,7 +69,10 @@ from attune_forms.workspace import (
 
 logger = logging.getLogger(__name__)
 
-_server: Server = Server("attune-forms")
+# The version is passed explicitly: with version=None the SDK
+# reports ITS OWN version under this server's name, so a host
+# asking which attune-forms it is talking to got "1.30.0".
+_server: Server = Server("attune-forms", version=__version__)
 
 
 def _field_schema() -> dict[str, Any]:
