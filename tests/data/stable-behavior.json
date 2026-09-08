@@ -1,0 +1,743 @@
+{
+ "provisional": {
+  "routing": {
+   "host_admissible_keyboard_mode": "ask",
+   "host_admissible_single_select": "ask",
+   "no_portable_control": "widget",
+   "reference_keyboard_mode": "widget",
+   "reference_not_widget_capable": "ask",
+   "reference_widget_capable": "widget"
+  }
+ },
+ "stable": {
+  "headless_schema": {
+   "properties": {
+    "blockers": {
+     "enum": [
+      "Design sign-off",
+      "Staging environment"
+     ],
+     "title": "Which blocker should we tackle first?",
+     "type": "string"
+    },
+    "branch_strategy": {
+     "enum": [
+      "Long-lived feature branch",
+      "Short stacked PRs off main"
+     ],
+     "title": "You proposed a long-lived feature branch.",
+     "type": "string"
+    },
+    "cache_strategy": {
+     "enum": [
+      "In-process LRU",
+      "Redis sidecar",
+      "No cache yet"
+     ],
+     "title": "Where should the response cache live?",
+     "type": "string"
+    },
+    "concerns": {
+     "items": {
+      "enum": [
+       "impl",
+       "test",
+       "docs",
+       "migration",
+       "release-notes"
+      ],
+      "type": "string"
+     },
+     "minItems": 1,
+     "title": "Which concerns apply?",
+     "type": "array"
+    },
+    "estimated_days": {
+     "maximum": 30,
+     "minimum": 0,
+     "title": "Estimated effort in days?",
+     "type": "number"
+    },
+    "feature_name": {
+     "description": "A short human-readable name.",
+     "title": "What is the feature called?",
+     "type": "string"
+    },
+    "finding_rulings.retry-loop": {
+     "default": "fix now",
+     "description": "high \u00b7 worker.py:88",
+     "enum": [
+      "fix now",
+      "ticket",
+      "dismiss"
+     ],
+     "title": "Rule each review finding. \u2014 Unbounded retry loop",
+     "type": "string"
+    },
+    "finding_rulings.stale-doc": {
+     "description": "low",
+     "enum": [
+      "fix now",
+      "ticket",
+      "dismiss"
+     ],
+     "title": "Rule each review finding. \u2014 Stale docstring",
+     "type": "string"
+    },
+    "flag_flip_gate": {
+     "description": "Will: Flag flips to 100% rollout (high) \u2014 reversible via the same flag; Announcement email sends (irreversible)",
+     "enum": [
+      "Approve",
+      "Abort"
+     ],
+     "title": "Enable the feature flag for all users now?",
+     "type": "string"
+    },
+    "inferred_scope.Tests run in CI on every push": {
+     "enum": [
+      "accept",
+      "edit",
+      "reject"
+     ],
+     "title": "I inferred these from context \u2014 rule each one. \u2014 Tests run in CI on every push",
+     "type": "string"
+    },
+    "inferred_scope.Tests run in CI on every push.text": {
+     "description": "Only read when the ruling is edit",
+     "title": "Replacement text if editing \u2014 Tests run in CI on every push",
+     "type": "string"
+    },
+    "inferred_scope.host": {
+     "description": "plugin/.claude-plugin/marketplace.json \u00b7 the plugin manifest names it",
+     "enum": [
+      "accept",
+      "edit",
+      "reject"
+     ],
+     "title": "I inferred these from context \u2014 rule each one. \u2014 Claude Code is the only host",
+     "type": "string"
+    },
+    "inferred_scope.host.text": {
+     "description": "Only read when the ruling is edit",
+     "title": "Replacement text if editing \u2014 Claude Code is the only host",
+     "type": "string"
+    },
+    "inferred_scope.py-floor": {
+     "default": "accept",
+     "description": "pyproject.toml requires-python",
+     "enum": [
+      "accept",
+      "edit",
+      "reject"
+     ],
+     "title": "I inferred these from context \u2014 rule each one. \u2014 Python 3.10 is the floor",
+     "type": "string"
+    },
+    "inferred_scope.py-floor.text": {
+     "description": "Only read when the ruling is edit",
+     "title": "Replacement text if editing \u2014 Python 3.10 is the floor",
+     "type": "string"
+    },
+    "needs_migration": {
+     "enum": [
+      "Yes",
+      "No"
+     ],
+     "title": "Does it require a data migration?",
+     "type": "string"
+    },
+    "notes": {
+     "maxLength": 500,
+     "title": "Anything else to capture?",
+     "type": "string"
+    },
+    "priority": {
+     "enum": [
+      "low",
+      "medium",
+      "high"
+     ],
+     "title": "How urgent is it?",
+     "type": "string"
+    },
+    "rollout": {
+     "enum": [
+      "Ship behind a feature flag",
+      "Ship to everyone at once",
+      "Hold for the next release"
+     ],
+     "title": "How should we roll it out?",
+     "type": "string"
+    },
+    "rollout_order": {
+     "default": [
+      "staging",
+      "canary",
+      "eu-prod"
+     ],
+     "items": {
+      "enum": [
+       "staging",
+       "canary",
+       "eu-prod",
+       "us-prod"
+      ],
+      "type": "string"
+     },
+     "maxItems": 3,
+     "minItems": 3,
+     "title": "Which environments ship first?",
+     "type": "array",
+     "uniqueItems": true
+    },
+    "target_date": {
+     "format": "date",
+     "title": "Target ship date?",
+     "type": "string"
+    }
+   },
+   "required": [
+    "feature_name",
+    "priority",
+    "concerns",
+    "needs_migration",
+    "estimated_days",
+    "target_date",
+    "rollout",
+    "branch_strategy",
+    "cache_strategy",
+    "finding_rulings.retry-loop",
+    "finding_rulings.stale-doc",
+    "flag_flip_gate",
+    "rollout_order",
+    "inferred_scope.py-floor",
+    "inferred_scope.host",
+    "inferred_scope.Tests run in CI on every push",
+    "blockers"
+   ],
+   "type": "object"
+  },
+  "inference": {
+   "inferred_field_count": 0,
+   "is_fully_inferred": false
+  },
+  "markdown": {
+   "field_order": [
+    "feature_name",
+    "priority",
+    "concerns",
+    "needs_migration",
+    "estimated_days",
+    "target_date",
+    "notes",
+    "rollout",
+    "branch_strategy",
+    "cache_strategy",
+    "finding_rulings",
+    "flag_flip_gate",
+    "rollout_order",
+    "inferred_scope",
+    "blockers"
+   ],
+   "round_trip_keys": [
+    "branch_strategy",
+    "cache_strategy",
+    "finding_rulings",
+    "inferred_scope",
+    "rollout",
+    "rollout_order"
+   ]
+  },
+  "parse": [
+   {
+    "default": null,
+    "id": "feature_name",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "text_input"
+   },
+   {
+    "default": null,
+    "id": "priority",
+    "option_notes": {},
+    "options": [
+     "low",
+     "medium",
+     "high"
+    ],
+    "recommended": null,
+    "required": true,
+    "type": "single_select"
+   },
+   {
+    "default": null,
+    "id": "concerns",
+    "option_notes": {},
+    "options": [
+     "impl",
+     "test",
+     "docs",
+     "migration",
+     "release-notes"
+    ],
+    "recommended": null,
+    "required": true,
+    "type": "multi_select"
+   },
+   {
+    "default": null,
+    "id": "needs_migration",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "boolean"
+   },
+   {
+    "default": null,
+    "id": "estimated_days",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "number"
+   },
+   {
+    "default": null,
+    "id": "target_date",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "date"
+   },
+   {
+    "default": null,
+    "id": "notes",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": false,
+    "type": "textarea"
+   },
+   {
+    "default": null,
+    "id": "rollout",
+    "option_notes": {
+     "Hold for the next release": "Zero risk now, but delays the value.",
+     "Ship behind a feature flag": "Safest \u2014 gated exposure, instant rollback.",
+     "Ship to everyone at once": "Fastest, but no kill switch if it regresses."
+    },
+    "options": [
+     "Ship behind a feature flag",
+     "Ship to everyone at once",
+     "Hold for the next release"
+    ],
+    "recommended": "Ship behind a feature flag",
+    "required": true,
+    "type": "decision"
+   },
+   {
+    "default": null,
+    "id": "branch_strategy",
+    "option_notes": {},
+    "options": [
+     "Long-lived feature branch",
+     "Short stacked PRs off main"
+    ],
+    "recommended": "Short stacked PRs off main",
+    "required": true,
+    "type": "pushback"
+   },
+   {
+    "default": null,
+    "id": "cache_strategy",
+    "option_notes": {},
+    "options": [
+     "In-process LRU",
+     "Redis sidecar",
+     "No cache yet"
+    ],
+    "recommended": "In-process LRU",
+    "required": true,
+    "type": "deliberation"
+   },
+   {
+    "default": null,
+    "id": "finding_rulings",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "triage"
+   },
+   {
+    "default": null,
+    "id": "flag_flip_gate",
+    "option_notes": {},
+    "options": [
+     "Approve",
+     "Abort"
+    ],
+    "recommended": null,
+    "required": true,
+    "type": "confirm"
+   },
+   {
+    "default": null,
+    "id": "rollout_order",
+    "option_notes": {},
+    "options": [
+     "staging",
+     "canary",
+     "eu-prod",
+     "us-prod"
+    ],
+    "recommended": null,
+    "required": true,
+    "type": "ranking"
+   },
+   {
+    "default": null,
+    "id": "inferred_scope",
+    "option_notes": {},
+    "options": [],
+    "recommended": null,
+    "required": true,
+    "type": "assumption_review"
+   },
+   {
+    "default": null,
+    "id": "blockers",
+    "option_notes": {},
+    "options": [
+     "Design sign-off",
+     "Staging environment"
+    ],
+    "recommended": null,
+    "required": true,
+    "type": "progress"
+   }
+  ],
+  "summary": {
+   "answer_lines": 15,
+   "answered_fields": 15,
+   "line_count": 16,
+   "summarized": true
+  },
+  "validate": {
+   "complete": {
+    "accepted": true,
+    "responses": {
+     "blockers": "Design sign-off",
+     "branch_strategy": "Short stacked PRs off main",
+     "cache_strategy": "In-process LRU",
+     "concerns": [
+      "impl",
+      "test",
+      "docs"
+     ],
+     "estimated_days": 3,
+     "feature_name": "Dark mode toggle",
+     "finding_rulings": {
+      "retry-loop": "fix now",
+      "stale-doc": "ticket"
+     },
+     "flag_flip_gate": "Approve",
+     "inferred_scope": {
+      "Tests run in CI on every push": "reject",
+      "host": {
+       "edit": "Claude Code plus any text-only host via markdown"
+      },
+      "py-floor": "accept"
+     },
+     "needs_migration": "No",
+     "notes": "Ship behind a flag, measure, then widen.",
+     "priority": "high",
+     "rollout": "Ship behind a feature flag",
+     "rollout_order": [
+      "staging",
+      "canary",
+      "us-prod"
+     ],
+     "target_date": "2026-08-01"
+    }
+   },
+   "corrupt.blockers": {
+    "accepted": false,
+    "fields": [
+     "blockers"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.branch_strategy": {
+    "accepted": false,
+    "fields": [
+     "branch_strategy"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.cache_strategy": {
+    "accepted": false,
+    "fields": [
+     "cache_strategy"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.concerns": {
+    "accepted": false,
+    "fields": [
+     "concerns"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.estimated_days": {
+    "accepted": false,
+    "fields": [
+     "estimated_days"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.feature_name": {
+    "accepted": true,
+    "responses": {
+     "blockers": "Design sign-off",
+     "branch_strategy": "Short stacked PRs off main",
+     "cache_strategy": "In-process LRU",
+     "concerns": [
+      "impl",
+      "test",
+      "docs"
+     ],
+     "estimated_days": 3,
+     "feature_name": "not-a-valid-answer",
+     "finding_rulings": {
+      "retry-loop": "fix now",
+      "stale-doc": "ticket"
+     },
+     "flag_flip_gate": "Approve",
+     "inferred_scope": {
+      "Tests run in CI on every push": "reject",
+      "host": {
+       "edit": "Claude Code plus any text-only host via markdown"
+      },
+      "py-floor": "accept"
+     },
+     "needs_migration": "No",
+     "notes": "Ship behind a flag, measure, then widen.",
+     "priority": "high",
+     "rollout": "Ship behind a feature flag",
+     "rollout_order": [
+      "staging",
+      "canary",
+      "us-prod"
+     ],
+     "target_date": "2026-08-01"
+    }
+   },
+   "corrupt.finding_rulings": {
+    "accepted": false,
+    "fields": [
+     "finding_rulings"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.flag_flip_gate": {
+    "accepted": false,
+    "fields": [
+     "flag_flip_gate"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.inferred_scope": {
+    "accepted": false,
+    "fields": [
+     "inferred_scope"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.needs_migration": {
+    "accepted": false,
+    "fields": [
+     "needs_migration"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.notes": {
+    "accepted": true,
+    "responses": {
+     "blockers": "Design sign-off",
+     "branch_strategy": "Short stacked PRs off main",
+     "cache_strategy": "In-process LRU",
+     "concerns": [
+      "impl",
+      "test",
+      "docs"
+     ],
+     "estimated_days": 3,
+     "feature_name": "Dark mode toggle",
+     "finding_rulings": {
+      "retry-loop": "fix now",
+      "stale-doc": "ticket"
+     },
+     "flag_flip_gate": "Approve",
+     "inferred_scope": {
+      "Tests run in CI on every push": "reject",
+      "host": {
+       "edit": "Claude Code plus any text-only host via markdown"
+      },
+      "py-floor": "accept"
+     },
+     "needs_migration": "No",
+     "notes": "not-a-valid-answer",
+     "priority": "high",
+     "rollout": "Ship behind a feature flag",
+     "rollout_order": [
+      "staging",
+      "canary",
+      "us-prod"
+     ],
+     "target_date": "2026-08-01"
+    }
+   },
+   "corrupt.priority": {
+    "accepted": false,
+    "fields": [
+     "priority"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.rollout": {
+    "accepted": false,
+    "fields": [
+     "rollout"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.rollout_order": {
+    "accepted": false,
+    "fields": [
+     "rollout_order"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "corrupt.target_date": {
+    "accepted": false,
+    "fields": [
+     "target_date"
+    ],
+    "fully_attributed": true,
+    "problem_count": 1
+   },
+   "empty": {
+    "accepted": false,
+    "fields": [
+     "feature_name",
+     "priority",
+     "concerns",
+     "needs_migration",
+     "estimated_days",
+     "target_date",
+     "rollout",
+     "branch_strategy",
+     "cache_strategy",
+     "finding_rulings",
+     "flag_flip_gate",
+     "rollout_order",
+     "inferred_scope",
+     "blockers"
+    ],
+    "fully_attributed": true,
+    "problem_count": 14
+   },
+   "unknown_key": {
+    "accepted": false,
+    "fields": [],
+    "fully_attributed": false,
+    "problem_count": 1
+   }
+  },
+  "widget_bindings": {
+   "data-assume": [
+    "accept",
+    "edit",
+    "reject"
+   ],
+   "data-collect": [
+    "checked-many",
+    "checked-one",
+    "ranked",
+    "rulings",
+    "rulings-with-text",
+    "value"
+   ],
+   "data-fid": [
+    "blockers",
+    "branch_strategy",
+    "cache_strategy",
+    "concerns",
+    "estimated_days",
+    "feature_name",
+    "finding_rulings",
+    "flag_flip_gate",
+    "inferred_scope",
+    "needs_migration",
+    "notes",
+    "priority",
+    "rollout",
+    "rollout_order",
+    "target_date"
+   ],
+   "data-ftype": [
+    "assumption_review",
+    "boolean",
+    "confirm",
+    "date",
+    "decision",
+    "deliberation",
+    "multi_select",
+    "number",
+    "progress",
+    "pushback",
+    "ranking",
+    "single_select",
+    "text_input",
+    "textarea",
+    "triage"
+   ],
+   "data-item": [
+    "Tests run in CI on every push",
+    "host",
+    "py-floor",
+    "retry-loop",
+    "stale-doc"
+   ],
+   "data-opt": [
+    "canary",
+    "eu-prod",
+    "staging",
+    "us-prod"
+   ],
+   "data-rank-n": [
+    "3"
+   ],
+   "data-required": [
+    "1"
+   ]
+  }
+ }
+}
