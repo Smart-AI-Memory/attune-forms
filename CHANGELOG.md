@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-09-08
+
+The consuming half of the host-question line, reachable from the MCP
+surface — and the release that starts saying what it promises. The public
+surface is tiered, promised behavior is pinned by a checked-in record,
+the first two deprecations warn, and a running server can finally report
+its own version.
+
 ### Added
 
 - **A documented way to hold a version.** attune-forms ships default-on
