@@ -256,11 +256,13 @@ path.
 
    If the result carries `next_host_question`, that is a bounded re-ask
    of just the offending questions. Send **all three** things back with
-   it — the same `form`, the re-ask reply as `host_response`, and
-   `attempt` plus `answered_so_far` copied verbatim from the result.
-   The carry is what lets a narrowed reply decode against the whole
-   form; without it every question you did not re-ask reads as missing
-   and the exchange dies.
+   it — the same `form`, the re-ask reply as `host_response`,
+   `answered_so_far` copied verbatim, and the result's **`next_attempt`
+   sent as `attempt`** — not the result's `attempt`, which is the turn
+   that just finished; resending it never advances the budget, so the
+   re-ask could repeat forever. The carry is what lets a narrowed reply
+   decode against the whole form; without it every question you did not
+   re-ask reads as missing and the exchange dies.
 
    When `host_question_admissible` is false, `host_question_problems`
    says what the host cannot carry; use the widget or portable markdown
