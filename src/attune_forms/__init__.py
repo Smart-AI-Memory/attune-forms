@@ -43,6 +43,9 @@ Licensed under Apache 2.0
 
 from __future__ import annotations
 
+# Explicit re-export: a dunder is not tiered public surface, so it
+# stays out of __all__ (see attune_forms.stability).
+from attune_forms._version import __version__ as __version__
 from attune_forms.bridge import (
     FormValidationError,
     collect_form_response,
