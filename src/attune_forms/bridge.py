@@ -17,7 +17,7 @@ import json
 import math
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -53,11 +53,45 @@ class FormValidationError(ValueError):
 
     Carries a list of human-readable problems so a caller (or the agent)
     can re-ask exactly the offending fields rather than guess.
+
+    ``problems`` is the unchanged prose list. ``field_problems`` pairs
+    each problem with the question id at fault, or ``None`` when the
+    problem belongs to no single question (an unknown answer key, a
+    fold-time shape error). A caller that re-asks only some questions
+    MUST check :attr:`fully_attributed` first: an unattributed problem
+    cannot be fixed by re-asking a subset, so the safe response is to
+    re-ask the whole form. Omitting ``field_problems`` attributes
+    nothing, which fails closed for every existing raiser.
     """
 
-    def __init__(self, problems: list[str]) -> None:
+    def __init__(
+        self,
+        problems: list[str],
+        field_problems: Sequence[tuple[str | None, str]] | None = None,
+    ) -> None:
         self.problems = problems
+        self.field_problems: tuple[tuple[str | None, str], ...] = (
+            tuple(field_problems)
+            if field_problems is not None
+            else tuple((None, problem) for problem in problems)
+        )
         super().__init__("; ".join(problems))
+
+    @property
+    def fields(self) -> tuple[str, ...]:
+        """Ids of the questions at fault, in first-seen order, deduplicated."""
+        seen: dict[str, None] = {}
+        for field_id, _ in self.field_problems:
+            if field_id is not None:
+                seen[field_id] = None
+        return tuple(seen)
+
+    @property
+    def fully_attributed(self) -> bool:
+        """True when every problem names a question, so a partial re-ask is safe."""
+        return bool(self.field_problems) and all(
+            field_id is not None for field_id, _ in self.field_problems
+        )
 
 
 def _parse_field_identity(
@@ -1943,7 +1977,12 @@ def collect_form_response(
         FormValidationError: If any answer is missing-required or invalid.
     """
     responses: dict[str, Any] = {}
-    raw_answers, problems = _fold_expanded_answers(form, raw_answers)
+    raw_answers, fold_problems = _fold_expanded_answers(form, raw_answers)
+    # Each problem is paired with the question id at fault, or None when
+    # it belongs to no single question. A fold-time shape error and an
+    # unknown answer key are both unattributed: neither is fixed by
+    # re-asking a subset, so they force a whole-form re-ask downstream.
+    attributed: list[tuple[str | None, str]] = [(None, problem) for problem in fold_problems]
 
     known_ids = {question.id for question in form.questions}
     dotted_prefixes = tuple(
@@ -1951,7 +1990,7 @@ def collect_form_response(
     )
     for key in raw_answers:
         if key not in known_ids and not key.startswith(dotted_prefixes):
-            problems.append(f"unknown answer key {key!r}")
+            attributed.append((None, f"unknown answer key {key!r}"))
 
     for question in form.questions:
         # The D2 constructs forbid a `default` outright. `form_from_dict`
@@ -1962,9 +2001,12 @@ def collect_form_response(
         # collected as approved/ordered/ruled with no user act, defeating
         # the two-way gate (checkpoint-2 promoted item, 2026-08-20).
         if question.default is not None and question.type in _NO_DEFAULT_REASON:
-            problems.append(
-                f"'default' is not permitted on {question.type.value} "
-                f"for {question.id!r} ({_NO_DEFAULT_REASON[question.type]})"
+            attributed.append(
+                (
+                    question.id,
+                    f"'default' is not permitted on {question.type.value} "
+                    f"for {question.id!r} ({_NO_DEFAULT_REASON[question.type]})",
+                )
             )
             continue
 
@@ -1973,23 +2015,28 @@ def collect_form_response(
 
         if not provided or value is None or value == "" or value == [] or value == {}:
             if question.required and question.default is None:
-                problems.append(f"{question.id!r} is required")
+                attributed.append((question.id, f"{question.id!r} is required"))
             elif question.default is not None:
                 default_problem = _validate_answer(question, question.default)
                 if default_problem:
-                    problems.append(f"invalid 'default' for {question.id!r}: {default_problem}")
+                    attributed.append(
+                        (
+                            question.id,
+                            f"invalid 'default' for {question.id!r}: {default_problem}",
+                        )
+                    )
                 else:
                     responses[question.id] = question.default
             continue
 
         problem = _validate_answer(question, value)
         if problem:
-            problems.append(problem)
+            attributed.append((question.id, problem))
         else:
             responses[question.id] = value
 
-    if problems:
-        raise FormValidationError(problems)
+    if attributed:
+        raise FormValidationError([problem for _, problem in attributed], attributed)
 
     return FormResponse(template_id=template_id, responses=responses)
 
