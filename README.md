@@ -15,6 +15,30 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
+## What's new in 0.16.0
+
+- **The host-question line is reachable end to end.**
+  `attune_forms.host_question_adapter` decodes a raw reply from a host's
+  own question control back to typed answers through the bindings AF-2
+  retains, and `elicitation_render_form` / `elicitation_collect_response`
+  now carry it: `host_question` out, `host_response` back, with a bounded
+  re-ask (`next_host_question`, `next_attempt`, `answered_so_far`) and
+  `cancelled: true` for a dismissed prompt. `batches` still ships and is
+  deprecated.
+- **The public surface is tiered.** 46 names are stable, 91 provisional,
+  2 deprecated — a promise you can rely on instead of 139 names promised
+  equally. `attune_forms.stability` records it and a test fails when a new
+  export carries no tier. See [`docs/stability.md`](docs/stability.md).
+- **Behavior changes to promised surface can't land silently.** A checked-in
+  record pins what the stable surface *does*, so a change arrives as a
+  readable diff rather than a flipped hash — and it digests the contract,
+  not the paint: a CSS change provably does not move it.
+- **First deprecations.** `form_to_askuserquestion` and `is_trivial_form`
+  now warn, naming their replacements; removal no earlier than 0.18.0.
+- **A running server can say which version it is.** The MCP handshake
+  reported the SDK's version under this package's name; it now reports its
+  own. Pinning is documented for every install path.
+
 ## What's new in 0.15.0
 
 - **Host-question profile facet** — `InteractionProfile.host_question`
@@ -171,13 +195,13 @@ version to hold still.
 The constraint goes inside the `--from` spec, not after the entry point:
 
 ```bash
-pip install 'attune-forms==0.15.0'
-uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
-codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
+pip install 'attune-forms==0.16.0'
+uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
+codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
 ```
 
 ```json
-{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.15.0", "attune-forms-mcp"]}}}
+{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.16.0", "attune-forms-mcp"]}}}
 ```
 
 **The Claude Code plugin cannot be pinned in place.** Its `.mcp.json`
@@ -188,7 +212,7 @@ server yourself and copy the skill from the repository, exactly as the
 Codex path above does:
 
 ```bash
-claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
+claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
 ```
 
 Pinning is the supported way to hold behavior still. `attune-forms`
