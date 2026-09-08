@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import mcp.types as types
@@ -472,9 +473,13 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "raw reply from the host's question control — that is "
                 "decoded through bindings re-derived from the same form, so "
                 "an unmappable reply is named, never guessed. A host "
-                "response may also return 'next_host_question' plus "
-                "'next_attempt': a bounded re-ask of just the offending "
-                "questions, which you send back with that attempt number."
+                "response may also return 'next_host_question', 'next_attempt' and "
+                "'answered_so_far': a bounded re-ask of just the offending "
+                "questions. Send ALL THREE back — the same 'form', the "
+                "re-ask reply as 'host_response', plus 'attempt' and "
+                "'answered_so_far' verbatim — or the narrowed reply cannot "
+                "decode against the full form. Pass cancelled=true for a "
+                "prompt the user dismissed."
             ),
             inputSchema={
                 "type": "object",
@@ -483,6 +488,8 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                     **template_props,
                     "answers": {"type": "object"},
                     "host_response": {"type": "object"},
+                    "answered_so_far": {"type": "object"},
+                    "cancelled": {"type": "boolean"},
                     "freeform": {"type": "object"},
                     "attempt": {"type": "integer", "minimum": 1},
                     "instance_id": {"type": "string", "pattern": "^(?:[a-f0-9]{32})?$"},
@@ -740,16 +747,51 @@ async def _collect_host_response(args: dict[str, Any]) -> dict[str, Any]:
         }
 
     raw = args.get("host_response")
+    # A wrong SHAPE is not a cancellation. Coercing it to None reported
+    # `outcome: "cancelled"` with an empty problems list and a receipt
+    # asserting the user cancelled a prompt they never saw a cancel on.
+    # The stdio path is covered by the SDK's schema gate, but this
+    # handler is also a direct import surface (the attune-ai mirror), so
+    # it holds the problems contract itself.
+    if args.get("cancelled") is True:
+        raw = None
+    elif not isinstance(raw, Mapping):
+        return {
+            "success": False,
+            "problems": [
+                "'host_response' must be an object mapping the host's question "
+                f"keys to its replies, got {type(raw).__name__}; pass "
+                "cancelled=true for a prompt the user dismissed"
+            ],
+        }
+    prior = args.get("answered_so_far")
+    if prior is not None and not isinstance(prior, Mapping):
+        return {
+            "success": False,
+            "problems": [
+                "'answered_so_far' must be the object a previous call returned, "
+                f"got {type(prior).__name__}"
+            ],
+        }
+    if raw is not None and prior:
+        # A re-ask covers only the offending questions, but decoding is
+        # fail-closed: every binding in the full batch needs a key. So
+        # the reply so far is carried forward and the new answers
+        # override it — rather than asking the caller to merge raw host
+        # payloads, or weakening the missing-key rule that makes an
+        # uncorrelatable reply a named problem.
+        raw = {**prior, **raw}
+
     freeform = args.get("freeform") or None
     attempt = args.get("attempt", 1)
-    if not isinstance(attempt, int) or attempt < 1:
+    if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 1:
         return {"success": False, "problems": ["'attempt' must be an integer >= 1"]}
 
     turn = host_question_turn(
         form,
         batch,
         profile,
-        raw if isinstance(raw, dict) else None,
+        raw,
         freeform=freeform,
         attempt=attempt,
         template_id=args.get("template") or "",
@@ -771,10 +813,14 @@ async def _collect_host_response(args: dict[str, Any]) -> dict[str, Any]:
         if args.get("template"):
             result["template_id"] = turn.response.template_id
     if turn.next_batch is not None:
-        # A bounded re-ask the profile still allows: the narrowed
-        # payload plus the attempt the caller must send back with it.
+        # A bounded re-ask the profile still allows. All THREE go back on
+        # the next call: without `answered_so_far` the narrowed reply
+        # cannot decode against the full form, every question that was
+        # not re-asked reads as a missing key, and the exchange
+        # dead-ends as `undecodable` with the user's answer discarded.
         result["next_host_question"] = turn.next_batch.payload
         result["next_attempt"] = turn.attempt + 1
+        result["answered_so_far"] = dict(raw) if raw else {}
     return result
 
 

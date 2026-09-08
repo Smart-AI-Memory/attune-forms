@@ -29,9 +29,14 @@ follow [SemVer](https://semver.org/).
   round-tripped through the host**: the renderer is pure, so the
   bindings are identical, and a binding the host could edit would not be
   a binding. `freeform` carries Other text; `attempt` carries the
-  profile's validation budget across stateless calls; a validation
-  failure returns `next_host_question` and `next_attempt`, a bounded
-  re-ask of just the offending questions.
+  profile's validation budget across stateless calls; `cancelled: true`
+  says the user dismissed the prompt, which is not the same as a reply
+  of the wrong shape. A validation failure returns
+  `next_host_question`, `next_attempt` and `answered_so_far` — a bounded
+  re-ask of just the offending questions, plus the reply so far. All
+  three go back on the next call: decoding is fail-closed, so without
+  the carry a narrowed reply cannot decode against the full form and
+  every question not re-asked reads as a missing key.
 
   Additive throughout. `batches` is still returned — the tool
   description and the skill both promise it, so it retires with
@@ -84,7 +89,10 @@ follow [SemVer](https://semver.org/).
   projection is still registered under its public name;
   `AllowlistEntry`'s docstring now says so rather than describing only
   the not-really-a-projection case. Wiring `handle_render_form` to the
-  route-active target will remove both the caller and this entry.
+  route-active target did NOT remove the caller or this entry, contrary
+  to what this entry first claimed: `batches` is a documented key and
+  retires with `form_to_askuserquestion` at 0.18.0, so the private alias
+  still has a caller until then.
 
 - **The workspace vocabulary is now stable surface** — 17 names
   (`WorkspaceView`, `WorkspaceAction`, the binding and response types,

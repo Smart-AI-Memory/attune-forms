@@ -251,9 +251,16 @@ path.
    `elicitation_collect_response` as `host_response`: the server decodes
    the display labels to option ids through bindings it re-derives, so
    you never map labels yourself. An unmappable reply is named, never
-   guessed. If the result carries `next_host_question`, that is a
-   bounded re-ask of just the offending questions — send it with
-   `next_attempt`.
+   guessed. If the user dismissed the prompt, send `cancelled: true`
+   rather than an empty or oddly-shaped reply.
+
+   If the result carries `next_host_question`, that is a bounded re-ask
+   of just the offending questions. Send **all three** things back with
+   it — the same `form`, the re-ask reply as `host_response`, and
+   `attempt` plus `answered_so_far` copied verbatim from the result.
+   The carry is what lets a narrowed reply decode against the whole
+   form; without it every question you did not re-ask reads as missing
+   and the exchange dies.
 
    When `host_question_admissible` is false, `host_question_problems`
    says what the host cannot carry; use the widget or portable markdown

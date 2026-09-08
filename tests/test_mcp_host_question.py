@@ -163,6 +163,56 @@ def test_the_unanswered_marker_is_reported_and_re_asked():
     assert result["next_attempt"] == 2
 
 
+def test_the_re_ask_completes_and_preserves_earlier_answers():
+    """The turn-2 test whose absence let a dead-end ship.
+
+    Turn 1 pinned the re-ask payload; nothing followed the documented
+    flow to its end. It did not work: the narrowed reply was decoded
+    against the FULL form, every question not re-asked read as a missing
+    key, and the exchange died `undecodable` with the user's answer
+    discarded. `answered_so_far` closes it.
+    """
+    first = collect(
+        {
+            "form": FORM,
+            "host_response": {"Which approach?": "[No preference]", "Which lanes?": "docs"},
+        }
+    )
+    assert first["outcome"] == "invalid"
+
+    second = collect(
+        {
+            "form": FORM,
+            "host_response": {"Which approach?": "Verify first"},
+            "attempt": first["next_attempt"],
+            "answered_so_far": first["answered_so_far"],
+        }
+    )
+
+    assert second["outcome"] == "accepted"
+    # Both the re-asked answer AND the one accepted on turn 1.
+    assert second["responses"] == {"approach": "Verify first", "lanes": ["docs"]}
+
+
+def test_the_re_ask_without_the_carry_still_names_the_problem():
+    # Dropping answered_so_far must not silently succeed on a partial
+    # form; it stays a named missing-key problem.
+    first = collect(
+        {
+            "form": FORM,
+            "host_response": {"Which approach?": "[No preference]", "Which lanes?": "docs"},
+        }
+    )
+
+    second = collect(
+        {"form": FORM, "host_response": {"Which approach?": "Verify first"}, "attempt": 2}
+    )
+
+    assert first["outcome"] == "invalid"
+    assert second["outcome"] == "undecodable"
+    assert any("no response under key" in p for p in second["problems"])
+
+
 def test_the_attempt_budget_is_carried_by_the_caller():
     raw = {**_raw(), "Which approach?": "[No preference]"}
 
@@ -172,14 +222,47 @@ def test_the_attempt_budget_is_carried_by_the_caller():
     assert "next_host_question" not in last
 
 
-def test_a_cancelled_reply_is_terminal():
+def test_an_empty_reply_is_named_not_treated_as_cancellation():
     result = collect({"form": FORM, "host_response": {}})
 
-    # An empty mapping is not cancellation — it is a reply that
-    # correlates to nothing, which must be named rather than treated as
-    # a silent cancel.
+    # An empty mapping is a reply that correlates to nothing, not a
+    # cancel. Only an explicit `cancelled` says the user dismissed it.
     assert result["success"] is False
+    assert result["outcome"] != "cancelled"
     assert result["problems"]
+
+
+@pytest.mark.parametrize("bad", ["Verify first", ["Verify first"], 7, True, 1.5])
+def test_a_malformed_host_response_is_not_reported_as_a_cancellation(bad):
+    """A wrong shape must not be laundered into `outcome: cancelled`.
+
+    It was: a non-dict became None, which the adapter reads as the user
+    dismissing the prompt — empty problems, and a receipt asserting a
+    cancellation that never happened. stdio is covered by the SDK's
+    schema gate, but this handler is a direct import surface (the
+    attune-ai mirror), so it holds the contract itself.
+    """
+    result = collect({"form": FORM, "host_response": bad})
+
+    assert result["success"] is False
+    assert result.get("outcome") != "cancelled"
+    assert any("must be an object" in p for p in result["problems"])
+
+
+def test_an_explicit_cancellation_is_recorded_as_one():
+    result = collect({"form": FORM, "host_response": {}, "cancelled": True})
+
+    assert result["outcome"] == "cancelled"
+    assert result["receipt"]["outcome"] == "cancelled"
+    assert "next_host_question" not in result
+
+
+@pytest.mark.parametrize("bad", ["nope", 3, ["a"]])
+def test_a_malformed_carry_is_refused(bad):
+    result = collect({"form": FORM, "host_response": _raw(), "answered_so_far": bad})
+
+    assert result["success"] is False
+    assert any("answered_so_far" in p for p in result["problems"])
 
 
 def test_an_inadmissible_form_cannot_decode():
