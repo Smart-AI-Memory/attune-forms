@@ -46,8 +46,14 @@ from attune_forms.bridge import (
     keyboard_mode_enabled,
     select_form_surface,
 )
+from attune_forms.conformance import installed_profile
 from attune_forms.elicitation_schema import form_to_elicitation_schema
 from attune_forms.form_events import log_submission, maybe_keyboard_hint
+from attune_forms.host_question import (
+    form_to_host_question,
+    host_question_admissibility,
+)
+from attune_forms.host_question_adapter import host_question_turn
 from attune_forms.mcp_app import (
     MCP_APP_MIME_TYPE,
     MCP_APPS_EXTENSION,
@@ -56,6 +62,7 @@ from attune_forms.mcp_app import (
     mcp_app_result,
     mcp_app_tool_meta,
 )
+from attune_forms.renderer_registry import RENDERER_REGISTRY, iter_targets
 from attune_forms.template_store import form_from_template
 from attune_forms.widget import form_to_widget_html
 from attune_forms.workspace import (
@@ -411,12 +418,19 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
         types.Tool(
             name="elicitation_render_form",
             description=(
-                "Validate a declarative form and return batched question "
-                "payloads (<=4 per batch) ready for the AskUserQuestion "
-                "tool. Returns {success, batches} or {success: false, "
-                "problems} so you re-fix the definition. Pass either 'form' "
-                "or 'template' + 'slots' (a stored template, cast "
-                "server-side)."
+                "Validate a declarative form and return it projected onto "
+                "the host's own question control. Returns {success, "
+                "host_question, host_question_admissible, profile_id} when "
+                "the installed profile can carry the form, and "
+                "{host_question_admissible: false, host_question_problems} "
+                "naming what it cannot carry — never a silent truncation. "
+                "Send a raw reply back through elicitation_collect_response "
+                "as 'host_response' and it is decoded through the retained "
+                "bindings. 'batches' is still returned but DEPRECATED "
+                "(removal no earlier than 0.18.0); prefer host_question. "
+                "Returns {success: false, problems} so you re-fix the "
+                "definition. Pass either 'form' or 'template' + 'slots' "
+                "(a stored template, cast server-side)."
             ),
             inputSchema={
                 "type": "object",
@@ -453,7 +467,14 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "{success: false, problems} naming exactly which fields to "
                 "re-ask; never silently accepts malformed input. Name the "
                 "form the same way it was rendered: 'form', or 'template' + "
-                "'slots' (responses then carry the template as template_id)."
+                "'slots' (responses then carry the template as template_id). "
+                "Pass 'answers' for typed answers, or 'host_response' for a "
+                "raw reply from the host's question control — that is "
+                "decoded through bindings re-derived from the same form, so "
+                "an unmappable reply is named, never guessed. A host "
+                "response may also return 'next_host_question' plus "
+                "'next_attempt': a bounded re-ask of just the offending "
+                "questions, which you send back with that attempt number."
             ),
             inputSchema={
                 "type": "object",
@@ -461,9 +482,11 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                     "form": form,
                     **template_props,
                     "answers": {"type": "object"},
+                    "host_response": {"type": "object"},
+                    "freeform": {"type": "object"},
+                    "attempt": {"type": "integer", "minimum": 1},
                     "instance_id": {"type": "string", "pattern": "^(?:[a-f0-9]{32})?$"},
                 },
-                "required": ["answers"],
             },
         ),
         types.Tool(
@@ -561,6 +584,19 @@ def _record_surface_choice(form: Any, *, chosen: str) -> str | None:
         return None
 
 
+def _host_question_profile() -> Any | None:
+    """The installed profile of the route-active host-question target.
+
+    Read from the registry rather than hardcoded, so the profile the
+    server renders against is the same one the registry ratifies and
+    the clean-wheel probe executes.
+    """
+    for target in iter_targets(RENDERER_REGISTRY):
+        if target.target_id == "form.host_question" and target.status == "route_active":
+            return installed_profile(target.profile_id)
+    return None
+
+
 async def handle_render_form(args: dict[str, Any]) -> dict[str, Any]:
     form, problems = _parse_form(args)
     if problems:
@@ -570,12 +606,29 @@ async def handle_render_form(args: dict[str, Any]) -> dict[str, Any]:
         "success": True,
         "title": form.title,
         "description": form.description,
-        # The private alias: this server still renders through the
-        # compatibility projection because AF-2's route-active target
-        # is not wired here yet. Warning our own users about our own
-        # internal choice would be noise they cannot act on.
+        # DEPRECATED alongside form_to_askuserquestion itself (removal no
+        # earlier than 0.18.0). Kept because the tool description and the
+        # skill both promise this key; retiring a documented contract
+        # needs its own cycle. The private alias keeps the server from
+        # warning users about its own internal choice.
         "batches": _form_to_askuserquestion(form),
     }
+    profile = _host_question_profile()
+    if profile is not None:
+        verdict = host_question_admissibility(form, profile)
+        result["profile_id"] = profile.id
+        result["host_question_admissible"] = verdict.admissible
+        if verdict.admissible:
+            batch = form_to_host_question(form, profile)
+            if batch is not None:
+                # The route-active projection. Answer bindings stay
+                # server-side; elicitation_collect_response re-derives
+                # them from the same form to decode a raw host reply,
+                # which is why they need not cross the wire.
+                result["host_question"] = batch.payload
+                result["response_correlation"] = batch.response_correlation
+        else:
+            result["host_question_problems"] = list(verdict.problems)
     if recommended == "widget":
         result["surface_note"] = (
             "The router recommends the widget for this form. "
@@ -604,7 +657,24 @@ async def handle_render_widget(args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
-    answers = args.get("answers", {})
+    # Exactly one source of answers. The schema cannot express "one of"
+    # here without fighting the shared form/template properties, so the
+    # handler names it: passing both would silently prefer one, and
+    # passing neither would surface as every field being required.
+    typed, raw = args.get("answers"), args.get("host_response")
+    if typed is not None and raw is not None:
+        return {
+            "success": False,
+            "problems": ["pass 'answers' (typed) or 'host_response' (a raw host reply), not both"],
+        }
+    if typed is None and raw is None:
+        return {
+            "success": False,
+            "problems": ["provide 'answers' (typed) or 'host_response' (a raw host reply)"],
+        }
+    if raw is not None:
+        return await _collect_host_response(args)
+    answers = typed
     if not isinstance(answers, dict):
         # The SDK's jsonschema gate covers the stdio path, but the
         # handler is also a real import surface (attune-ai mirror), so
@@ -638,6 +708,73 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
         hint = None
     if hint:
         result["hint"] = hint
+    return result
+
+
+async def _collect_host_response(args: dict[str, Any]) -> dict[str, Any]:
+    """Decode a raw host-question reply, validate it, and license a re-ask.
+
+    The answer bindings are re-derived by rendering the same form again
+    rather than round-tripping through the host: the renderer is pure,
+    so the bindings are identical, and a binding the host could edit
+    would not be a binding. The caller carries ``attempt`` so the
+    profile's validation budget stays auditable across stateless calls.
+    """
+    form, problems = _parse_form(args)
+    if problems:
+        return problems
+    profile = _host_question_profile()
+    if profile is None:
+        return {
+            "success": False,
+            "action": "unsupported",
+            "problems": ["no route-active host-question profile is installed"],
+        }
+    batch = form_to_host_question(form, profile)
+    if batch is None:
+        verdict = host_question_admissibility(form, profile)
+        return {
+            "success": False,
+            "action": "inadmissible",
+            "problems": list(verdict.problems),
+        }
+
+    raw = args.get("host_response")
+    freeform = args.get("freeform") or None
+    attempt = args.get("attempt", 1)
+    if not isinstance(attempt, int) or attempt < 1:
+        return {"success": False, "problems": ["'attempt' must be an integer >= 1"]}
+
+    turn = host_question_turn(
+        form,
+        batch,
+        profile,
+        raw if isinstance(raw, dict) else None,
+        freeform=freeform,
+        attempt=attempt,
+        template_id=args.get("template") or "",
+    )
+    result: dict[str, Any] = {
+        "success": turn.outcome == "accepted",
+        "outcome": turn.outcome,
+        "attempt": turn.attempt,
+        "problems": list(turn.problems),
+        "unanswered": list(turn.decoding.unanswered),
+        "other_selected": list(turn.decoding.other_selected),
+        "receipt": turn.receipt.serialize(),
+    }
+    if turn.decoding.freeform:
+        result["freeform"] = dict(turn.decoding.freeform)
+    if turn.response is not None:
+        result["responses"] = turn.response.responses
+        result["response_id"] = turn.response.response_id
+        if args.get("template"):
+            result["template_id"] = turn.response.template_id
+    if turn.next_batch is not None:
+        # A bounded re-ask the profile still allows: the narrowed
+        # payload plus the attempt the caller must send back with it.
+        result["next_host_question"] = turn.next_batch.payload
+        result["next_attempt"] = turn.attempt + 1
     return result
 
 

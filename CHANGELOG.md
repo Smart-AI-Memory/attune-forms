@@ -8,6 +8,38 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **The MCP surface reaches the route-active host-question target.**
+  `form.host_question` was registered and ratified in 0.15.0 but not
+  reachable: `elicitation_render_form` rendered through the
+  compatibility-only projection, so the answer bindings AF-2 retains had
+  no consumer on the wire. Both directions are now wired.
+
+  `elicitation_render_form` returns `host_question` (the payload for the
+  host's own question control), `host_question_admissible`, `profile_id`
+  and `response_correlation`. A form the profile cannot carry returns
+  `host_question_admissible: false` with `host_question_problems` naming
+  what it cannot carry — the same rule as the renderer: a named problem,
+  never a silent truncation. The profile is read from the registry's
+  route-active target rather than hardcoded, so the server renders
+  against the profile the registry ratifies.
+
+  `elicitation_collect_response` accepts `host_response`, a raw reply
+  from the host's question control, and decodes it to typed answers.
+  **The bindings are re-derived by rendering the same form again, not
+  round-tripped through the host**: the renderer is pure, so the
+  bindings are identical, and a binding the host could edit would not be
+  a binding. `freeform` carries Other text; `attempt` carries the
+  profile's validation budget across stateless calls; a validation
+  failure returns `next_host_question` and `next_attempt`, a bounded
+  re-ask of just the offending questions.
+
+  Additive throughout. `batches` is still returned — the tool
+  description and the skill both promise it, so it retires with
+  `form_to_askuserquestion` no earlier than 0.18.0 — and the typed
+  `answers` path is unchanged. `answers` is no longer schema-required,
+  since requiring it would force a `host_response` caller to send both;
+  the handler names the one-of rule instead, and refuses both or neither.
+
 - **`attune_forms.host_question_adapter`** — the consuming half of the
   host-question line (attune-ai host-surface-parity AF-2, Task 2). AF-2
   shipped the renderer and its retained `QuestionAnswerBinding`s; this is
