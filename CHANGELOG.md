@@ -6,7 +6,58 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+
+- **`attune_forms.host_question_adapter`** — the consuming half of the
+  host-question line (attune-ai host-surface-parity AF-2, Task 2). AF-2
+  shipped the renderer and its retained `QuestionAnswerBinding`s; this is
+  the return path they exist for, and the only place a raw host response
+  is touched.
+  - **`decode_host_question_response(form, batch, profile, raw)`**
+    correlates a raw response back to typed answers through the bindings
+    and the profile's declared codec alone. Every value is reached
+    through a binding or named as a problem: an atom matching no emitted
+    option, a key matching no binding, a missing key, keys colliding
+    under the declared normalization, a repeated selection, a response
+    that does not re-encode to itself under `canonical_reencode`, and
+    quoting the host has not demonstrated (`escaping_verified` false) are
+    all named failures, never partial answers. The unanswered marker
+    omits its question rather than guessing it. The reserved Other is
+    recorded in `other_selected` with any separately-delivered text in
+    `freeform`, and is deliberately never laundered into `answers` — it
+    is the host user rejecting every offered option. `raw=None` is
+    cancellation when the profile declares it. The form is a parameter
+    because one source question can emit several host questions and
+    multi-select is a property of the emitted question; re-deriving the
+    flat controls is deterministic and spared the shipped binding a
+    field it would carry for one consumer.
+  - **`host_question_turn(...)`** decodes, validates through the form's
+    own `collect_form_response`, and licenses a bounded re-ask under the
+    profile's `validation_feedback` and `max_validation_attempts`. It is
+    stateless — the caller carries `attempt` — so the budget is auditable
+    from the receipts alone. A re-ask narrows to the offending questions
+    only when every problem names one, and falls back to the whole form
+    otherwise. An undecodable response is terminal rather than retried:
+    a response that will not correlate does not correlate on a retry.
+  - **`HostQuestionReceipt`** binds each turn to the digest of the facet
+    it decoded against, so a receipt cannot be silently re-read against a
+    profile that has since changed.
+
+### Changed
+
+
+- **`FormValidationError` carries structured attribution.** A new
+  `field_problems` pairs each problem with the question id at fault, or
+  `None` where it belongs to no single question; `fields` and
+  `fully_attributed` derive from it. `problems` is unchanged, and a
+  raiser that passes only `problems` attributes nothing and reports
+  `fully_attributed` false — so every existing caller, including the
+  attune-ai mirror, behaves exactly as before. Without this a re-ask
+  could only regex ids out of prose.
+
 ### Fixed
+
 
 - **The MCP handshake reports this package's version, not the SDK's.**
   `Server("attune-forms")` passed no version, and the SDK's signature is

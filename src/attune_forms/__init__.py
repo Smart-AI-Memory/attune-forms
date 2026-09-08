@@ -118,6 +118,14 @@ from attune_forms.host_question import (
     form_to_host_question,
     host_question_admissibility,
 )
+from attune_forms.host_question_adapter import (
+    TURN_OUTCOMES,
+    HostQuestionDecoding,
+    HostQuestionReceipt,
+    HostQuestionTurn,
+    decode_host_question_response,
+    host_question_turn,
+)
 from attune_forms.intake_template import (
     PROVIDERS,
     TEMPLATES,
@@ -229,10 +237,16 @@ __all__ = [
     "RECOMMENDED_SUFFIX",
     "Admissibility",
     "HostQuestionBatch",
+    "HostQuestionDecoding",
     "HostQuestionProfile",
+    "HostQuestionReceipt",
+    "HostQuestionTurn",
     "MultiSelectEncoding",
+    "TURN_OUTCOMES",
     "QuestionAnswerBinding",
+    "decode_host_question_response",
     "form_to_host_question",
+    "host_question_turn",
     "host_question_admissibility",
     "LatencyBudget",
     "LatencyMode",
