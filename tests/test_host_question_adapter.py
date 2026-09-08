@@ -305,15 +305,44 @@ def test_a_response_that_does_not_re_encode_to_itself_is_refused(form):
     assert any("re-encode" in problem for problem in decoding.problems)
 
 
-def test_quoting_the_host_has_not_demonstrated_is_refused(form, batch, raw):
-    assert FACET.multi_select_encoding.escaping_verified is False
+def test_quoting_the_host_has_not_demonstrated_is_refused(form):
+    """A DECLARED but unproven escaping refuses quoted input.
+
+    The installed profile no longer exercises this: the 2026-09-08 trial
+    measured that it escapes nothing, so its declaration is "none" and
+    verified. The guard still matters for any profile that declares a
+    rule before a host has demonstrated it.
+    """
+    profile = _profile(
+        multi_select_encoding=MultiSelectEncoding(
+            kind="comma_delimited",
+            delimiter=",",
+            escaping="json_quote_when_delimiter_or_quote",
+            canonical_reencode=True,
+        )
+    )
+    batch = form_to_host_question(form, profile)
+    raw = canonical_host_question_response(batch, profile)
+
+    decoding = decode_host_question_response(
+        form, batch, profile, {**raw, "Which lanes?": '"docs",tests'}
+    )
+
+    assert not decoding.ok
+    assert any("escaping_verified is false" in problem for problem in decoding.problems)
+
+
+def test_the_installed_host_joins_bare_so_quotes_are_literal(form, batch, raw):
+    # MEASURED: this host escapes nothing, so a quote in the reply is part
+    # of a label, not a delimiter — and matches no emitted option here.
+    assert FACET.multi_select_encoding.escaping == "none"
 
     decoding = decode_host_question_response(
         form, batch, PROFILE, {**raw, "Which lanes?": '"docs",tests'}
     )
 
     assert not decoding.ok
-    assert any("escaping_verified is false" in problem for problem in decoding.problems)
+    assert any("matches no emitted option" in problem for problem in decoding.problems)
 
 
 def test_verified_quoting_decodes_a_delimiter_bearing_atom():
