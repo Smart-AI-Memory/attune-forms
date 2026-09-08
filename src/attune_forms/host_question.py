@@ -222,7 +222,9 @@ def _normalize(text: str, algorithm: str) -> str:
 
 #: Claude Code's built-in ``AskUserQuestion`` as observed on the desktop
 #: Code tab (Claude Code 2.1.260, 2026-09-07 live trial recorded in
-#: attune-ai ``docs/probes/host-surface-parity/host-native-trials-2026-09-07.md``):
+#: attune-ai ``docs/probes/host-surface-parity/host-native-trials-2026-09-07.md``;
+#: multi-select escaping measured 2026-09-08, this repo's
+#: ``docs/probes/host-question-escaping-2026-09-08.md``):
 #: 1–4 questions per call, 2–4 options each, a ``header`` of at most 12
 #: characters, ``multiSelect``, a built-in "Other" whose free text is the
 #: host's separate global response, Escape cancels the call (a tool error,
@@ -257,8 +259,18 @@ ASKUSERQUESTION_HOST_QUESTION = HostQuestionProfile(
         kind="comma_delimited",
         delimiter=",",
         atom="emitted_label",
-        escaping="json_quote_when_delimiter_or_quote",
+        # MEASURED, not assumed (2026-09-08 live trial, see
+        # docs/probes/host-question-escaping-2026-09-08.md). This host
+        # escapes NOTHING: a label containing the delimiter came back
+        # joined with a bare comma, and quotes and backslashes passed
+        # through raw. `red, green` + `blue` returned `red, green,blue`,
+        # which cannot be told from three atoms. So the declaration is
+        # "none" and it is verified as such — which keeps
+        # delimiter-bearing and quote-bearing labels permanently
+        # inadmissible, because this host genuinely cannot carry them.
+        escaping="none",
         canonical_reencode=True,
+        escaping_verified=True,
     ),
     unanswered_marker="[No preference]",
     inadmissible_types=(QuestionType.RANKING.value,),
@@ -406,7 +418,16 @@ def _emit_question(
             and (codec.delimiter in emitted or '"' in emitted)
             and (codec.escaping == "none" or not codec.escaping_verified)
         ):
-            problems.append(f"{qid!r}: option {emitted!r} requires verified host escaping")
+            # Two different failures, and a caller can act on only one of
+            # them: an unverified rule may become admissible once the host
+            # demonstrates it, while "none" never will.
+            why = (
+                f"the host joins with {codec.delimiter!r} and escapes nothing, "
+                "so this label cannot be carried unambiguously"
+                if codec.escaping == "none"
+                else "requires verified host escaping"
+            )
+            problems.append(f"{qid!r}: option {emitted!r}: {why}")
         if normalized == other:
             problems.append(f"{qid!r}: option {emitted!r} collides with the reserved Other label")
         if normalized in seen:

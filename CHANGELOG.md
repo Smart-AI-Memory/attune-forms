@@ -6,6 +6,32 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`CLAUDE_ASKUSERQUESTION` declares the escaping it was measured to
+  have, which is none.** The profile claimed
+  `escaping="json_quote_when_delimiter_or_quote"` for its comma-delimited
+  multi-select codec, and no host had ever demonstrated it — the
+  2026-09-07 trial fixed the delimiter but exercised only comma-free,
+  quote-free labels. A live trial on 2026-09-08 settled it: offering
+  `red, green` and `blue` returned **`red, green,blue`**, a bare comma
+  join that cannot be told from three atoms, and `say "hi"` /
+  `back\slash` came back raw. So the claim was deleted rather than
+  confirmed: the codec now declares `escaping="none"` with
+  `escaping_verified=True` — verified as *none*, which is what the flag
+  asserts.
+
+  The practical effect is unchanged and finally explained. Delimiter- and
+  quote-bearing multi-select labels remain inadmissible, but
+  **permanently** rather than pending evidence, and the refusal now says
+  which case it is: an unverified rule may become admissible once a host
+  demonstrates it, `none` never will. Evidence, verbatim, in
+  `docs/probes/host-question-escaping-2026-09-08.md`.
+
+  The facet digest moves accordingly; `record_digest`, the stable-surface
+  and behavior digests do not.
+
+
 ## [0.16.0] — 2026-09-08
 
 The consuming half of the host-question line, reachable from the MCP

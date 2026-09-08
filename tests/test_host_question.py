@@ -70,12 +70,16 @@ def test_askuserquestion_profile_is_installed_with_its_observed_facet() -> None:
     assert FACET.freeform == "separate_response" and FACET.other_label == "Other"
     assert FACET.response_correlation == "emitted_text"
     assert FACET.unanswered_marker == "[No preference]"
+    # MEASURED 2026-09-08: this host escapes nothing — a delimiter-bearing
+    # label came back joined with a bare comma. "none" is verified as the
+    # declaration, not merely unproven.
     assert FACET.multi_select_encoding == MultiSelectEncoding(
         kind="comma_delimited",
         delimiter=",",
         atom="emitted_label",
-        escaping="json_quote_when_delimiter_or_quote",
+        escaping="none",
         canonical_reencode=True,
+        escaping_verified=True,
     )
     assert FACET.inadmissible_types == ("ranking",)
     assert FACET.max_validation_attempts > 0 and FACET.response_deadline_seconds > 0
@@ -118,13 +122,22 @@ def test_facet_rejects_a_non_encoding_and_encoding_rejects_inconsistency() -> No
 
 
 def test_encoding_quotes_atoms_that_carry_the_delimiter_or_a_quote() -> None:
-    encoded = FACET.multi_select_encoding.encode(["a,b", 'say "hi"', "plain"])
+    quoting = MultiSelectEncoding(
+        kind="comma_delimited",
+        delimiter=",",
+        escaping="json_quote_when_delimiter_or_quote",
+        canonical_reencode=True,
+    )
+    encoded = quoting.encode(["a,b", 'say "hi"', "plain"])
     assert encoded == '"a,b","say \\"hi\\"",plain'
     first_atom, end = json.JSONDecoder().raw_decode(encoded)
     assert first_atom == "a,b" and encoded[end] == ","
     assert MultiSelectEncoding().encode(["a", "b"]) == ["a", "b"]
     bare = MultiSelectEncoding(kind="comma_delimited", delimiter="; ")
     assert bare.encode(["a", "b"]) == "a; b"
+    # The INSTALLED host does none of this: it joins bare, which is why
+    # delimiter-bearing labels can never be carried on it.
+    assert FACET.multi_select_encoding.encode(["a", "b"]) == "a,b"
 
 
 def test_profile_serialization_binds_every_facet_field() -> None:
@@ -475,16 +488,27 @@ def test_unanswered_marker_cannot_be_selected_as_an_option(label: str) -> None:
 @pytest.mark.parametrize("label", ["a,b", "a, b", 'say "hi"'])
 def test_unverified_multiselect_escaping_falls_back_before_rendering(label: str) -> None:
     form = _form(_select(type="multi_select", options=[label, "plain"]))
-    assert not host_question_admissibility(form, PROFILE).admissible
-    assert form_to_host_question(form, PROFILE) is None
+    declared = MultiSelectEncoding(
+        kind="comma_delimited",
+        delimiter=",",
+        escaping="json_quote_when_delimiter_or_quote",
+        canonical_reencode=True,
+    )
+    unverified = _with_facet(multi_select_encoding=declared)
+    assert not host_question_admissibility(form, unverified).admissible
+    assert form_to_host_question(form, unverified) is None
     verified = _with_facet(
-        multi_select_encoding=dataclasses.replace(
-            FACET.multi_select_encoding, escaping_verified=True
-        )
+        multi_select_encoding=dataclasses.replace(declared, escaping_verified=True)
     )
     assert host_question_admissibility(form, verified).admissible
     batch = form_to_host_question(form, verified)
     assert batch.answer_bindings[0].option_bindings[0] == (label, label, label)
+    # The INSTALLED profile refuses these forever, and for a different
+    # reason: it declares no escaping at all, so verification cannot
+    # rescue the label.
+    verdict = host_question_admissibility(form, PROFILE)
+    assert not verdict.admissible
+    assert "escapes nothing" in verdict.problems[0]
     # Scalar single-select and list codecs need no delimiter decoding.
     assert host_question_admissibility(_form(_select(options=[label, "plain"])), PROFILE).admissible
     listed = _with_facet(multi_select_encoding=MultiSelectEncoding())
@@ -500,7 +524,9 @@ def test_multiselect_without_escaping_cannot_claim_ambiguous_labels_are_safe() -
     assert not host_question_admissibility(
         _form(_select(type="multi_select", options=["a,b", "c"])), profile
     ).admissible
-    changed = dataclasses.replace(FACET.multi_select_encoding, escaping_verified=True)
+    changed = dataclasses.replace(
+        FACET.multi_select_encoding, escaping="json_quote_when_delimiter_or_quote"
+    )
     assert digest(dataclasses.asdict(changed)) != digest(
         dataclasses.asdict(FACET.multi_select_encoding)
     )

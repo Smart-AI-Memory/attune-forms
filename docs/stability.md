@@ -212,8 +212,10 @@ Not yet met. In order:
 - [ ] Finish AF-2: merge the consuming adapter, wire the MCP tools to the
       route-active `form.host_question` target, retire
       `form_to_askuserquestion`.
-- [ ] Resolve `escaping_verified` — obtain the live-host evidence for the
-      declared multi-select escaping, or delete the claim.
+- [x] Resolve `escaping_verified` — trialled 2026-09-08 and the claim was
+      DELETED, not confirmed: the host escapes nothing, so the profile now
+      declares `escaping="none"` (verified as such). Evidence:
+      `docs/probes/host-question-escaping-2026-09-08.md`.
 - [ ] Run one deprecation end to end. Declared and warning as of
       0.16.0; the cycle is demonstrated only once a removal lands.
 - [x] Document a pinned install — README "Pinning a version", gated
