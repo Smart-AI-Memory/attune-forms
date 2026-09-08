@@ -6,6 +6,29 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The MCP handshake reports this package's version, not the SDK's.**
+  `Server("attune-forms")` passed no version, and the SDK's signature is
+  `Server(name, version=None, ...)` — with `version=None` it fills
+  `serverInfo.version` with its own, so a host asking which attune-forms
+  it was talking to was told `1.30.0`. The package also had no
+  `__version__`, so there was no answer available from Python either.
+  `attune_forms._version` now resolves it and `mcp_server` passes it
+  through. Resolution prefers a sibling `pyproject.toml` that declares
+  this project over installed metadata: in a source checkout a
+  *different* attune-forms may be pip-installed in the same interpreter,
+  and reporting that one is exactly the version skew this exists to
+  expose. `__version__` is not part of the tiered public surface and
+  stays out of `__all__`.
+
+  This matters because attune-forms ships default-on and unpinned —
+  every documented install path is
+  `uvx --from 'attune-forms[mcp]' attune-forms-mcp` with no version
+  constraint — so hosts resolve whatever is newest and several versions
+  can sit on one machine at once. Hosts and consumers that recorded the
+  old `serverInfo.version` were recording the MCP SDK's number.
+
 ## [0.15.0] — 2026-09-07
 
 The host-question line (attune-ai host-surface-parity AF-2): a host's
