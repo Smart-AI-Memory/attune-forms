@@ -6,6 +6,13 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-09-08
+
+One correction, measured rather than reasoned: the host-question profile
+now declares the multi-select escaping its host actually performs, so a
+consumer characterizing that codec has a truthful artifact to pin.
+
+
 ### Changed
 
 - **`CLAUDE_ASKUSERQUESTION` declares the escaping it was measured to
