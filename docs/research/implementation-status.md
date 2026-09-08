@@ -68,7 +68,8 @@ replacement collection awaits explicit approval; see the outcome experiment plan
 
 Outcome-pilot-v0.2 completed at collector f623590: 72/72 units, 288 sealed model
 calls, all task-success checks passed. Every raw and turn manifest verified. The
-pilot shows a success ceiling across all three conditions, with no demonstrated
-task-success advantage for forms. See
+pilot shows a success ceiling across all three conditions: with no variation in
+task success the task set cannot rank them, so an advantage for forms is
+neither demonstrated nor refuted. See
 [results](../specs/outcome-experiment/outcome-pilot-v0.2-results.md). Human outcomes
 remain unmeasured.

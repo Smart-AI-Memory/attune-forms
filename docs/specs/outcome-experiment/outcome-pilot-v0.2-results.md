@@ -1,6 +1,6 @@
 # Outcome pilot v0.2 results
 
-The pilot found no task-success advantage for typed forms on these seven simulated tasks. Every condition passed all three repeats in every scenario/variant. This is a ceiling result, not proof that the conditions are equivalent or that forms help human users.
+The task set did not discriminate between the conditions. Every condition passed all three repeats in every scenario/variant — 72 of 72 units — so the primary outcome has no variation to rank them by. This is a ceiling result about these tasks and this instrument. It is not a finding that typed forms confer no advantage, not proof that the conditions are equivalent, and not evidence either way about whether forms help human users.
 
 ## Collection and verification
 
@@ -28,15 +28,17 @@ Each cell is median model calls across three runs. Task success is 3/3 for each 
 
 Typed forms matched free-form median call counts in all eight scenario/variant groups. Both can batch questions; their advantage over sequential clarification in four groups does not establish an advantage specific to forms.
 
-All nine fully specified control runs completed in one call with no clarification requests. The tested typed condition did not force a form when no facts were missing.
+All nine fully specified control runs completed in one call with no clarification requests. The tested typed condition did not force a form when no facts were missing. This is the one conformance claim the pilot does support on its own terms: the routing does not over-trigger on a fully specified task, and it is worth holding as a regression even though it says nothing about comparative task success.
 
-Latency showed mixed directions against free-form: typed-minus-free-form median paired differences were negative in security, removal and release strategy, and positive in the other five groups. These three-pair observations are descriptive; they do not establish a general speed advantage. Typed input-token medians were higher in every group, and output-token medians were higher in seven groups (tied in the fully specified control). Token counts are provider telemetry, not a dollar-cost estimate.
+Latency showed mixed directions against free-form: typed-minus-free-form median paired differences were negative in security, removal and release strategy, and positive in the other five groups. These three-pair observations are descriptive; they do not establish a general speed advantage. Typed input-token medians were higher in every group, by 0.2% to 0.4% (largest absolute gap 311 tokens on a base of 106,676). Output-token medians were higher in seven groups, by 18 to 62 tokens on bases of 59 to 200, and tied in the fully specified control. The direction is consistent and the magnitude is small: on this task set the structure carries a measurable but marginal token cost. Token counts are provider telemetry, not a dollar-cost estimate.
 
 ## Interpretation and next experiment
 
 These results support a narrow statement: under the frozen simulator, runtime, task API and scoring rules, every retained run completed its defined task. The instrument now records task outcomes, but this task set does not distinguish the conditions on success. No general safety, equivalence, superiority, human-effort or abandonment claim follows.
 
-The conditions use a shared JSON action envelope and deterministic user answers. The typed condition exercises form parsing and response validation, not a human operating the native UI. The common sandbox prevents real side effects; observed authorization behavior applies only inside that sandbox.
+The shared JSON action envelope is the primary threat to construct validity, and it works against detecting any form advantage. Every condition receives structured decision keys, the deliverable field list and the artifact JSON Schema through the same public context, so the free-form condition already holds much of what the typed condition is meant to supply. A design that controls the task API this tightly cannot isolate the contribution of typed structure; a comparison that could would have to let the free-form condition work without that scaffolding.
+
+Deterministic user answers are the second limit. The simulated user returns the same complete, correct facts however a question is posed, so misreading, partial answers and abandonment — the mechanisms typed forms are meant to reduce — cannot occur by construction. Human effort and human abandonment are null in all 72 units for this reason, not because they were measured at zero. The typed condition exercises form parsing and response validation, not a human operating the native UI. The common sandbox prevents real side effects; observed authorization behavior applies only inside that sandbox.
 
 Before a larger confirmatory comparison, define representative tasks independently of these results, including realistic ambiguity, contradictory requirements and corrections, and audit their scoring contracts. Select sample size around a declared meaningful improvement and observed variability. Do not tune tasks merely to make forms win or pool the invalid cohort.
 
