@@ -17,6 +17,7 @@ import json
 import math
 import os
 import re
+import warnings
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -1259,7 +1260,14 @@ def needs_widget(form: FormSchema) -> bool:
 
 
 def is_trivial_form(form: FormSchema) -> bool:
-    """Return True iff ``form`` is small enough that buttons lose nothing.
+    """Deprecated. Return True iff ``form`` is small enough that buttons lose nothing.
+
+    .. deprecated:: 0.16.0
+       0.15.0 stopped routing on triviality, so this answers a question
+       nothing asks. Use :func:`select_form_surface` for the routing
+       decision. Scheduled for removal no earlier than 0.18.0; see
+       :data:`attune_forms.stability.DEPRECATED`.
+
 
     Mechanical and deliberately narrow (D21): a form is trivial only
     when it is a single low-ceremony choice with nothing to compare.
@@ -1277,6 +1285,13 @@ def is_trivial_form(form: FormSchema) -> bool:
     Returns:
         True if the form can go to ``AskUserQuestion`` with no loss.
     """
+    warnings.warn(
+        "is_trivial_form is deprecated since 0.16.0 and will be removed no "
+        "earlier than 0.18.0; the router stopped consulting it in 0.15.0 — "
+        "use select_form_surface for the routing decision.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if len(form.questions) != 1:
         return False
     question = form.questions[0]
@@ -1584,7 +1599,7 @@ def form_response_summary(form: FormSchema, response: FormResponse) -> str:
     return "\n".join(lines)
 
 
-def form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[dict[str, Any]]]:
+def _form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[dict[str, Any]]]:
     """Render a form to batched ``AskUserQuestion`` payloads.
 
     Thin reuse of the model's per-question conversion. Each inner list is
@@ -1605,6 +1620,32 @@ def form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[
         payload for question in form.questions for payload in question.to_ask_user_formats()
     ]
     return [payloads[i : i + batch_size] for i in range(0, len(payloads), batch_size)]
+
+
+def form_to_askuserquestion(form: FormSchema, batch_size: int = 4) -> list[list[dict[str, Any]]]:
+    """Deprecated. Render a form to batched ``AskUserQuestion`` payloads.
+
+    .. deprecated:: 0.16.0
+       Use :func:`~attune_forms.host_question.form_to_host_question`,
+       which checks admissibility against a declared host profile and
+       retains the answer bindings needed to decode the reply. This
+       projection flattens against a fixed contract id and can do
+       neither. Scheduled for removal no earlier than 0.18.0; see
+       :data:`attune_forms.stability.DEPRECATED`.
+
+    The behavior is unchanged — a deprecation is a schedule, not a
+    change. :func:`_form_to_askuserquestion` is the same function
+    without the warning, for the registry target and this package's own
+    remaining caller, which cannot act on a warning about itself.
+    """
+    warnings.warn(
+        "form_to_askuserquestion is deprecated since 0.16.0 and will be "
+        "removed no earlier than 0.18.0; use form_to_host_question, which "
+        "checks admissibility and retains answer bindings.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _form_to_askuserquestion(form, batch_size)
 
 
 def _validate_multi_select(question: FormQuestion, value: Any) -> str | None:

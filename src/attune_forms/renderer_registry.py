@@ -114,7 +114,14 @@ class RendererRecord:
 
 @dataclass(frozen=True)
 class AllowlistEntry:
-    """A public callable that looks like a projection but is not one."""
+    """A projection-shaped callable the registry does not target directly.
+
+    Usually because it is not really a projection — a routing decision, a
+    transcript summary, a partial re-ask. It also covers an
+    implementation standing behind a name the registry DOES target: a
+    deprecation shim's private body has not escaped the registry, since
+    the projection is registered under its public name.
+    """
 
     qualname: str
     rationale: str
@@ -179,6 +186,15 @@ SWEEP_ALLOWLIST: tuple[AllowlistEntry, ...] = (
         f"{PACKAGE}.markdown_ingestion.problems_to_markdown",
         "re-asks only the offending fields through the PORTABLE renderer's own field "
         "formatter; a partial re-ask, not a whole-form projection",
+    ),
+    AllowlistEntry(
+        f"{PACKAGE}.bridge._form_to_askuserquestion",
+        "the body of the registered compatibility_only form.askuserquestion target; "
+        "the projection is registered under its public name, which is now a "
+        "deprecation shim, and this package's own remaining caller uses the private "
+        "alias so it does not warn users about its own internal choice. Wiring "
+        "handle_render_form to the route-active target removes both the caller and "
+        "this entry",
     ),
     AllowlistEntry(
         f"{PACKAGE}.bridge.select_form_surface",

@@ -12,6 +12,7 @@ writing a changelog entry, not slipping through review.
 
 from __future__ import annotations
 
+import pathlib
 import warnings
 
 import pytest
@@ -275,3 +276,27 @@ def test_the_dueness_check_is_not_disarmed_by_an_unknown_version():
     assert deprecation_is_due(entry, entry.since) is True
     assert deprecation_is_due(entry, "0.16") is True
     assert deprecation_is_due(entry, "0.15.99") is False
+
+
+def test_no_stale_entries_in_the_deprecated_surface_allowlist():
+    """Every listed module must still call deprecated surface.
+
+    `tests/conftest.py` exempts these modules from the error filter. An
+    entry that no longer needs the exemption silently re-permits future
+    deprecated use, so the list has to shrink as the calls go — and reach
+    empty when the deprecated names are removed.
+    """
+    import tests.conftest as conftest
+
+    called = tuple(f"{entry.name}(" for entry in DEPRECATED)
+    stale = []
+    for module in sorted(conftest.EXERCISES_DEPRECATED_SURFACE):
+        path = pathlib.Path(__file__).parent / f"{module}.py"
+        assert path.is_file(), f"{module} is listed but has no test file"
+        if not any(call in path.read_text(encoding="utf-8") for call in called):
+            stale.append(module)
+
+    assert not stale, (
+        f"{stale} no longer call deprecated surface; drop them from "
+        "EXERCISES_DEPRECATED_SURFACE so the exemption does not outlive its reason"
+    )

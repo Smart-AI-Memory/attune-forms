@@ -51,6 +51,14 @@ attune_forms = ["templates/*.json", "semantic_tokens.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# This package's own deprecations are errors: a new internal or
+# accidental use of deprecated surface should fail loudly, not scroll
+# past in a warning summary. Third-party DeprecationWarnings are
+# untouched. tests/conftest.py lists the modules that exercise the
+# deprecated surface deliberately.
+filterwarnings = [
+    "error:.*is deprecated since.*:DeprecationWarning",
+]
 
 [tool.black]
 line-length = 100

@@ -45,6 +45,15 @@ follow [SemVer](https://semver.org/).
 
 ### Changed
 
+- **`registry_digest` moved** (`bc7ebe8a…`). The sweep allowlist is a
+  digest input, and it gained `_form_to_askuserquestion` — the body
+  behind the registered `form.askuserquestion` target. A deprecation
+  shim's private implementation has not escaped the registry, since the
+  projection is still registered under its public name;
+  `AllowlistEntry`'s docstring now says so rather than describing only
+  the not-really-a-projection case. Wiring `handle_render_form` to the
+  route-active target will remove both the caller and this entry.
+
 - **The workspace vocabulary is now stable surface** — 17 names
   (`WorkspaceView`, `WorkspaceAction`, the binding and response types,
   `collect_workspace_action`, `workspace_from_dict`,
@@ -78,13 +87,27 @@ follow [SemVer](https://semver.org/).
   Both still work. This is the changelog's first `### Deprecated`
   section — no deprecation cycle had ever been run.
 
-  Neither emits `DeprecationWarning` yet. The policy requires it in the
-  release that declares them, and a test now fails the moment the
-  running version reaches `since` with the warning unwired, so 0.16.0
-  cannot ship without it. Wiring `form_to_askuserquestion` needs care:
-  it is a live renderer-registry target, so the warning belongs on the
-  public name with the registry and internal callers moved to a private
-  alias.
+  Both now emit `DeprecationWarning` naming the replacement, so the
+  policy's requirement is met in the release that declares them and the
+  due-date gate passes at 0.16.0. Behavior is unchanged — a deprecation
+  is a schedule, not a change.
+
+  `form_to_askuserquestion` needed the care its registry target implies.
+  The projection moved to a private `_form_to_askuserquestion`; the
+  public name is now a shim that warns and delegates. The registry still
+  targets the public name, so `record_digest` and the compatibility
+  contract are untouched. `handle_render_form` — this package's one
+  remaining caller, still on the compatibility projection because AF-2's
+  route-active target is not wired to the MCP surface yet — uses the
+  private alias, since a warning about our own internal choice is noise
+  a consumer cannot act on.
+
+- **This package's own deprecations are pytest errors.** A new internal
+  or accidental use of deprecated surface fails rather than scrolling
+  past in a warning summary; third-party `DeprecationWarning`s are
+  untouched. `tests/conftest.py` carries the one reviewable list of
+  modules that exercise the deprecated surface deliberately, and a test
+  fails on a stale entry so the list shrinks as the calls go.
 
 ### Fixed
 

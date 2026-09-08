@@ -101,9 +101,14 @@ never sooner than **two minors and 90 days**.
 **What a deprecation must do**, in the release that declares it:
 
 1. Add the `Deprecation` record to `attune_forms.stability`.
-2. Emit `DeprecationWarning` from the deprecated path — with internal
-   callers moved to a private alias first, so the warning fires for
-   consumers and not for our own code.
+2. Emit `DeprecationWarning` from the deprecated path, naming the
+   replacement — with internal callers moved to a private alias first,
+   so the warning fires for consumers and not for our own code. A test
+   fails the moment the running version reaches `since` with the warning
+   unwired, so this cannot be forgotten under release pressure. When the
+   deprecated name is a registry target, keep the target pointing at the
+   PUBLIC name so `record_digest` and any compatibility contract hold,
+   and allowlist the private body.
 3. Name the replacement in the warning text and the changelog.
 4. Add a `### Deprecated` changelog section. The changelog has never had
    one; the first deprecation creates it.
@@ -205,13 +210,13 @@ Not yet met. In order:
       `form_to_askuserquestion`.
 - [ ] Resolve `escaping_verified` — obtain the live-host evidence for the
       declared multi-select escaping, or delete the claim.
-- [ ] Run one deprecation end to end, so the cycle is demonstrated rather
-      than described.
+- [ ] Run one deprecation end to end. Declared and warning as of
+      0.16.0; the cycle is demonstrated only once a removal lands.
 - [ ] Document a pinned install, and adopt the observable-difference
       changelog rule for stable surface.
 - [ ] Soak: three consecutive releases and 30 days with no change to the
       stable surface digest.
-- [ ] Promote what has earned it — `workspace_*` first.
+- [x] Promote what has earned it — `workspace_*` promoted 2026-09-08.
 
 Only then does `Development Status :: 5 - Production/Stable` describe
 something true. Until then Beta is not underselling the library; it is

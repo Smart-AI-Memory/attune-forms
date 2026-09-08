@@ -39,10 +39,10 @@ from mcp.server.stdio import stdio_server
 from attune_forms._version import __version__
 from attune_forms.bridge import (
     FormValidationError,
+    _form_to_askuserquestion,
     collect_form_response,
     form_from_dict,
     form_response_summary,  # noqa: F401  (re-exported convenience)
-    form_to_askuserquestion,
     keyboard_mode_enabled,
     select_form_surface,
 )
@@ -570,7 +570,11 @@ async def handle_render_form(args: dict[str, Any]) -> dict[str, Any]:
         "success": True,
         "title": form.title,
         "description": form.description,
-        "batches": form_to_askuserquestion(form),
+        # The private alias: this server still renders through the
+        # compatibility projection because AF-2's route-active target
+        # is not wired here yet. Warning our own users about our own
+        # internal choice would be noise they cannot act on.
+        "batches": _form_to_askuserquestion(form),
     }
     if recommended == "widget":
         result["surface_note"] = (
