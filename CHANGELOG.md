@@ -22,9 +22,17 @@ follow [SemVer](https://semver.org/).
   reader is told to follow, and a `@flow(slug)` test makes those calls
   exactly as written. Neither side moves alone: an anchor with no test,
   a test with no anchor, and an anchor set that drifts from the
-  `.agents` mirror each fail. Eight flows are bound — host-question
-  render, inadmissibility, collect, retry, cancel, widget postback,
-  markdown round trip, and the offending-fields re-ask.
+  `.agents` mirror each fail. Ten flows are bound — the five
+  surfaces plus host-question inadmissibility, collect, retry and
+  cancel, and the offending-fields re-ask.
+
+  Coverage is a completeness rule, not a floor. Every numbered surface
+  in the skill's "Choosing a surface" list must carry its own anchor —
+  the list is numbered, so the rule is exact rather than heuristic, and
+  describing a sixth way to ask now fails until it comes with a flow
+  that proves it works. That closed the two real gaps a count check had
+  hidden: the MCP Apps surface and the native-elicitation fallback were
+  documented and unexercised.
 
   Verified against the pre-fix code rather than asserted: replayed at
   `6fb61e1` the retry and cancellation flows both fail; at `8c5e9d4` the

@@ -49,6 +49,7 @@ from attune_forms import (
     problems_to_markdown,
 )
 from attune_forms.mcp_server import (
+    handle_ask,
     handle_collect_response,
     handle_render_form,
     handle_render_widget,
@@ -144,10 +145,42 @@ def test_every_flow_test_is_still_documented():
     )
 
 
-def test_the_skill_documents_at_least_the_host_question_line():
-    # A guard on the guard: an empty anchor set would make both gates
-    # above pass vacuously.
-    assert len(documented_flows()) >= 5
+#: The surface list a reader chooses from. Each numbered entry describes
+#: a different way to put a form in front of someone, so each is a call
+#: sequence in its own right.
+_SURFACE_SECTION = "## Choosing a surface"
+_SURFACE = re.compile(r"^(\d+)\. \*\*(.+?)\*\*", re.M)
+
+
+def _surfaces_with_anchor_state() -> list[tuple[str, str, bool]]:
+    """(number, title, has its OWN anchor) for every numbered surface."""
+    body = _SKILL[_SKILL.index(_SURFACE_SECTION) :]
+    body = body[: body.index("\n## ", len(_SURFACE_SECTION))]
+    hits = list(_SURFACE.finditer(body))
+    out = []
+    for index, hit in enumerate(hits):
+        stop = hits[index + 1].start() if index + 1 < len(hits) else len(body)
+        out.append((hit.group(1), hit.group(2), bool(_ANCHOR.search(body[hit.start() : stop]))))
+    return out
+
+
+def test_every_documented_surface_carries_its_own_flow_anchor():
+    """Completeness, not a floor.
+
+    A count check (``>= 5``) only stops the registry passing vacuously —
+    it says nothing about whether a NEW surface got bound. The surface
+    list is numbered, so the rule can be exact: describe a sixth way to
+    ask, and it must come with a flow that proves it works.
+    """
+    surfaces = _surfaces_with_anchor_state()
+    assert len(surfaces) >= 5, "the surface list did not parse; the gate would pass vacuously"
+    unbound = [f"{n}. {title}" for n, title, anchored in surfaces if not anchored]
+
+    assert not unbound, (
+        f"surface(s) {unbound} describe a call sequence with no flow anchor. "
+        "Anchor it and add a @flow test, or the sequence ships unexercised — "
+        "which is how the 2026-09-08 defects reached main."
+    )
 
 
 # --- the flows, executed as written --------------------------------------
@@ -265,6 +298,28 @@ def test_problems_re_ask_exactly_the_offending_fields():
 
     assert "Which approach?" in re_ask
     assert "Which lanes?" not in re_ask
+
+
+@flow("mcp-apps-surface")
+def test_the_mcp_apps_surface_links_the_resource_and_names_its_collector():
+    # "the host discovers the linked ui:// resource ... Its actions call
+    # the named server-side collector."
+    result = asyncio.run(handle_render_widget({"form": FORM}))
+
+    app = result["mcp_app"]
+    assert app["resource_uri"] == "ui://attune-forms/dynamic-surface/v1"
+    assert app["collect_tool"] == "elicitation_collect_response"
+
+
+@flow("native-elicitation-fallback")
+def test_a_host_that_cannot_elicit_says_unsupported():
+    # "call elicitation_ask; on action: 'unsupported', fall back to (4)."
+    # No elicitation session is available here, which is the branch the
+    # skill tells the reader to detect.
+    result = asyncio.run(handle_ask({"form": FORM}))
+
+    assert result["success"] is False
+    assert result["action"] == "unsupported"
 
 
 # --- the mirror carries the same anchors ---------------------------------

@@ -222,6 +222,7 @@ host default); the ladder below is the explicitly requested Attune-form
 path.
 
 1. **MCP Apps host**: call `elicitation_render_widget` (or
+<!-- flow: mcp-apps-surface -->
    `elicitation_render_workspace`). After capability negotiation the host
    discovers the linked `ui://attune-forms/dynamic-surface/v1` resource and
    renders it inline. Its actions call the named server-side collector; only
@@ -244,6 +245,7 @@ path.
    `__elicitation_response__` — parse it and validate with
    `elicitation_collect_response`.
 3. **Native elicitation host**: call `elicitation_ask`; on
+<!-- flow: native-elicitation-fallback -->
    `action: "unsupported"`, fall back to (4).
 4. **The host's own question control**: call `elicitation_render_form`.
 <!-- flow: host-question-render -->
