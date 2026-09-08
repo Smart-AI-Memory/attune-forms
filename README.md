@@ -157,8 +157,60 @@ portable markdown elsewhere).
 pip install attune-forms
 ```
 
-Python 3.10+, one runtime dependency (structlog), 950+ tests, CI on
+Python 3.10+, one runtime dependency (structlog), 1,400+ tests, CI on
 Linux/macOS/Windows. Apache 2.0.
+
+### Pinning a version
+
+Every install line above resolves the **newest** release, and the package
+has no feature flags, so a new version takes effect as soon as it is
+resolved. That is deliberate — one step from install to working — but it
+means a behavior change reaches every host at once. Pin when you need a
+version to hold still.
+
+The constraint goes inside the `--from` spec, not after the entry point:
+
+```bash
+pip install 'attune-forms==0.15.0'
+uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
+codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
+```
+
+```json
+{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.15.0", "attune-forms-mcp"]}}}
+```
+
+**The Claude Code plugin cannot be pinned in place.** Its `.mcp.json`
+belongs to the plugin manager and is replaced when the plugin updates, so
+an edit there does not survive. To hold a version, take the server and the
+skill separately instead of installing the plugin — register the pinned
+server yourself and copy the skill from the repository, exactly as the
+Codex path above does:
+
+```bash
+claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.15.0' attune-forms-mcp
+```
+
+Pinning is the supported way to hold behavior still. `attune-forms`
+follows SemVer and tiers its public surface (see
+[`docs/stability.md`](docs/stability.md)): stable names change only
+through a deprecation cycle, while provisional names may change in any
+minor release.
+
+### Which version am I running?
+
+```bash
+python -c "import attune_forms; print(attune_forms.__version__)"
+```
+
+Over MCP, the server reports it in the `initialize` handshake as
+`serverInfo.version`. **Before 0.16.0 that field carried the MCP SDK's
+version rather than this package's** — so a host showing something like
+`1.30.0` under the `attune-forms` name is running a release older than
+0.16.0, and cannot tell you which one. Several versions can sit on one
+machine at once (a `pip` install, a `uvx` cache entry per resolved
+version), so check the one your host actually launched rather than the
+one on your `PATH`.
 
 ## The grammar
 

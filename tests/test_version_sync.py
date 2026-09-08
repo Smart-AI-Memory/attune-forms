@@ -36,3 +36,20 @@ def test_marketplace_manifest_matches_pyproject() -> None:
 def test_readme_whats_new_matches_pyproject() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"## What's new in {_pyproject_version()}" in readme
+
+
+def test_readme_pinned_examples_match_pyproject() -> None:
+    """The pinned-install examples must name the current version.
+
+    A pin is a hand-maintained claim, and hand-maintained claims rot: a
+    README showing `==0.14.0` after 0.16.0 ships teaches a reader to pin
+    the wrong release. Every `attune-forms...==X.Y.Z` in the README moves
+    with pyproject, which the release prep already touches.
+    """
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    version = _pyproject_version()
+    pins = re.findall(r"attune-forms(?:\[mcp\])?==([0-9][^'\"\s]*)", readme)
+
+    assert pins, "the README documents no pinned install"
+    stale = sorted({pin for pin in pins if pin != version})
+    assert not stale, f"README pins {stale}; pyproject says {version}"

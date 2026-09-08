@@ -8,6 +8,25 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **A documented way to hold a version.** attune-forms ships default-on
+  and unpinned: every install line resolves the newest release and the
+  package has no feature flags, so a change reaches every host at once.
+  The README now documents the pin for each path — the constraint goes
+  inside the `--from` spec, not after the entry point — and states the
+  case it could not previously answer: **the Claude Code plugin cannot be
+  pinned in place**, because its `.mcp.json` belongs to the plugin
+  manager and is replaced on update. Holding a version there means taking
+  the server and the skill separately instead of installing the plugin.
+
+  A companion section answers "which version am I running?", including
+  the diagnostic that a host reporting something like `1.30.0` under this
+  package's name is on a release older than 0.16.0 — the releases whose
+  handshake carried the MCP SDK's version instead of their own.
+
+  `test_readme_pinned_examples_match_pyproject` keeps every pinned
+  example on the current release. A pin is a hand-maintained claim, and a
+  stale one teaches a reader to hold the wrong version.
+
 - **A docs-versus-code gate for documented call SEQUENCES**
   (`tests/test_docs_flows.py`). `test_docs_drift.py` already gates the
   vocabulary — construct counts, real tool names, real function names —
