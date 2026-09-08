@@ -181,7 +181,11 @@ of a flag:
    internal one, and stating explicitly whether action is required.
 2. A pinned-install line in the README for consumers who need to hold a
    version (`attune-forms[mcp]==X.Y.Z`). The plugin default stays
-   unpinned; the escape hatch exists for the caller who wants it.
+   unpinned; the escape hatch exists for the caller who wants it. This
+   landed in the README's "Pinning a version" section, and
+   `test_readme_pinned_examples_match_pyproject` keeps the examples on
+   the current release — a stale pin teaches a reader to hold the wrong
+   version.
 
 Provisional surface owes only the changelog entry. That is what the tier
 buys.
@@ -212,8 +216,10 @@ Not yet met. In order:
       declared multi-select escaping, or delete the claim.
 - [ ] Run one deprecation end to end. Declared and warning as of
       0.16.0; the cycle is demonstrated only once a removal lands.
-- [ ] Document a pinned install, and adopt the observable-difference
-      changelog rule for stable surface.
+- [x] Document a pinned install — README "Pinning a version", gated
+      against pyproject (2026-09-08). The observable-difference changelog
+      rule for stable surface is adopted in this document; it is a
+      practice, proved only by being followed.
 - [ ] Soak: three consecutive releases and 30 days with no change to the
       stable surface digest.
 - [x] Promote what has earned it — `workspace_*` promoted 2026-09-08.
