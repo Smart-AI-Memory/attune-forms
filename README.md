@@ -15,6 +15,22 @@ either direction.
 The full argument: ["A Communication Grammar for AI
 Agents"](https://www.linkedin.com/pulse/communication-grammar-ai-agents-patrick-roebuck-sutse).
 
+## What's new in 0.17.0
+
+- **The `AskUserQuestion` profile declares the multi-select escaping it
+  was measured to have, which is none.** It had claimed JSON-quoting the
+  host does not perform: a live trial offering `red, green` and `blue`
+  returned `red, green,blue` — a bare comma join indistinguishable from
+  three atoms — and `say "hi"` / `back\slash` came back raw. Labels
+  containing the delimiter or a quote were already refused and still
+  are, but now **permanently** rather than pending evidence, and the
+  refusal says which case it is. Evidence:
+  `docs/probes/host-question-escaping-2026-09-08.md`.
+
+  Consumers pinning the profile's facet digest should re-pin; a
+  downstream that characterizes this host's codec should read the probe
+  before writing its own receipt.
+
 ## What's new in 0.16.0
 
 - **The host-question line is reachable end to end.**
@@ -195,13 +211,13 @@ version to hold still.
 The constraint goes inside the `--from` spec, not after the entry point:
 
 ```bash
-pip install 'attune-forms==0.16.0'
-uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
-codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
+pip install 'attune-forms==0.17.0'
+uvx --from 'attune-forms[mcp]==0.17.0' attune-forms-mcp
+codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.17.0' attune-forms-mcp
 ```
 
 ```json
-{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.16.0", "attune-forms-mcp"]}}}
+{"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.17.0", "attune-forms-mcp"]}}}
 ```
 
 **The Claude Code plugin cannot be pinned in place.** Its `.mcp.json`
@@ -212,7 +228,7 @@ server yourself and copy the skill from the repository, exactly as the
 Codex path above does:
 
 ```bash
-claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.16.0' attune-forms-mcp
+claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.17.0' attune-forms-mcp
 ```
 
 Pinning is the supported way to hold behavior still. `attune-forms`
