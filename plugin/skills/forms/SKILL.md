@@ -222,6 +222,7 @@ host default); the ladder below is the explicitly requested Attune-form
 path.
 
 1. **MCP Apps host**: call `elicitation_render_widget` (or
+<!-- flow: mcp-apps-surface -->
    `elicitation_render_workspace`). After capability negotiation the host
    discovers the linked `ui://attune-forms/dynamic-surface/v1` resource and
    renders it inline. Its actions call the named server-side collector; only
@@ -239,22 +240,28 @@ path.
    arriving through the surface you rendered on, not the render call
    returning.
 2. **Legacy widget host** (the client renders returned HTML): show the
+<!-- flow: widget-postback -->
    returned `html`. The form posts answers back as a JSON block marked
    `__elicitation_response__` — parse it and validate with
    `elicitation_collect_response`.
 3. **Native elicitation host**: call `elicitation_ask`; on
+<!-- flow: native-elicitation-fallback -->
    `action: "unsupported"`, fall back to (4).
 4. **The host's own question control**: call `elicitation_render_form`.
+<!-- flow: host-question-render -->
    When `host_question_admissible` is true, `host_question` is the
    payload for the host's question tool, already ordered and headed —
    send it as-is. Send the host's raw reply straight back to
    `elicitation_collect_response` as `host_response`: the server decodes
+<!-- flow: host-question-collect -->
    the display labels to option ids through bindings it re-derives, so
    you never map labels yourself. An unmappable reply is named, never
    guessed. If the user dismissed the prompt, send `cancelled: true`
    rather than an empty or oddly-shaped reply.
+<!-- flow: host-question-cancel -->
 
    If the result carries `next_host_question`, that is a bounded re-ask
+<!-- flow: host-question-retry -->
    of just the offending questions. Send **all three** things back with
    it — the same `form`, the re-ask reply as `host_response`,
    `answered_so_far` copied verbatim, and the result's **`next_attempt`
@@ -265,6 +272,7 @@ path.
    re-ask reads as missing and the exchange dies.
 
    When `host_question_admissible` is false, `host_question_problems`
+<!-- flow: host-question-inadmissible -->
    says what the host cannot carry; use the widget or portable markdown
    instead of flattening it yourself.
 
@@ -286,6 +294,7 @@ path.
    `field_id.item_id: edit: <text>` for an assumption edit).
    Collect the reply in this order:
    - **Parse first**: run `markdown_to_answers(form, reply)` — it
+<!-- flow: markdown-roundtrip -->
      deterministically handles a pasted JSON block or shorthand lines
      and returns `(answers, problems)`; it never guesses, so every
      stray line comes back as a named problem.
@@ -309,5 +318,6 @@ widgets.
 Every submission — widget postback, elicitation response, or typed
 reply — goes through `elicitation_collect_response`. On
 `{"success": false, "problems": [...]}`, re-ask ONLY the offending
+<!-- flow: reask-only-offending-fields -->
 fields; never silently accept malformed input, and never re-ask what
 already validated.
