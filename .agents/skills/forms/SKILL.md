@@ -14,8 +14,10 @@ argument-hint: "<what needs deciding, e.g. 'deployment options' or 'this refacto
 This skill drives the six `attune-forms` MCP tools:
 
 - `elicitation_render_widget` — form dict → interactive HTML (rich surface).
-- `elicitation_render_form` — form dict → batched plain-question payloads.
-- `elicitation_collect_response` — form + answers → validated response.
+- `elicitation_render_form` — form dict → the host's own question control
+  (`host_question`), or a named reason it cannot carry the form.
+- `elicitation_collect_response` — form + answers (or a raw
+  `host_response`) → validated response.
 - `elicitation_ask` — native MCP elicitation dialog, where supported.
 - `elicitation_render_workspace` — validated workspace view → widget + markdown.
 - `elicitation_collect_workspace_action` — view + action envelope → validated action.
@@ -242,8 +244,31 @@ path.
    `elicitation_collect_response`.
 3. **Native elicitation host**: call `elicitation_ask`; on
    `action: "unsupported"`, fall back to (4).
-4. **Plain conversation**: call `elicitation_render_form` and map each
-   batched payload to your host's question tool (or plain prose):
+4. **The host's own question control**: call `elicitation_render_form`.
+   When `host_question_admissible` is true, `host_question` is the
+   payload for the host's question tool, already ordered and headed —
+   send it as-is. Send the host's raw reply straight back to
+   `elicitation_collect_response` as `host_response`: the server decodes
+   the display labels to option ids through bindings it re-derives, so
+   you never map labels yourself. An unmappable reply is named, never
+   guessed. If the user dismissed the prompt, send `cancelled: true`
+   rather than an empty or oddly-shaped reply.
+
+   If the result carries `next_host_question`, that is a bounded re-ask
+   of just the offending questions. Send **all three** things back with
+   it — the same `form`, the re-ask reply as `host_response`, and
+   `attempt` plus `answered_so_far` copied verbatim from the result.
+   The carry is what lets a narrowed reply decode against the whole
+   form; without it every question you did not re-ask reads as missing
+   and the exchange dies.
+
+   When `host_question_admissible` is false, `host_question_problems`
+   says what the host cannot carry; use the widget or portable markdown
+   instead of flattening it yourself.
+
+   `batches` is still returned for now but is **deprecated** (removal no
+   earlier than 0.18.0). If you use it, map each batched payload to your
+   host's question tool (or plain prose):
    recommendation-first ordering, `multi_select` → multi-select,
    constructs → single-select with the recommended option first and
    tradeoffs folded into option descriptions (a triage board arrives

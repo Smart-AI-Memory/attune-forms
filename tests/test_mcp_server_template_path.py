@@ -135,7 +135,16 @@ def test_schemas_advertise_the_template_path_without_requiring_form():
         # Both shapes are legal at the schema layer; the handler decides.
         jsonschema.validate({**_TEMPLATE_ARGS, "answers": {}}, schema)
         jsonschema.validate({"form": _FORM, "answers": {}}, schema)
-    assert tools["elicitation_collect_response"].inputSchema["required"] == ["answers"]
+    # 'answers' is no longer schema-required: a caller may instead send
+    # 'host_response', a raw reply from the host's question control.
+    # Requiring 'answers' would force a host-response caller to send both,
+    # which the handler refuses. The one-of rule cannot be expressed here
+    # alongside the shared form/template properties, so the handler names
+    # it (see tests/test_mcp_host_question.py).
+    collect = tools["elicitation_collect_response"].inputSchema
+    assert "required" not in collect
+    for shape in ({"answers": {}}, {"host_response": {}}):
+        jsonschema.validate({**_TEMPLATE_ARGS, **shape}, collect)
 
 
 def test_slots_schema_rejects_non_string_values():

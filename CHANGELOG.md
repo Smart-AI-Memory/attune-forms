@@ -8,6 +8,43 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **The MCP surface reaches the route-active host-question target.**
+  `form.host_question` was registered and ratified in 0.15.0 but not
+  reachable: `elicitation_render_form` rendered through the
+  compatibility-only projection, so the answer bindings AF-2 retains had
+  no consumer on the wire. Both directions are now wired.
+
+  `elicitation_render_form` returns `host_question` (the payload for the
+  host's own question control), `host_question_admissible`, `profile_id`
+  and `response_correlation`. A form the profile cannot carry returns
+  `host_question_admissible: false` with `host_question_problems` naming
+  what it cannot carry — the same rule as the renderer: a named problem,
+  never a silent truncation. The profile is read from the registry's
+  route-active target rather than hardcoded, so the server renders
+  against the profile the registry ratifies.
+
+  `elicitation_collect_response` accepts `host_response`, a raw reply
+  from the host's question control, and decodes it to typed answers.
+  **The bindings are re-derived by rendering the same form again, not
+  round-tripped through the host**: the renderer is pure, so the
+  bindings are identical, and a binding the host could edit would not be
+  a binding. `freeform` carries Other text; `attempt` carries the
+  profile's validation budget across stateless calls; `cancelled: true`
+  says the user dismissed the prompt, which is not the same as a reply
+  of the wrong shape. A validation failure returns
+  `next_host_question`, `next_attempt` and `answered_so_far` — a bounded
+  re-ask of just the offending questions, plus the reply so far. All
+  three go back on the next call: decoding is fail-closed, so without
+  the carry a narrowed reply cannot decode against the full form and
+  every question not re-asked reads as a missing key.
+
+  Additive throughout. `batches` is still returned — the tool
+  description and the skill both promise it, so it retires with
+  `form_to_askuserquestion` no earlier than 0.18.0 — and the typed
+  `answers` path is unchanged. `answers` is no longer schema-required,
+  since requiring it would force a `host_response` caller to send both;
+  the handler names the one-of rule instead, and refuses both or neither.
+
 - **`attune_forms.host_question_adapter`** — the consuming half of the
   host-question line (attune-ai host-surface-parity AF-2, Task 2). AF-2
   shipped the renderer and its retained `QuestionAnswerBinding`s; this is
@@ -52,7 +89,10 @@ follow [SemVer](https://semver.org/).
   projection is still registered under its public name;
   `AllowlistEntry`'s docstring now says so rather than describing only
   the not-really-a-projection case. Wiring `handle_render_form` to the
-  route-active target will remove both the caller and this entry.
+  route-active target did NOT remove the caller or this entry, contrary
+  to what this entry first claimed: `batches` is a documented key and
+  retires with `form_to_askuserquestion` at 0.18.0, so the private alias
+  still has a caller until then.
 
 - **The workspace vocabulary is now stable surface** — 17 names
   (`WorkspaceView`, `WorkspaceAction`, the binding and response types,
