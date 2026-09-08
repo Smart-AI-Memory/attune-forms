@@ -249,12 +249,76 @@ def test_a_malformed_host_response_is_not_reported_as_a_cancellation(bad):
     assert any("must be an object" in p for p in result["problems"])
 
 
-def test_an_explicit_cancellation_is_recorded_as_one():
-    result = collect({"form": FORM, "host_response": {}, "cancelled": True})
+def test_an_explicit_cancellation_needs_no_dummy_payload():
+    """The documented cancellation call, with nothing else.
+
+    This test used to pass a dummy `host_response={}` alongside
+    `cancelled`, so it exercised a workaround rather than the call the
+    docs describe — and the documented call was rejected outright by the
+    missing-answer-source guard. A dismissed prompt HAS no reply.
+    """
+    result = collect({"form": FORM, "cancelled": True})
 
     assert result["outcome"] == "cancelled"
     assert result["receipt"]["outcome"] == "cancelled"
     assert "next_host_question" not in result
+
+
+def test_typed_answers_and_a_cancellation_together_are_refused():
+    result = collect({"form": FORM, "answers": {"approach": "Ship now"}, "cancelled": True})
+
+    assert result["success"] is False
+    assert any("not both" in p for p in result["problems"])
+
+
+def test_following_the_documented_retry_flow_terminates():
+    """The budget advances only if the caller sends `next_attempt`.
+
+    The skill briefly told callers to copy `attempt` verbatim, which is
+    the turn that just finished — resending it leaves the budget at 1
+    forever and the re-ask can repeat without end. This walks the
+    documented flow and asserts it reaches a terminal outcome.
+    """
+    skip = {"Which approach?": "[No preference]", "Which lanes?": "docs"}
+    args = {"form": FORM, "host_response": skip}
+    outcomes = []
+    for _ in range(6):
+        result = collect(args)
+        outcomes.append(result["outcome"])
+        if "next_attempt" not in result:
+            break
+        args = {
+            "form": FORM,
+            "host_response": {"Which approach?": "[No preference]"},
+            "attempt": result["next_attempt"],
+            "answered_so_far": result["answered_so_far"],
+        }
+
+    assert outcomes[-1] == "exhausted"
+    assert len(outcomes) <= 3, outcomes
+
+
+def test_resending_the_completed_attempt_never_advances_the_budget():
+    # Why the instruction matters: `attempt` is the turn that finished.
+    first = collect(
+        {
+            "form": FORM,
+            "host_response": {"Which approach?": "[No preference]", "Which lanes?": "docs"},
+        }
+    )
+
+    stuck = collect(
+        {
+            "form": FORM,
+            "host_response": {"Which approach?": "[No preference]"},
+            "attempt": first["attempt"],
+            "answered_so_far": first["answered_so_far"],
+        }
+    )
+
+    assert first["attempt"] == 1 and first["next_attempt"] == 2
+    assert stuck["outcome"] == "invalid"
+    assert stuck["next_attempt"] == 2
 
 
 @pytest.mark.parametrize("bad", ["nope", 3, ["a"]])

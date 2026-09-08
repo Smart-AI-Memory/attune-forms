@@ -31,12 +31,16 @@ follow [SemVer](https://semver.org/).
   a binding. `freeform` carries Other text; `attempt` carries the
   profile's validation budget across stateless calls; `cancelled: true`
   says the user dismissed the prompt, which is not the same as a reply
-  of the wrong shape. A validation failure returns
+  of the wrong shape — and it stands alone, since a dismissed prompt
+  has no reply to send with it. A validation failure returns
   `next_host_question`, `next_attempt` and `answered_so_far` — a bounded
   re-ask of just the offending questions, plus the reply so far. All
-  three go back on the next call: decoding is fail-closed, so without
-  the carry a narrowed reply cannot decode against the full form and
-  every question not re-asked reads as a missing key.
+  three go back on the next call — with the result's `next_attempt`
+  sent as `attempt`, since `attempt` is the turn that just finished
+  and resending it never advances the budget. Decoding is
+  fail-closed, so without the carry a narrowed reply cannot decode
+  against the full form and every question not re-asked reads as a
+  missing key.
 
   Additive throughout. `batches` is still returned — the tool
   description and the skill both promise it, so it retires with

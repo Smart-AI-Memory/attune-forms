@@ -470,14 +470,18 @@ def tool_definitions(*, mcp_apps: bool = False) -> list[types.Tool]:
                 "form the same way it was rendered: 'form', or 'template' + "
                 "'slots' (responses then carry the template as template_id). "
                 "Pass 'answers' for typed answers, or 'host_response' for a "
-                "raw reply from the host's question control — that is "
+                "raw reply from the host's question control, or cancelled=true "
+                "alone for a prompt the user dismissed — that is "
                 "decoded through bindings re-derived from the same form, so "
                 "an unmappable reply is named, never guessed. A host "
                 "response may also return 'next_host_question', 'next_attempt' and "
                 "'answered_so_far': a bounded re-ask of just the offending "
                 "questions. Send ALL THREE back — the same 'form', the "
                 "re-ask reply as 'host_response', plus 'attempt' and "
-                "'answered_so_far' verbatim — or the narrowed reply cannot "
+                "'answered_so_far' verbatim, sending the result's "
+                "'next_attempt' as 'attempt' (NOT the result's 'attempt', "
+                "which is the turn that just finished) — or the narrowed "
+                "reply cannot "
                 "decode against the full form. Pass cancelled=true for a "
                 "prompt the user dismissed."
             ),
@@ -669,17 +673,27 @@ async def handle_collect_response(args: dict[str, Any]) -> dict[str, Any]:
     # handler names it: passing both would silently prefer one, and
     # passing neither would surface as every field being required.
     typed, raw = args.get("answers"), args.get("host_response")
-    if typed is not None and raw is not None:
+    cancelled = args.get("cancelled") is True
+    if typed is not None and (raw is not None or cancelled):
         return {
             "success": False,
-            "problems": ["pass 'answers' (typed) or 'host_response' (a raw host reply), not both"],
+            "problems": [
+                "pass 'answers' (typed) or 'host_response'/'cancelled' (a raw host "
+                "reply, or a prompt the user dismissed), not both"
+            ],
         }
-    if typed is None and raw is None:
+    if typed is None and raw is None and not cancelled:
         return {
             "success": False,
-            "problems": ["provide 'answers' (typed) or 'host_response' (a raw host reply)"],
+            "problems": [
+                "provide 'answers' (typed), 'host_response' (a raw host reply), "
+                "or cancelled=true"
+            ],
         }
-    if raw is not None:
+    # `cancelled` is an answer source in its own right. A dismissed
+    # prompt HAS no reply, so requiring a dummy host_response alongside
+    # it made the documented cancellation call fail outright.
+    if raw is not None or cancelled:
         return await _collect_host_response(args)
     answers = typed
     if not isinstance(answers, dict):
