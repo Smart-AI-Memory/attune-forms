@@ -8,7 +8,6 @@ follow [SemVer](https://semver.org/).
 
 ### Added
 
-
 - **`attune_forms.host_question_adapter`** — the consuming half of the
   host-question line (attune-ai host-surface-parity AF-2, Task 2). AF-2
   shipped the renderer and its retained `QuestionAnswerBinding`s; this is
@@ -46,7 +45,20 @@ follow [SemVer](https://semver.org/).
 
 ### Changed
 
+- **The workspace vocabulary is now stable surface** — 17 names
+  (`WorkspaceView`, `WorkspaceAction`, the binding and response types,
+  `collect_workspace_action`, `workspace_from_dict`,
+  `workspace_action_contract`, and the two projections). Promoted by
+  chair ruling on 7 releases with no removal, rename or `### Changed`
+  entry since v0.9.1, a canonical fixture, and an external consumer in
+  attune-ai.
 
+  This **waives the drafted 30-day soak** (10 days elapsed), recorded
+  here as `docs/stability.md` requires rather than waived quietly. The
+  30-day figure was drafted the same day and was a proxy for "has it
+  stopped moving", which 7 unchanged releases answers directly.
+  `workspace_to_headless` (v0.14.0) stays provisional: the promotion
+  covered the vocabulary, not every projection.
 - **`FormValidationError` carries structured attribution.** A new
   `field_problems` pairs each problem with the question id at fault, or
   `None` where it belongs to no single question; `fields` and
@@ -56,8 +68,25 @@ follow [SemVer](https://semver.org/).
   attune-ai mirror, behaves exactly as before. Without this a re-ask
   could only regex ids out of prose.
 
-### Fixed
+### Deprecated
 
+- **`form_to_askuserquestion`** and **`is_trivial_form`**, both scheduled
+  for removal no earlier than 0.18.0 with replacements named in
+  `attune_forms.stability.DEPRECATED`. The first is the
+  compatibility-only projection superseded by `form_to_host_question`;
+  the second is vestigial, since 0.15.0 stopped routing on triviality.
+  Both still work. This is the changelog's first `### Deprecated`
+  section — no deprecation cycle had ever been run.
+
+  Neither emits `DeprecationWarning` yet. The policy requires it in the
+  release that declares them, and a test now fails the moment the
+  running version reaches `since` with the warning unwired, so 0.16.0
+  cannot ship without it. Wiring `form_to_askuserquestion` needs care:
+  it is a live renderer-registry target, so the warning belongs on the
+  public name with the registry and internal callers moved to a private
+  alias.
+
+### Fixed
 
 - **The MCP handshake reports this package's version, not the SDK's.**
   `Server("attune-forms")` passed no version, and the SDK's signature is
