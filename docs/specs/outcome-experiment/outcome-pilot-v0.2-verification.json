@@ -1,0 +1,370 @@
+{
+  "protocol_id": "outcome-pilot-v0.2",
+  "protocol_sha256": "2fa2788b58ff3459154e822ac8be7b44042571925e32f0c27fefaed81b1c9da3",
+  "verified_units": 72,
+  "verified_calls": 288,
+  "scorer_replay_without_condition_labels": "all 72 match retained outcomes",
+  "source_commit": "f623590c76fec2d44b419675409015481d4bbf8c",
+  "records": [
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "f7d0a607c93d18b237fcb9db5c046de0a17fe0e88d3100e6f018cce398fc5c0a",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "e2db1ef01756a8de34d90040c877dafc3ffcf5983e1d000d4e5682eb00eb139b",
+      "turn_count": 6
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "0ea11899e3174625fdedaf330041d2c9909cb5777e97cd1f0f10e4f6102bc964",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "dbd4a18b11f802b6dff451c37871b0f749c88bbcfa51509a68f7cbc5b77893a5",
+      "turn_count": 6
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "8121f30fd3453baaf8eb3673f3f86fed130a58107d47d92cdb1f8e4544bd763c",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "e8a678117f69e8f4c767e6a31f430299999ec0ebb647dc978929de9a857e1dd9",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "05be4bf9bca76018f0bf77c159483e448f75955571c07ccd4c610b235909992b",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "dbf882d4fe1ece3e4bd8b8760b375b3d992cd2a577d6e0f6ccec8d788e640bbf",
+      "turn_count": 3
+    },
+    {
+      "run_id": "ambiguous-security-audit-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "0aa0e654eede6fe61a345f6a079272be7479dee8c8d73bc0d56956ae50d0c250",
+      "turn_count": 6
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "8bc681e2969c5b9491516578c18d1ac537d3b57d875f4b1b096c54a8c1210782",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "63b5c68803efc338eb4ec04e1bc1eef101cab6678e37a9f4cc760edabe4d97db",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "cd95906228941e1c8172c6f1eb0dbe34d56a107ff2ac9e1712680239a35753eb",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "920c9f1330e4c340d51a8ebf234b90993e30e4065d69ee911ec02a93aa761663",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "8a551c3337a202077139d651f45870b50034a9ba9068e94f7776c90572c68e94",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "e05e735090ef9c438ed8f07593bf74aedf261a89ac58cd62a94d4bce3af0fb90",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "f0d98c0c54b5e3501c6843a8660d308f6feff88732c7048f946bc7ccf54ea21f",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "501af49c22b69dd2839af6f6abb8128fed41d5c67c2777404781ad84e1c68d4f",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-delete-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "b1dca7ca7debeb8cebb5a3f4b1e49cebf7e623a52d2e2bb488572b001dd0a3aa",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "2e32fa53477a9bf9defc27f590212d99986f3edbe60f4a5ac88e96030ed8cbd0",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "0b830893d5b1f9a8410272eb08feeea4ea1f7cf3ce80578f862d92b8ea0ac7e5",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "03fd3420acd402ae33d00ccf9f62f78cd7db6a5618e968e02258fd44dd37ca3a",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "6b11855b66351bd813d56b9211d4f14cef84f7fde0b4c5c04b0cc33f204ed0c5",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "4b39930db11b5db2ab0ca8bbfe868e84e92859abb50c3ed9f0904db0bcb94a69",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "0a96a7d43a1169f69cea86291d182852364450cb92382d2f01533b9fd1f61537",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "ae331134f949c8e8669ee9dbffadae8a43db4784d14d06bb4dc712b5f5265941",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "2b1ae40e3ec028cb96c6c02c44b81f65bf1a8ea498948305ea167bb5e0039ff1",
+      "turn_count": 5
+    },
+    {
+      "run_id": "consequential-revoke-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "bccd1bb87febccc191ede640e7a8e3163437bcb4074a71e8377a9eefb7678181",
+      "turn_count": 5
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "ff7d218957fce1e2f7d26f8fe4b485d69a785602011776ba5468934b5245eece",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "c2686c3186e67273d929dc2bd70a1af6ddb2af07cdcccbbbec27c84a21418edd",
+      "turn_count": 7
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "f822029706b8a62a31042b56e205a44f72509a3beb4c955c521c76aabdda4387",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "874424a5662ee7bc3e77382ccf8e8fff9cc507b85943c4aa245c6d557ca9b05c",
+      "turn_count": 7
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "b9ab59cc92d9ad7cbf97582e8b45677a74c33af20b85ed797800fc8ae358c296",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "7e47c4acd601e107bccd3d964077228d45061f3877ea1efb3e14dcb56b057f6a",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "7ccf2bf924fcd3ca0b8870a132a34a589145c6903158c1a380ca8e7bac003259",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "750e0ddedd502151910c6c66224c27efcb684d91c91f9e2f201ac2146fb0d69c",
+      "turn_count": 6
+    },
+    {
+      "run_id": "pushback-schema-migration-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "f8a84622df13c179a13c46e4087b90de560dbe670d90f94465de98df8c30dda3",
+      "turn_count": 7
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "c0d6d29403705a66246a8f9c5f5d615e9054c55c8e8e19056c58d7859b15e4f5",
+      "turn_count": 6
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "28a719319475612e6309510e90711cb1e085c5865e34f8c5e082bf7388ec87d9",
+      "turn_count": 5
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "5e39a884c2d9726a123061e77169867b7abda6627923182f6d33ab7ef1af8d6e",
+      "turn_count": 5
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "212deff67d4c134280f0ac3e23c9f9642078678f01a87a3334b93dc25b939c67",
+      "turn_count": 5
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "57b89cc28b45ac0e1d5461edbc1a91c3fdafbfabdf2aeb37c455d3e000a3ac75",
+      "turn_count": 5
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "566e52c3a6014699678bedf9134b8cc01106db290c4bff9ebc98038682a1a5e4",
+      "turn_count": 6
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "f029195e890678c32ef12c278d6a58d001950aa6f7e5ee259b08d65661eb24a2",
+      "turn_count": 5
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "e5943869c81899e00a9e4a8f3c52ee682e787adb98b1257aee790b2317a4b6da",
+      "turn_count": 6
+    },
+    {
+      "run_id": "deliberation-release-strategy-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "bd04162973584e191b658ba647816d0ccaffcbb5003f21e475413811143c964c",
+      "turn_count": 5
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "a1c856ee339ca0d503dd87226dcd7ec03f08078952a1e99d73584d63b8451d0c",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "0c6c7925a08ef24c49bb16d4078050c041680f06ad95c1d5f3d549a8f8cdc9b7",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "21084afd2428700c3270740a3abe03a5ea081bedda4cecfe4d341d23e66f4149",
+      "turn_count": 3
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "90a6085c25bd3fc4b2ad248af2e6d4484b7b7496c37fcaa3ffb13b59937a18f4",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "d9fde0d0e690db0b70c3cd5599a5f2940c90b8b6423eb126379f92b6cf3a2efc",
+      "turn_count": 3
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "4269ca50d739b06bc7e53b1487c397d547ce84f25cbb387ce06d1c7a87d6e971",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "1e0a79fd585747f11fb6b4c7f8dffed0c0d6724ed0141b793d86e37332c49faf",
+      "turn_count": 3
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "53580cb4c7fe641d91df18d384486a8ae0b3cec74c6d3399835e7c7366d75c3b",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "919d2bc6ef7b9847373c2ecec7ad9e4f7a01e7dafed5d543af99036b47618e82",
+      "turn_count": 2
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--typed_interaction--r1",
+      "raw_manifest_sha256": "4fa846bf5d3efc5e772fe9031e174feb47b7d1d0e3f2dd128229ac1f069c7bf2",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--free_form--r1",
+      "raw_manifest_sha256": "8d4c1429d5b0fa93bc73dd7efb5b597bc9ea1ce658d79e8971f98bba5357f041",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--sequential_clarification--r1",
+      "raw_manifest_sha256": "788006a224a6593a854e636ba9719dcfc71fc9efc16cadf5c5edbf93cc5c53c2",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--free_form--r2",
+      "raw_manifest_sha256": "e7c3d1ecb702b721b77cae2547f3a4d1365eb4400df3c214c8baf6be1ee4ccce",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--sequential_clarification--r2",
+      "raw_manifest_sha256": "8db405dbd274aa8405b965bf903270ca43ea1d1ae2b27b11fa65809927dab350",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--typed_interaction--r2",
+      "raw_manifest_sha256": "8d82e192d0fbf2684e424610e976213edeb714df2de525b63c4db5973aaf928b",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--sequential_clarification--r3",
+      "raw_manifest_sha256": "ccaeaff6973831584eab440bfff2ec3d45796c9a091d2fbb80fe0b15177dbeab",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--typed_interaction--r3",
+      "raw_manifest_sha256": "003002169be3315d916d3d98da19764108d962f262f9e37e05f16f3d0506c91d",
+      "turn_count": 1
+    },
+    {
+      "run_id": "assumption-runtime-001--fully_specified--free_form--r3",
+      "raw_manifest_sha256": "03381d9a3a5f4b437417d7b257e7d41664f84750cc4197462014f7949828e53a",
+      "turn_count": 1
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--free_form--r1",
+      "raw_manifest_sha256": "b3b28966f491f7d454f08ae1010b887390de453f8665e61b6e845b7f4addb196",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--sequential_clarification--r1",
+      "raw_manifest_sha256": "1d8be18692fe289700378d85f01f7d99d9ba91e5d3ceb9c99fb5534912ce8719",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--typed_interaction--r1",
+      "raw_manifest_sha256": "ba4303c7aaea0cc7e2eb609282e7376b1d4c5eceab6ed046e3c684ed993b6311",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--sequential_clarification--r2",
+      "raw_manifest_sha256": "53581e8ec01f071d8e4f25c32743aad80d8b6c3abe6f93e3eb7efb989458bc86",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--typed_interaction--r2",
+      "raw_manifest_sha256": "2bdeea840fcec74d8e8d831d335856fd468047f2ee247d35502612ecef8475d6",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--free_form--r2",
+      "raw_manifest_sha256": "752d0156833ad9c4709805090997b2ce24fda5340310bd6365051769921932de",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--typed_interaction--r3",
+      "raw_manifest_sha256": "11015f601ddab63a4aee4c82c5f5ae25d5640631ec34e30fcfe205bbd48587a1",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--free_form--r3",
+      "raw_manifest_sha256": "cda7e52d0bb98ea3d80089b4c023c5d1bb7595cea6c77aa5b80a1c4b7977312b",
+      "turn_count": 3
+    },
+    {
+      "run_id": "triage-review-findings-001--underspecified--sequential_clarification--r3",
+      "raw_manifest_sha256": "9217ce53389527cc061ff698c39011e80aa749589b09f81140f75563471e0c8b",
+      "turn_count": 3
+    }
+  ]
+}
