@@ -220,12 +220,16 @@ codex mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.17.0' attune-form
 {"mcpServers": {"attune-forms": {"command": "uvx", "args": ["--from", "attune-forms[mcp]==0.17.0", "attune-forms-mcp"]}}}
 ```
 
-**The Claude Code plugin cannot be pinned in place.** Its `.mcp.json`
-belongs to the plugin manager and is replaced when the plugin updates, so
-an edit there does not survive. To hold a version, take the server and the
-skill separately instead of installing the plugin — register the pinned
-server yourself and copy the skill from the repository, exactly as the
-Codex path above does:
+**The Claude Code plugin cannot be pinned durably.** Its `.mcp.json`
+lives in a version-keyed cache directory —
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.mcp.json` — and
+an update installs a *new* version alongside the old one, with its own
+pristine file. An edit you made is not overwritten; it is **orphaned** in
+the previous version's directory, which nothing reads any more. You would
+have to redo it after every update, and the stale file left behind looks
+live. To hold a version, take the server and the skill separately instead
+of installing the plugin — register the pinned server yourself and copy
+the skill from the repository, exactly as the Codex path above does:
 
 ```bash
 claude mcp add attune-forms -- uvx --from 'attune-forms[mcp]==0.17.0' attune-forms-mcp

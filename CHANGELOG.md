@@ -6,6 +6,39 @@ follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Two more claim-drift gates** (`tests/test_docs_drift.py`). The README's
+  test-count claim is checked against pytest's COLLECTED total — it had
+  rotted to "950+" while the suite passed 1,400 and nothing noticed,
+  because the existing gates covered names and construct counts, not
+  free-standing numbers. And no version block may repeat a `###` section
+  heading: rebasing two branches that both appended to `[Unreleased]`
+  produces a duplicate with no conflict markers and no failing test, which
+  happened twice on 2026-09-08. The heading gate immediately found a real
+  one in `[0.9.0]`, from #63 in August; it is merged here.
+
+### Fixed
+
+- **The README described the wrong mechanism for plugin pinning.** It said
+  a plugin update *replaces* `.mcp.json`. The cache is version-keyed
+  (`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/.mcp.json`),
+  so an update installs a new version alongside and an edit is **orphaned**
+  in the old directory, never overwritten — a stale file that still looks
+  live. The conclusion is unchanged (the plugin cannot be pinned durably)
+  but the reason, and therefore the remedy, is now accurate. Verified
+  against the installed cache, where an untouched 2026-08-09 file survives
+  five later versions.
+
+### Changed
+
+- **`docs/stability.md` records that a `<1.0` upper bound is not
+  protection.** Pre-1.0 minors may change provisional surface and remove
+  deprecated names, so `>=0.15.0,<1.0` resolves a breaking 0.x release as
+  happily as a safe one. Consumers needing protection pin exactly or to a
+  patch range.
+
+
 ## [0.17.0] — 2026-09-08
 
 One correction, measured rather than reasoned: the host-question profile
@@ -516,6 +549,7 @@ manual entry and portable fallbacks.
 ## [0.9.0] — 2026-08-29
 
 ### Added
+
 - **Fix-first command workspace grammar** — four portable state views
   (`intake`, `preview`, `execution`, `receipt`) compose the existing
   validated `FormSchema` with a closed display-block vocabulary and stable,
@@ -533,12 +567,18 @@ manual entry and portable fallbacks.
   and enforce independent form/workspace CSS budgets.
 
 ### Changed
+
 - Form widget and portable Markdown renderers accept optional stable action
   and view context, action-specific labels, workspace-owned titles, and
   explicit-action consequences while retaining their existing defaults for
   standalone callers.
+- `FORM_THEME_CSS` budget raised 10 KB → 12 KB (chair-ruled
+  2026-08-28) for the shared `ae-detail-block` rule in `CSS_BASE`; a
+  trim to fit under 10 KB was offered and declined. Current size
+  10,263 B. The cap remains a design decision, not a ratchet.
 
 ### Fixed
+
 - Display-action widgets now emit valid JavaScript, disable actions after
   dispatch, announce success through a live region, and send the same fenced
   sentinel grammar as form-backed views.
@@ -572,12 +612,6 @@ manual entry and portable fallbacks.
     author's own ` ```lang ` wrapper is stripped rather than rendered
     as defused noise. Fixed for `triage`, `assumption_review` and
     `confirm` consequences.
-
-### Changed
-- `FORM_THEME_CSS` budget raised 10 KB → 12 KB (chair-ruled
-  2026-08-28) for the shared `ae-detail-block` rule in `CSS_BASE`; a
-  trim to fit under 10 KB was offered and declined. Current size
-  10,263 B. The cap remains a design decision, not a ratchet.
 
 ## [0.8.0] — 2026-08-24
 

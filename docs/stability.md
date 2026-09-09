@@ -187,6 +187,15 @@ of a flag:
    the current release — a stale pin teaches a reader to hold the wrong
    version.
 
+**A `<1.0` upper bound is not protection.** Pre-1.0 minors may change
+provisional surface and may remove deprecated names, so a constraint like
+`attune-forms>=0.15.0,<1.0` resolves a breaking 0.x release exactly as
+happily as a safe one — it reads protective and is not. A consumer that
+needs protection pins an exact version or a patch range (`~=0.17.0`).
+Such a bound also will not resolve 1.0.0 when it arrives, so it has to
+change for the 1.0 line regardless. attune-ai carries exactly this shape
+today (2026-09-08).
+
 Provisional surface owes only the changelog entry. That is what the tier
 buys.
 
