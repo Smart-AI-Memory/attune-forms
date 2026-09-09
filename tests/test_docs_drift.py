@@ -12,6 +12,7 @@ grammar and its documentation disagree.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -83,3 +84,58 @@ def test_skill_names_only_real_library_functions() -> None:
     named = {name for name in re.findall(r"`([a-z][a-z0-9_]*)\(?", _SKILL) if "_to_" in name}
     ghosts = named - real
     assert not ghosts, f"SKILL.md names library function(s) that do not exist: {sorted(ghosts)}"
+
+
+def test_readme_test_count_claim_is_not_stale() -> None:
+    """A bare number in prose rots silently; gate it like any other claim.
+
+    The README carried "950+ tests" while the suite was past 1,400 — no
+    gate covered it, because this module gated NAMES and construct
+    counts, not free-standing numeric claims.
+
+    The count is pytest's COLLECTED total, which is what a reader takes
+    the claim to mean. Counting `def test_` instead understates badly
+    (1,191 functions vs 1,464 collected) because parametrize expands —
+    the first version of this gate made exactly that mistake and failed
+    a truthful README.
+    """
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(_ROOT / "src")},
+    )
+    found = re.search(r"(\d+) tests? collected", proc.stdout)
+    assert found, f"could not read a collected count: {proc.stdout[-300:]}"
+    actual = int(found.group(1))
+    claims = re.findall(r"([\d,]+)\+ tests", _README)
+
+    assert claims, "the README makes no test-count claim"
+    for raw in claims:
+        claimed = int(raw.replace(",", ""))
+        assert claimed <= actual, f"README claims {claimed}+ tests; only {actual} collected"
+        assert actual - claimed < 500, (
+            f"README claims {claimed}+ tests but {actual} are collected; "
+            "the claim is stale — raise it"
+        )
+
+
+def test_no_changelog_version_repeats_a_section_heading() -> None:
+    """Two `### Changed` blocks in one version is a merge artifact.
+
+    Rebasing two branches that both appended to `[Unreleased]` produces
+    exactly this, with no conflict markers and no failing test — it reads
+    as a clean merge and renders as a duplicated section. Hit twice on
+    2026-09-08 and fixed by hand both times.
+    """
+    changelog = (_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    blocks = re.split(r"^## \[", changelog, flags=re.M)[1:]
+    for block in blocks:
+        version = block.split("]", 1)[0]
+        headings = re.findall(r"^### (.+)$", block, flags=re.M)
+        duplicates = sorted({h for h in headings if headings.count(h) > 1})
+        assert not duplicates, f"[{version}] repeats section heading(s) {duplicates}"
